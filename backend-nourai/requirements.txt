@@ -1,0 +1,23 @@
+# FastAPI and server
+fastapi[standard]==0.115.0
+uvicorn[standard]==0.32.0
+
+# Database - SQLAlchemy 2.0 with asyncpg
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+
+# Settings and validation
+pydantic-settings==2.6.0
+
+# JWT validation (Supabase uses HS256)
+python-jose[cryptography]==3.3.0
+
+# HTTP client for external APIs
+httpx==0.28.0
+
+# AI / Research agent
+anthropic==0.40.0
+
+# Development
+python-dotenv==1.0.1

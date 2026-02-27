@@ -1,0 +1,82 @@
+# ─── Dependencies ────────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ─── Expo / React Native ─────────────────────────────────────────────────────
+.expo/
+dist/
+web-build/
+ios/Pods/
+ios/build/
+android/build/
+android/.gradle/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# ─── Environment variables ───────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.*.example
+
+# ─── Python / Backend ────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ─── Database ────────────────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ─── IDE / OS ────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ─── Logs ────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+
+# ─── Test / Coverage ─────────────────────────────────────────────────────────
+coverage/
+.coverage
+.pytest_cache/
+htmlcov/
+.nyc_output/
+
+# ─── Build artifacts ─────────────────────────────────────────────────────────
+*.tsbuildinfo
+
+# ─── Assets — large binaries ─────────────────────────────────────────────────
+midjourney/
+moodboard/

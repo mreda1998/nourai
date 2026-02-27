@@ -1,0 +1,329 @@
+import { useState } from 'react';
+import { useRouter } from 'expo-router';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeIn } from 'react-native-reanimated';
+
+import {
+  Colors,
+  Fonts,
+  Spacing,
+  Radius,
+  FontSizes,
+  Layout,
+  scale,
+  verticalScale,
+} from '@/constants/theme';
+import { useAuth } from '@/context/auth-context';
+
+type AuthMode = 'signin' | 'signup';
+
+export default function AuthScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { signIn, signUp } = useAuth();
+
+  const [mode, setMode] = useState<AuthMode>('signin');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    setError('');
+    setIsLoading(true);
+
+    try {
+      if (mode === 'signup') {
+        if (!name.trim()) {
+          setError('Please enter your name');
+          return;
+        }
+        await signUp(email, password, name);
+      } else {
+        await signIn(email, password);
+      }
+      router.replace('/(tabs)');
+    } catch (err) {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSkip = () => {
+    router.replace('/(tabs)');
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        contentContainerStyle={[
+          styles.container,
+          { paddingTop: insets.top + verticalScale(60) },
+        ]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.logo}>nourai</Text>
+          <Text style={styles.tagline}>Clinical intelligence for your wellness</Text>
+        </View>
+
+        {/* Auth Form */}
+        <View style={styles.form}>
+          <Text style={styles.formTitle}>
+            {mode === 'signin' ? 'Welcome Back' : 'Create Account'}
+          </Text>
+
+          {mode === 'signup' && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Your name"
+                placeholderTextColor={Colors.inkTertiary}
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+              />
+            </View>
+          )}
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="you@example.com"
+              placeholderTextColor={Colors.inkTertiary}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Password</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter password"
+              placeholderTextColor={Colors.inkTertiary}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoComplete="password"
+            />
+          </View>
+
+          {error ? (
+            <Animated.View entering={FadeIn.duration(300)}>
+              <Text style={styles.error}>{error}</Text>
+            </Animated.View>
+          ) : null}
+
+          <Pressable
+            style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={isLoading}
+          >
+            <Text style={styles.submitButtonText}>
+              {isLoading
+                ? 'Please wait...'
+                : mode === 'signin'
+                ? 'Sign In'
+                : 'Create Account'}
+            </Text>
+          </Pressable>
+
+          {/* Toggle Mode */}
+          <Pressable
+            style={styles.toggleMode}
+            onPress={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
+          >
+            <Text style={styles.toggleModeText}>
+              {mode === 'signin'
+                ? "Don't have an account? "
+                : 'Already have an account? '}
+              <Text style={styles.toggleModeLink}>
+                {mode === 'signin' ? 'Sign Up' : 'Sign In'}
+              </Text>
+            </Text>
+          </Pressable>
+
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Skip Button */}
+          <Pressable style={styles.skipButton} onPress={handleSkip}>
+            <Text style={styles.skipButtonText}>Continue as Guest</Text>
+          </Pressable>
+
+          {/* Terms */}
+          <Text style={styles.terms}>
+            By continuing, you agree to our{' '}
+            <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
+            <Text style={styles.termsLink}>Privacy Policy</Text>
+          </Text>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: Colors.bone,
+  },
+  container: {
+    paddingHorizontal: Layout.screenPaddingHorizontal,
+    paddingBottom: verticalScale(40),
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: verticalScale(48),
+  },
+  logo: {
+    fontFamily: Fonts.serif,
+    fontSize: scale(48),
+    color: Colors.ink,
+    marginBottom: Spacing.sm,
+  },
+  tagline: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.inkSecondary,
+    letterSpacing: 1,
+  },
+  form: {
+    flex: 1,
+  },
+  formTitle: {
+    fontFamily: Fonts.serif,
+    fontSize: FontSizes.display,
+    color: Colors.ink,
+    marginBottom: Spacing.xl,
+    textAlign: 'center',
+  },
+  inputGroup: {
+    marginBottom: Spacing.lg,
+  },
+  inputLabel: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    color: Colors.inkSecondary,
+    marginBottom: Spacing.sm,
+  },
+  input: {
+    backgroundColor: Colors.boneCard,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: verticalScale(16),
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.subtitle,
+    color: Colors.ink,
+  },
+  error: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.accentAlert,
+    textAlign: 'center',
+    marginBottom: Spacing.md,
+  },
+  submitButton: {
+    backgroundColor: Colors.ink,
+    paddingVertical: verticalScale(18),
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    marginTop: Spacing.md,
+  },
+  submitButtonDisabled: {
+    opacity: 0.6,
+  },
+  submitButtonText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.body,
+    color: Colors.bone,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+  },
+  toggleMode: {
+    marginTop: Spacing.lg,
+    alignItems: 'center',
+  },
+  toggleModeText: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.inkSecondary,
+  },
+  toggleModeLink: {
+    fontFamily: Fonts.sansSemiBold,
+    color: Colors.ink,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: Spacing.xl,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.borderHairline,
+  },
+  dividerText: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.inkTertiary,
+    paddingHorizontal: Spacing.md,
+  },
+  skipButton: {
+    borderWidth: 1,
+    borderColor: Colors.ink,
+    paddingVertical: verticalScale(16),
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+  },
+  skipButtonText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  terms: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    color: Colors.inkTertiary,
+    textAlign: 'center',
+    marginTop: Spacing.xl,
+    lineHeight: FontSizes.caption * 1.6,
+  },
+  termsLink: {
+    color: Colors.inkSecondary,
+    textDecorationLine: 'underline',
+  },
+});
