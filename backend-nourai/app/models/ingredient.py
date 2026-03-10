@@ -72,6 +72,16 @@ class Ingredient(Base, UUIDMixin, TimestampMixin):
     # Evidence level — updated by research agent after synthesis
     evidence_level: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
+    # Belief vs. reality — the core NourAI differentiator.
+    # Both fields are written by the research agent in a single Claude call
+    # after all PubMed studies for this ingredient have been synthesized.
+    # common_belief  = what people generally think this ingredient does
+    #                  (sourced from marketing language + folk knowledge)
+    # evidence_reality = what the human-trial evidence actually supports
+    #                  (honest, plain-English, with caveats)
+    common_belief: Mapped[str | None] = mapped_column(Text, nullable=True)
+    evidence_reality: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Research pipeline tracking
     research_status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=ResearchStatus.PENDING

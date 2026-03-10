@@ -1,0 +1,263 @@
+"""Ingredient API endpoints.
+
+GET /ingredients/search          — search canonical ingredients by name
+GET /ingredients/{id}            — full ingredient deep dive (profile + evidence + found-in)
+"""
+from __future__ import annotations
+
+import uuid
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.db.session import get_db
+from app.models.ingredient import Ingredient
+from app.models.ingredient_evidence import IngredientEvidence
+from app.models.product import Product, ProductIngredient
+
+router = APIRouter()
+
+
+# ─── Response schemas ─────────────────────────────────────────────────────────
+
+class EvidenceRecord(BaseModel):
+    id: str
+    pmid: str | None
+    title: str | None
+    journal: str | None
+    year: int | None
+    study_type: str | None
+    population: str | None
+    sample_size: int | None
+    finding: str
+    direction: str           # benefit | risk | neutral | mixed
+    effect_size: str | None  # strong | moderate | weak
+    confidence: str          # high | moderate | low
+    concern_tags: list[str]
+    goal_tags: list[str]
+
+
+class FoundInProduct(BaseModel):
+    id: str
+    name: str
+    brand: str | None
+    category: str
+    subcategory: str | None
+    image_url: str | None
+    amount: str | None       # e.g. "10%" or "400mg"
+    status: str | None       # clean | watch | avoid
+
+
+class IngredientDetail(BaseModel):
+    id: str
+    canonical_name: str
+    category: str
+    description: str | None
+    mechanism_summary: str | None
+
+    # Belief vs. reality — the core NourAI differentiator
+    common_belief: str | None
+    evidence_reality: str | None
+
+    # Dosage / safety
+    typical_dose_range: str | None
+    recommended_daily: str | None
+    upper_limit: str | None
+    side_effects: list[str]
+    contraindications: list[str]
+    drug_interactions: list[str]
+
+    # Research summary
+    evidence_level: str | None   # strong | moderate | limited | insufficient
+    research_status: str
+
+    # Evidence records — sorted high→low confidence then newest→oldest
+    evidence: list[EvidenceRecord]
+
+    # Products in our DB that contain this ingredient
+    found_in: list[FoundInProduct]
+
+
+class IngredientListItem(BaseModel):
+    id: str
+    canonical_name: str
+    category: str
+    description: str | None
+    evidence_level: str | None
+    research_status: str
+
+
+class IngredientSearchResponse(BaseModel):
+    ingredients: list[IngredientListItem]
+    total: int
+
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+_CONFIDENCE_ORDER = {"high": 0, "moderate": 1, "low": 2}
+
+
+def _sort_evidence(records: list[IngredientEvidence]) -> list[IngredientEvidence]:
+    """Sort evidence high→low confidence, then newest→oldest year."""
+    return sorted(
+        records,
+        key=lambda e: (
+            _CONFIDENCE_ORDER.get(e.confidence, 9),
+            -(e.year or 0),
+        ),
+    )
+
+
+# ─── Endpoints ────────────────────────────────────────────────────────────────
+
+@router.get("/search", response_model=IngredientSearchResponse)
+async def search_ingredients(
+    q: str = Query(..., min_length=2, description="Search term (partial match on name or synonym)"),
+    limit: int = Query(20, le=50),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    Search canonical ingredients by name.
+
+    Matches against canonical_name with a case-insensitive LIKE.
+    Returns up to `limit` results ordered alphabetically.
+
+    Used by:
+      • Search tab when the user toggles to "Ingredients"
+      • Any screen that needs ingredient autocomplete
+    """
+    pattern = f"%{q}%"
+    stmt = (
+        select(Ingredient)
+        .where(Ingredient.canonical_name.ilike(pattern))
+        .order_by(Ingredient.canonical_name)
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    ingredients = result.scalars().all()
+
+    # Also count total matches (for the UI to show "X results")
+    count_stmt = (
+        select(func.count())
+        .select_from(Ingredient)
+        .where(Ingredient.canonical_name.ilike(pattern))
+    )
+    total = (await db.execute(count_stmt)).scalar_one()
+
+    return IngredientSearchResponse(
+        ingredients=[
+            IngredientListItem(
+                id=str(ing.id),
+                canonical_name=ing.canonical_name,
+                category=ing.category,
+                description=ing.description,
+                evidence_level=ing.evidence_level,
+                research_status=ing.research_status,
+            )
+            for ing in ingredients
+        ],
+        total=total,
+    )
+
+
+@router.get("/{ingredient_id}", response_model=IngredientDetail)
+async def get_ingredient(
+    ingredient_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    Full ingredient deep dive.
+
+    Returns:
+      • Mechanism summary + description
+      • Belief vs. reality (common_belief / evidence_reality)
+      • Dosage and safety information
+      • All synthesized PubMed evidence records, sorted by confidence
+      • List of products in our DB that contain this ingredient
+
+    Accessible from:
+      • Product page → tapping an ingredient row
+      • Search tab (ingredient search mode)
+      • Any future surface (food log, stack, etc.)
+    """
+    # Load ingredient with all evidence in one query
+    stmt = (
+        select(Ingredient)
+        .where(Ingredient.id == ingredient_id)
+        .options(selectinload(Ingredient.evidence))
+    )
+    result = await db.execute(stmt)
+    ingredient = result.scalar_one_or_none()
+
+    if not ingredient:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+
+    # Load products that contain this ingredient, with product info joined.
+    # We limit to 30 — enough to show a meaningful list without over-fetching.
+    found_stmt = (
+        select(ProductIngredient, Product)
+        .join(Product, ProductIngredient.product_id == Product.id)
+        .where(ProductIngredient.ingredient_id == ingredient_id)
+        .order_by(Product.name)
+        .limit(30)
+    )
+    found_result = await db.execute(found_stmt)
+    found_rows = found_result.all()
+
+    found_in = [
+        FoundInProduct(
+            id=str(product.id),
+            name=product.name,
+            brand=product.brand,
+            category=product.category,
+            subcategory=product.subcategory,
+            image_url=product.image_url,
+            amount=pi.amount,
+            status=pi.status,
+        )
+        for pi, product in found_rows
+    ]
+
+    sorted_evidence = _sort_evidence(ingredient.evidence)
+
+    return IngredientDetail(
+        id=str(ingredient.id),
+        canonical_name=ingredient.canonical_name,
+        category=ingredient.category,
+        description=ingredient.description,
+        mechanism_summary=ingredient.mechanism_summary,
+        common_belief=ingredient.common_belief,
+        evidence_reality=ingredient.evidence_reality,
+        typical_dose_range=ingredient.typical_dose_range,
+        recommended_daily=ingredient.recommended_daily,
+        upper_limit=ingredient.upper_limit,
+        side_effects=ingredient.side_effects or [],
+        contraindications=ingredient.contraindications or [],
+        drug_interactions=ingredient.drug_interactions or [],
+        evidence_level=ingredient.evidence_level,
+        research_status=ingredient.research_status,
+        evidence=[
+            EvidenceRecord(
+                id=str(ev.id),
+                pmid=ev.pmid,
+                title=ev.title,
+                journal=ev.journal,
+                year=ev.year,
+                study_type=ev.study_type,
+                population=ev.population,
+                sample_size=ev.sample_size,
+                finding=ev.finding,
+                direction=ev.direction,
+                effect_size=ev.effect_size,
+                confidence=ev.confidence,
+                concern_tags=ev.concern_tags or [],
+                goal_tags=ev.goal_tags or [],
+            )
+            for ev in sorted_evidence
+        ],
+        found_in=found_in,
+    )

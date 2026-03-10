@@ -53,6 +53,19 @@ class ProductService:
             offset=offset,
         )
 
+    async def list_products(
+        self,
+        category: ProductCategory | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[Product], int]:
+        """List all products with optional category filter."""
+        return await self._repo.list_products(
+            category=category,
+            limit=limit,
+            offset=offset,
+        )
+
     async def get_top_products(
         self,
         category: ProductCategory | None = None,

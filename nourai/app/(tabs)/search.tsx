@@ -1,14 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
   ActivityIndicator,
-  Image,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
+  Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInUp, FadeIn } from 'react-native-reanimated';
@@ -23,9 +22,13 @@ import {
   scale,
   verticalScale,
 } from '@/constants/theme';
-import { api, ProductListItem } from '@/services/api';
+import { api, type ProductListItem } from '@/services/api';
+import ProductListItemComponent from '@/components/ProductListItem';
 
-// Categories for filtering
+const DISCOVERY_LIMIT = 50;
+const SEARCH_LIMIT = 30;
+const DEBOUNCE_MS = 300;
+
 const CATEGORIES = [
   { id: 'all', label: 'All' },
   { id: 'food', label: 'Food' },
@@ -37,67 +40,95 @@ const CATEGORIES = [
 export default function SearchScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [searchQuery, setSearchQuery] = useState('');
+
+  const [query, setQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [products, setProducts] = useState<ProductListItem[]>([]);
-  const [filteredProducts, setFilteredProducts] = useState<ProductListItem[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  // Two separate product lists: discovery (on mount) and search results
+  const [discoveryProducts, setDiscoveryProducts] = useState<ProductListItem[]>([]);
+  const [searchResults, setSearchResults] = useState<ProductListItem[]>([]);
+  const [totalResults, setTotalResults] = useState(0);
+
+  const [loadingDiscovery, setLoadingDiscovery] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load products on mount
-  useEffect(() => {
-    loadProducts();
-  }, []);
+  const isSearchMode = query.trim().length >= 2;
 
-  // Filter products when search or category changes
-  useEffect(() => {
-    let filtered = products;
+  // Refs for debounce timer and in-flight request cancellation
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-    // Filter by category
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter((p) => p.category === selectedCategory);
+  // ── Discovery: reload when category changes ──────────────────────────────
+  useEffect(() => {
+    loadDiscovery();
+  }, [selectedCategory]);
+
+  // ── Search: debounce on query or category change ─────────────────────────
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (query.trim().length < 2) {
+      // Not enough to search — cancel any in-flight request
+      if (abortRef.current) abortRef.current.abort();
+      setSearchResults([]);
+      setSearching(false);
+      return;
     }
 
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (p) =>
-          p.name.toLowerCase().includes(query) ||
-          (p.brand && p.brand.toLowerCase().includes(query))
-      );
-    }
+    setSearching(true);
+    debounceRef.current = setTimeout(() => {
+      runSearch(query.trim());
+    }, DEBOUNCE_MS);
 
-    setFilteredProducts(filtered);
-  }, [products, searchQuery, selectedCategory]);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query, selectedCategory]);
 
-  const loadProducts = async () => {
-    setLoading(true);
+  // ── Fetch discovery set ───────────────────────────────────────────────────
+  const loadDiscovery = async () => {
+    setLoadingDiscovery(true);
     setError(null);
-
     try {
-      const response = await api.getProducts();
-      setProducts(response.products);
-      setFilteredProducts(response.products);
-    } catch (err) {
-      console.error('Error loading products:', err);
+      const category = selectedCategory !== 'all' ? selectedCategory : undefined;
+      const res = await api.getProducts({ limit: DISCOVERY_LIMIT, category });
+      setDiscoveryProducts(res.products);
+    } catch {
       setError('Failed to load products');
     } finally {
-      setLoading(false);
+      setLoadingDiscovery(false);
     }
   };
 
-  const getGradeStyle = (grade: string) => {
-    switch (grade) {
-      case 'A':
-        return { badge: styles.gradeBadgeA, text: styles.gradeTextA };
-      case 'B':
-        return { badge: styles.gradeBadgeB, text: styles.gradeTextB };
-      default:
-        return { badge: {}, text: {} };
+  // ── Server-side search ────────────────────────────────────────────────────
+  const runSearch = async (q: string) => {
+    // Cancel previous in-flight request
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+
+    setError(null);
+    try {
+      const category = selectedCategory !== 'all' ? selectedCategory : undefined;
+      const res = await api.searchProducts(q, { limit: SEARCH_LIMIT, category });
+      setSearchResults(res.products);
+      setTotalResults(res.total);
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') setError('Search failed');
+    } finally {
+      setSearching(false);
     }
   };
+
+  // ── Displayed data ────────────────────────────────────────────────────────
+  const displayedProducts = isSearchMode ? searchResults : discoveryProducts;
+  const isLoading = isSearchMode ? searching : loadingDiscovery;
+
+  // Section label
+  const sectionLabel = isSearchMode
+    ? (searching ? 'Searching…' : `${totalResults} result${totalResults !== 1 ? 's' : ''} for "${query}"`)
+    : `Top ${discoveryProducts.length} Products`;
 
   return (
     <View style={styles.screen}>
@@ -112,7 +143,6 @@ export default function SearchScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Discover</Text>
-          <Text style={styles.subtitle}>{products.length} products</Text>
         </View>
 
         {/* Search Input */}
@@ -121,15 +151,15 @@ export default function SearchScreen() {
             <Text style={styles.searchIcon}>⌕</Text>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search products, brands..."
+              placeholder="Search products, brands…"
               placeholderTextColor={Colors.inkTertiary}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
+              value={query}
+              onChangeText={setQuery}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
             />
-            {searchQuery.length > 0 && (
-              <Pressable onPress={() => setSearchQuery('')}>
+            {query.length > 0 && (
+              <Pressable onPress={() => setQuery('')}>
                 <Text style={styles.clearBtn}>✕</Text>
               </Pressable>
             )}
@@ -163,80 +193,50 @@ export default function SearchScreen() {
           ))}
         </ScrollView>
 
-        {/* Loading State */}
-        {loading && (
-          <View style={styles.centered}>
-            <ActivityIndicator size="large" color={Colors.ink} />
-            <Text style={styles.loadingText}>Loading products...</Text>
-          </View>
-        )}
-
-        {/* Error State */}
-        {error && !loading && (
+        {/* Error */}
+        {error && !isLoading && (
           <View style={styles.centered}>
             <Text style={styles.errorText}>{error}</Text>
-            <Pressable style={styles.retryBtn} onPress={loadProducts}>
+            <Pressable style={styles.retryBtn} onPress={loadDiscovery}>
               <Text style={styles.retryBtnText}>Retry</Text>
             </Pressable>
           </View>
         )}
 
-        {/* Products Grid */}
-        {!loading && !error && (
+        {/* Product list */}
+        {!error && (
           <View style={styles.productsSection}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionLabel}>
-                {selectedCategory === 'all' ? 'All Products' : CATEGORIES.find(c => c.id === selectedCategory)?.label}
-              </Text>
-              <Text style={styles.sectionCount}>{filteredProducts.length}</Text>
+              <Text style={styles.sectionLabel}>{sectionLabel}</Text>
+              {isLoading && <ActivityIndicator size="small" color={Colors.ink} />}
             </View>
 
-            {filteredProducts.length === 0 ? (
+            {!isLoading && displayedProducts.length === 0 ? (
               <Animated.View entering={FadeIn.duration(400)} style={styles.emptyState}>
-                <Text style={styles.emptyText}>No products found</Text>
-                <Text style={styles.emptySubtext}>Try a different search or category</Text>
+                <Text style={styles.emptyText}>
+                  {isSearchMode ? 'No products found' : 'No products yet'}
+                </Text>
+                <Text style={styles.emptySubtext}>
+                  {isSearchMode ? 'Try a different term or category' : 'Try a different category'}
+                </Text>
               </Animated.View>
             ) : (
-              <View style={styles.productGrid}>
-                {filteredProducts.map((product, index) => {
-                  const gradeStyle = getGradeStyle(product.grade);
-                  return (
-                    <Animated.View
-                      key={product.id}
-                      entering={FadeInUp.duration(400).delay(index * 80)}
-                      style={{ width: '47%' }}
-                    >
-                      <Pressable
-                        style={styles.productCard}
-                        onPress={() => router.push(`/product/${product.id}`)}
-                      >
-                        <View style={styles.productImageContainer}>
-                          <View style={styles.productImagePlaceholder}>
-                            <Text style={styles.productImageIcon}>📦</Text>
-                          </View>
-                          <View style={[styles.gradeBadge, gradeStyle.badge]}>
-                            <Text style={[styles.gradeText, gradeStyle.text]}>
-                              {product.grade}
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={styles.productInfo}>
-                          <Text style={styles.productBrand} numberOfLines={1}>
-                            {product.brand || 'Unknown'}
-                          </Text>
-                          <Text style={styles.productName} numberOfLines={2}>
-                            {product.name}
-                          </Text>
-                          <View style={styles.categoryTag}>
-                            <Text style={styles.categoryTagText}>
-                              {product.category}
-                            </Text>
-                          </View>
-                        </View>
-                      </Pressable>
-                    </Animated.View>
-                  );
-                })}
+              <View>
+                {displayedProducts.map((product, index) => (
+                  <Animated.View
+                    key={product.id}
+                    entering={FadeInUp.duration(300).delay(index * 40)}
+                  >
+                    <ProductListItemComponent
+                      id={product.id}
+                      name={product.name}
+                      brand={product.brand}
+                      category={product.category}
+                      grade={product.grade}
+                      onPress={() => router.push(`/product/${product.id}`)}
+                    />
+                  </Animated.View>
+                ))}
               </View>
             )}
           </View>
@@ -264,12 +264,6 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.serif,
     fontSize: FontSizes.display,
     color: Colors.ink,
-  },
-  subtitle: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.inkSecondary,
-    marginTop: 4,
   },
   searchContainer: {
     paddingHorizontal: Layout.screenPaddingHorizontal,
@@ -333,18 +327,14 @@ const styles = StyleSheet.create({
   centered: {
     paddingVertical: verticalScale(60),
     alignItems: 'center',
-  },
-  loadingText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.inkSecondary,
-    marginTop: Spacing.md,
+    paddingHorizontal: Layout.screenPaddingHorizontal,
   },
   errorText: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.bodyLarge,
     color: Colors.accentAlert,
     marginBottom: Spacing.md,
+    textAlign: 'center',
   },
   retryBtn: {
     backgroundColor: Colors.ink,
@@ -378,11 +368,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     color: Colors.ink,
   },
-  sectionCount: {
-    fontFamily: Fonts.mono,
-    fontSize: FontSizes.body,
-    color: Colors.inkSecondary,
-  },
   emptyState: {
     paddingVertical: verticalScale(40),
     alignItems: 'center',
@@ -397,101 +382,5 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
     color: Colors.inkSecondary,
-  },
-  productGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.md,
-  },
-  productCard: {
-    width: '100%',
-    backgroundColor: Colors.boneCard,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
-  productImageContainer: {
-    width: '100%',
-    aspectRatio: 1,
-    backgroundColor: Colors.boneDark,
-    position: 'relative',
-  },
-  productImagePlaceholder: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  productImageIcon: {
-    fontSize: scale(40),
-    opacity: 0.5,
-  },
-  productImage: {
-    width: '100%',
-    height: '100%',
-  },
-  gradeBadge: {
-    position: 'absolute',
-    top: Spacing.sm,
-    right: Spacing.sm,
-    width: scale(28),
-    height: scale(28),
-    borderRadius: scale(4),
-    borderWidth: 1,
-    borderColor: Colors.ink,
-    backgroundColor: Colors.boneCard,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  gradeBadgeA: {
-    backgroundColor: Colors.accentHill,
-    borderColor: Colors.accentHill,
-  },
-  gradeBadgeB: {
-    backgroundColor: Colors.ink,
-    borderColor: Colors.ink,
-  },
-  gradeText: {
-    fontFamily: Fonts.mono,
-    fontSize: FontSizes.body,
-    fontWeight: '700',
-    color: Colors.ink,
-  },
-  gradeTextA: {
-    color: Colors.bone,
-  },
-  gradeTextB: {
-    color: Colors.bone,
-  },
-  productInfo: {
-    padding: Spacing.md,
-  },
-  productBrand: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: Colors.inkSecondary,
-    marginBottom: 4,
-  },
-  productName: {
-    fontFamily: Fonts.sansMedium,
-    fontSize: FontSizes.body,
-    color: Colors.ink,
-    lineHeight: FontSizes.body * 1.3,
-    marginBottom: Spacing.sm,
-  },
-  categoryTag: {
-    alignSelf: 'flex-start',
-    paddingVertical: scale(3),
-    paddingHorizontal: scale(8),
-    borderRadius: Radius.pill,
-    backgroundColor: 'rgba(28, 28, 28, 0.05)',
-  },
-  categoryTagText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.xs,
-    color: Colors.inkSecondary,
-    textTransform: 'capitalize',
   },
 });

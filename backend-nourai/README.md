@@ -42,27 +42,50 @@ Then open `.env` and fill in your values — at minimum `ANTHROPIC_API_KEY` is n
 
 ## Local development workflow
 
+### 1 — First run (fresh database)
+
 ```bash
-make up          # start PostgreSQL on port 5432 (Docker)
-make migrate     # apply all pending Alembic migrations
-make seed        # load the golden set (23 ingredients + 15 products)
-make images      # upload product images to Supabase Storage (needs SUPABASE_* vars)
-make research    # enrich first 5 ingredients with PubMed studies (needs ANTHROPIC_API_KEY)
-make dev         # start API with hot reload on http://localhost:8001
+make setup            # create venv, install deps, copy .env.example → .env
+                      # → fill in .env before continuing
+
+make up               # start PostgreSQL on port 5432 (Docker)
+make migrate          # apply all Alembic migrations
+make seed             # load the golden set: 23 ingredients + 15 real products
+make fetch-products   # expand to ~4 500 products from Open Food Facts + Open Beauty Facts
+make research         # enrich first 5 ingredients with PubMed evidence (test run)
+make dev              # start API with hot reload → http://localhost:8001
 ```
 
-### Other useful commands
+### 2 — Populate the full database
+
+Run these after `make seed` to build a production-quality dataset.
 
 ```bash
-make research-all     # run research agent on ALL pending ingredients
-make research-dry     # preview what would be researched (no API calls)
-make research-retry   # retry ingredients that previously failed
-make images-dry       # preview image uploads without making changes
-make migrate-down     # roll back one migration
-make migration-status # show current migration head
-make reset            # full wipe: stop containers → re-migrate → re-seed
+# Step 1 — expand products (takes ~10 min, no API cost)
+make fetch-products
+
+# Step 2 — dry-run the research agent to see what will be processed
+make research-dry
+
+# Step 3 — enrich all ingredients (uses Anthropic API, ~$3–6 one-time)
+make research-all
+```
+
+After `make research-all` completes, every ingredient has:
+- PubMed evidence records with confidence, direction, concern/goal tags
+- A `common_belief` vs `evidence_reality` summary (plain English, Claude Sonnet)
+
+### 3 — Day-to-day commands
+
+```bash
+make dev              # start API (hot reload)
+make research         # enrich next 5 pending ingredients
+make research-retry   # retry any that previously failed
+make fetch-products   # pull new products from OpenFoodFacts (idempotent)
+make migrate          # apply any new migrations after a git pull
+make reset            # full wipe → re-migrate → re-seed (destructive)
 make logs             # tail PostgreSQL logs
-make down             # stop all Docker containers
+make down             # stop Docker containers
 ```
 
 ---
@@ -130,10 +153,11 @@ backend-nourai/
 │   ├── services/        # Business logic
 │   └── main.py          # FastAPI app entry point
 ├── alembic/
-│   └── versions/        # Migration files
+│   └── versions/        # Migration files (001 → 003)
 ├── scripts/
-│   ├── seed_golden_set.py         # Seeds 23 ingredients + 15 products
-│   ├── research_agent.py          # PubMed → Claude synthesis pipeline
+│   ├── seed_golden_set.py         # 23 curated ingredients + 15 real products (run first)
+│   ├── fetch_popular_products.py  # Expands to ~4 500 products via OpenFoodFacts + OpenBeautyFacts
+│   ├── research_agent.py          # PubMed → Claude Haiku synthesis + Sonnet belief/reality summary
 │   └── upload_product_images.py   # Re-hosts images to Supabase Storage
 ├── docker-compose.yml
 ├── Dockerfile
@@ -174,23 +198,43 @@ Loads a curated set of 23 ingredients and 15 real products into the database. Id
 make seed
 ```
 
-### `scripts/research_agent.py`
+### `scripts/fetch_popular_products.py`
 
-Fetches PubMed studies for every ingredient, synthesizes each abstract with Claude Haiku, and stores structured evidence records (`ingredient_evidence` table).
+Expands the golden set with real, popular products pulled from [Open Food Facts](https://world.openfoodfacts.org/) and [Open Beauty Facts](https://world.openbeautyfacts.org/). Products are sorted by `unique_scans_n` (real scan count) so the most widely used items are imported first.
+
+- Covers 15 categories: dietary supplements, proteins, vitamins, energy drinks, dairy, plant-based, snacks, beverages, baby food, condiments, cereals, moisturisers, sunscreen, serums, shampoos
+- Target: ~4 500 products
+- Matches product ingredients against the canonical `ingredients` table (exact → synonym → substring)
+- Idempotent: skips products whose barcode already exists
 
 ```bash
-make research           # 5 ingredients (testing)
-make research-all       # all pending ingredients
-make research-dry       # preview without API calls
-make research-retry     # retry failed ingredients
-
-# Target a specific ingredient
-. venv/bin/activate && python scripts/research_agent.py --ingredient "Niacinamide"
+make fetch-products          # full run (~4 500 products, no API cost)
+make fetch-products-dry      # preview without writing to DB
+make fetch-products-test     # import only 10 products per category (quick test)
 ```
 
-Evidence per ingredient: study type, population, finding (plain English), direction (benefit/risk/neutral/mixed), confidence (high/moderate/low), and concern/goal tags that map to the onboarding profile.
+### `scripts/research_agent.py`
 
-**Cost estimate:** ~$0.003/ingredient (10 abstracts × Claude Haiku). Full 500-ingredient run ≈ $1.65 one-time.
+4-step pipeline per ingredient:
+
+1. Search PubMed for relevant studies (E-utilities API)
+2. Fetch up to 10 abstracts
+3. Synthesise each abstract with **Claude Haiku** → structured finding (direction, confidence, concern/goal tags)
+4. Generate `common_belief` + `evidence_reality` summary with **Claude Sonnet** — what people *think* the ingredient does vs. what clinical evidence *actually* says
+
+Results are stored in `ingredient_evidence` rows and as prose fields on the `ingredients` table.
+
+```bash
+make research           # enrich next 5 pending ingredients (good for testing)
+make research-all       # enrich all pending ingredients
+make research-dry       # preview without making any API calls
+make research-retry     # retry ingredients with status = failed
+
+# Target a specific ingredient by name
+. venv/bin/activate && python scripts/research_agent.py --ingredient "Creatine"
+```
+
+**Cost estimate:** ~$0.012/ingredient (Haiku × abstracts + Sonnet × summary). Full 300-ingredient run ≈ $3–6 one-time.
 
 ### `scripts/upload_product_images.py`
 
@@ -218,13 +262,33 @@ The API is available at `http://localhost:8001` in development.
 ### Key endpoints
 
 ```
-GET  /api/v1/products/                      List / search products
-GET  /api/v1/products/{id}                  Product detail
+# Products
+GET  /api/v1/products/                      List / filter products (?category=&search=)
+GET  /api/v1/products/search/{query}        Search by name/brand (?generate_if_not_found=true)
+GET  /api/v1/products/{id}                  Product detail (ingredients include ingredient_id FK)
+GET  /api/v1/products/{id}/personalize      Server-side personalization overlay
 GET  /api/v1/products/barcode/{barcode}     Barcode lookup
-GET  /api/v1/ingredients/                   List ingredients
-GET  /api/v1/ingredients/{id}/evidence      PubMed evidence for an ingredient
+
+# Ingredients
+GET  /api/v1/ingredients/search?q=          Search canonical ingredients by name
+GET  /api/v1/ingredients/{id}               Full ingredient deep dive:
+                                              mechanism, common_belief, evidence_reality,
+                                              dose/safety info, PubMed evidence records,
+                                              found-in products
+
+# Users
 POST /api/v1/users/me/profile               Save onboarding profile
 GET  /api/v1/users/me/profile               Get user health profile
+GET  /api/v1/users/me/history               Scan history
+POST /api/v1/users/me/history               Add scan to history
+GET  /api/v1/users/me/stack                 User's product stack
+POST /api/v1/users/me/stack                 Add product to stack
+DELETE /api/v1/users/me/stack/{id}          Remove from stack
+
+# Meals
+POST /api/v1/meals/analyze                  Analyze meal photo or description (Claude AI)
+
+# Payments
 POST /api/v1/webhooks/revenuecat            RevenueCat subscription webhook
 ```
 

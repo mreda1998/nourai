@@ -36,7 +36,7 @@ function RootLayoutNav() {
     if (!isOnboarded) {
       // User hasn't completed onboarding
       router.replace('/onboarding');
-    } else if (!inAuthGroup && segments[0] !== '(tabs)' && segments[0] !== 'profile-hub' && segments[0] !== 'profile' && segments[0] !== 'product' && segments[0] !== 'settings' && segments[0] !== 'health') {
+    } else if (!inAuthGroup && segments[0] !== '(tabs)' && segments[0] !== 'profile-hub' && segments[0] !== 'profile' && segments[0] !== 'product' && segments[0] !== 'ingredient' && segments[0] !== 'newsletter' && segments[0] !== 'settings' && segments[0] !== 'health') {
       // After onboarding, go to main app
       router.replace('/(tabs)');
     }
@@ -143,6 +143,24 @@ function RootLayoutNav() {
       />
       <Stack.Screen
         name="health/sleep"
+        options={{
+          presentation: 'card',
+          animation: 'slide_from_right',
+        }}
+      />
+
+      {/* Ingredient Deep Dive */}
+      <Stack.Screen
+        name="ingredient/[id]"
+        options={{
+          presentation: 'card',
+          animation: 'slide_from_right',
+        }}
+      />
+
+      {/* Newsletter Article */}
+      <Stack.Screen
+        name="newsletter/[id]"
         options={{
           presentation: 'card',
           animation: 'slide_from_right',

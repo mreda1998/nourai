@@ -12,6 +12,7 @@ export interface Ingredient {
   tag?: string;
   tag_type?: string;
   description?: string;
+  ingredient_id?: string | null;   // FK to canonical ingredient — present when matched
 }
 
 export interface BioDomain {
@@ -57,6 +58,7 @@ export interface ProductListItem {
   category: string;
   grade: string;
   is_ai_generated: boolean;
+  image_url?: string;
 }
 
 export interface ProductSearchResponse {
@@ -97,6 +99,73 @@ export interface ServerPersonalAnalysis {
   source: string;
 }
 
+// ─── Ingredient deep dive ─────────────────────────────────────────────────────
+
+export interface IngredientEvidenceRecord {
+  id: string;
+  pmid: string | null;
+  title: string | null;
+  journal: string | null;
+  year: number | null;
+  study_type: string | null;
+  population: string | null;
+  sample_size: number | null;
+  finding: string;
+  direction: 'benefit' | 'risk' | 'neutral' | 'mixed';
+  effect_size: 'strong' | 'moderate' | 'weak' | null;
+  confidence: 'high' | 'moderate' | 'low';
+  concern_tags: string[];
+  goal_tags: string[];
+}
+
+export interface IngredientFoundInProduct {
+  id: string;
+  name: string;
+  brand: string | null;
+  category: string;
+  subcategory: string | null;
+  image_url: string | null;
+  amount: string | null;
+  status: 'clean' | 'watch' | 'avoid' | null;
+}
+
+export interface IngredientDetail {
+  id: string;
+  canonical_name: string;
+  category: string;
+  description: string | null;
+  mechanism_summary: string | null;
+  // Belief vs. reality
+  common_belief: string | null;
+  evidence_reality: string | null;
+  // Dosage / safety
+  typical_dose_range: string | null;
+  recommended_daily: string | null;
+  upper_limit: string | null;
+  side_effects: string[];
+  contraindications: string[];
+  drug_interactions: string[];
+  // Research
+  evidence_level: string | null;
+  research_status: string;
+  evidence: IngredientEvidenceRecord[];
+  found_in: IngredientFoundInProduct[];
+}
+
+export interface IngredientListItem {
+  id: string;
+  canonical_name: string;
+  category: string;
+  description: string | null;
+  evidence_level: string | null;
+  research_status: string;
+}
+
+export interface IngredientSearchResponse {
+  ingredients: IngredientListItem[];
+  total: number;
+}
+
 // ─── Meal Analysis ───────────────────────────────────────────────────────────
 
 export interface RecognizedFood {
@@ -113,7 +182,7 @@ export interface MealAnalysisResponse {
 }
 
 // ─── Onboarding Profile ──────────────────────────────────────────────────────
-// Collected during onboarding and sent to POST /users/me/profile on sign-up.
+// Collected during onboarding and sent to PUT /users/me on sign-up.
 // Drives the server-side personalization layer (Option A architecture).
 export interface OnboardingProfile {
   biologicalSex: 'male' | 'female' | 'not_specified';
@@ -131,33 +200,40 @@ export interface OnboardingProfile {
 // User Profile Types
 export interface UserHealthProfile {
   id: string;
-  user_id: string;
-  date_of_birth?: string;
+  email?: string;
+  name?: string;
   biological_sex?: 'male' | 'female' | 'other';
-  is_pregnant: boolean;
-  is_breastfeeding: boolean;
+  birth_year?: number;
   allergies: string[];
   conditions: string[];
   medications: string[];
   dietary_preferences: string[];
-  created_at: string;
-  updated_at: string;
+  health_goals: string[];
+  // Onboarding profile fields
+  age_range?: string;
+  focus_areas: string[];
+  health_concerns: string[];
+  is_pregnant: boolean;
+  is_breastfeeding: boolean;
+  onboarding_completed: boolean;
 }
 
 export interface UserHealthProfileUpdate {
-  date_of_birth?: string;
+  name?: string;
   biological_sex?: 'male' | 'female' | 'other';
-  is_pregnant?: boolean;
-  is_breastfeeding?: boolean;
+  birth_year?: number;
   allergies?: string[];
   conditions?: string[];
   medications?: string[];
   dietary_preferences?: string[];
-  // Concern taxonomy — maps to server-side personalization engine
+  health_goals?: string[];
+  // Onboarding profile fields
   age_range?: string;
   focus_areas?: string[];
   health_concerns?: string[];
-  goals?: string[];
+  is_pregnant?: boolean;
+  is_breastfeeding?: boolean;
+  onboarding_completed?: boolean;
 }
 
 // Subscription Types
@@ -241,13 +317,11 @@ class APIService {
    */
   async getProducts(params?: {
     category?: string;
-    search?: string;
     limit?: number;
     offset?: number;
   }): Promise<ProductSearchResponse> {
     const queryParams = new URLSearchParams();
     if (params?.category) queryParams.append('category', params.category);
-    if (params?.search) queryParams.append('search', params.search);
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     if (params?.offset) queryParams.append('offset', params.offset.toString());
 
@@ -270,15 +344,17 @@ class APIService {
   }
 
   /**
-   * Search products by name/brand
-   * If generateIfNotFound is true, will use AI to generate data for unknown products
+   * Server-side text search: GET /products/search?q=xxx
+   * Used by the search screen (debounced, min 2 chars).
    */
   async searchProducts(
     query: string,
-    generateIfNotFound: boolean = false
+    params?: { limit?: number; category?: string }
   ): Promise<ProductSearchResponse> {
-    const params = generateIfNotFound ? '?generate_if_not_found=true' : '';
-    return this.fetch<ProductSearchResponse>(`/products/search/${encodeURIComponent(query)}${params}`);
+    const qp = new URLSearchParams({ q: query });
+    if (params?.limit) qp.append('limit', params.limit.toString());
+    if (params?.category) qp.append('category', params.category);
+    return this.fetch<ProductSearchResponse>(`/products/search?${qp.toString()}`);
   }
 
   // ============================================
@@ -289,7 +365,7 @@ class APIService {
    * Get current user's health profile
    */
   async getHealthProfile(authToken: string): Promise<UserHealthProfile> {
-    return this.fetch<UserHealthProfile>('/users/me/profile', {
+    return this.fetch<UserHealthProfile>('/users/me', {
       headers: { Authorization: `Bearer ${authToken}` },
     });
   }
@@ -301,7 +377,7 @@ class APIService {
     authToken: string,
     data: UserHealthProfileUpdate
   ): Promise<UserHealthProfile> {
-    return this.fetch<UserHealthProfile>('/users/me/profile', {
+    return this.fetch<UserHealthProfile>('/users/me', {
       method: 'PUT',
       headers: { Authorization: `Bearer ${authToken}` },
       body: JSON.stringify(data),
@@ -339,33 +415,26 @@ class APIService {
   // ============================================
 
   /**
-   * Get user's scan history
+   * Get user's scan history (auth token injected automatically)
    */
-  async getScanHistory(
-    authToken: string,
-    params?: { limit?: number; offset?: number; date?: string }
-  ): Promise<ScanHistoryResponse> {
+  async getScanHistory(params?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<ScanHistoryResponse> {
     const queryParams = new URLSearchParams();
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     if (params?.offset) queryParams.append('offset', params.offset.toString());
-    if (params?.date) queryParams.append('date', params.date);
 
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    return this.fetch<ScanHistoryResponse>(`/users/me/history${query}`, {
-      headers: { Authorization: `Bearer ${authToken}` },
-    });
+    return this.fetch<ScanHistoryResponse>(`/users/me/history${query}`);
   }
 
   /**
-   * Add a scan to history
+   * Add a product view/scan to history (auth token injected automatically)
    */
-  async addToScanHistory(
-    authToken: string,
-    productId: string
-  ): Promise<ScanHistoryItem> {
+  async addToScanHistory(productId: string): Promise<ScanHistoryItem> {
     return this.fetch<ScanHistoryItem>('/users/me/history', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${authToken}` },
       body: JSON.stringify({ product_id: productId }),
     });
   }
@@ -434,6 +503,39 @@ class APIService {
     return this.fetch<ServerPersonalAnalysis>(`/products/${productId}/personalize${query}`);
   }
 
+  // ============================================
+  // Ingredient Methods
+  // ============================================
+
+  /**
+   * Search canonical ingredients by name.
+   * Used by the Search tab when the user switches to ingredient mode.
+   */
+  async searchIngredients(query: string, limit = 20): Promise<IngredientSearchResponse> {
+    const params = new URLSearchParams({ q: query, limit: String(limit) });
+    return this.fetch<IngredientSearchResponse>(`/ingredients/search?${params}`);
+  }
+
+  /**
+   * Get full ingredient deep dive by ID.
+   * Returns mechanism, belief/reality summary, evidence records, and found-in products.
+   */
+  async getIngredient(ingredientId: string): Promise<IngredientDetail> {
+    return this.fetch<IngredientDetail>(`/ingredients/${ingredientId}`);
+  }
+
+  /**
+   * Fetch an ingredient by ID, returning null on error.
+   * Used by screens that want graceful error handling.
+   */
+  async getIngredientWithFallback(ingredientId: string): Promise<IngredientDetail | null> {
+    try {
+      return await this.getIngredient(ingredientId);
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * Analyze a meal photo or free-text description with Claude AI.
    * Provide either image_base64 (base64-encoded JPEG) or description (free text).
@@ -450,3 +552,15 @@ class APIService {
 }
 
 export const api = new APIService();
+
+/**
+ * Fetch a product by ID, returning null instead of throwing on error.
+ * Used by the product detail screen so it can show a graceful error state.
+ */
+export async function getProductWithFallback(id: string): Promise<Product | null> {
+  try {
+    return await api.getProduct(id);
+  } catch {
+    return null;
+  }
+}

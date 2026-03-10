@@ -1,10 +1,20 @@
 """User API endpoints."""
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, DBSession, get_subscription_service
-from app.schemas.user import UserProfileResponse, UserProfileUpdate
+from app.models.user import ScanHistoryEntry
+from app.models.product import Product
+from app.schemas.user import (
+    UserProfileResponse,
+    UserProfileUpdate,
+    ScanHistoryItemResponse,
+    ScanHistoryResponse,
+)
 from app.schemas.subscription import SubscriptionResponse
 from app.services.subscription import SubscriptionService
 
@@ -47,6 +57,81 @@ async def complete_onboarding(
     await db.commit()
 
     return {"completed": True}
+
+
+@router.get("/me/history", response_model=ScanHistoryResponse)
+async def get_scan_history(
+    db: DBSession,
+    current_user: CurrentUser,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """Get the current user's scan history, newest first."""
+    count_result = await db.execute(
+        select(func.count()).where(ScanHistoryEntry.user_id == current_user.id)
+    )
+    total = count_result.scalar_one()
+
+    result = await db.execute(
+        select(ScanHistoryEntry)
+        .where(ScanHistoryEntry.user_id == current_user.id)
+        .options(selectinload(ScanHistoryEntry.product))
+        .order_by(ScanHistoryEntry.scanned_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    entries = list(result.scalars().all())
+
+    items = [
+        ScanHistoryItemResponse(
+            id=e.id,
+            product_id=e.product_id,
+            product_name=e.product.name,
+            product_brand=e.product.brand,
+            product_grade=e.product.grade or "C",
+            scanned_at=e.scanned_at,
+        )
+        for e in entries
+    ]
+
+    return ScanHistoryResponse(items=items, total=total)
+
+
+@router.post("/me/history", response_model=ScanHistoryItemResponse, status_code=201)
+async def add_to_scan_history(
+    body: dict,
+    db: DBSession,
+    current_user: CurrentUser,
+):
+    """Record a product scan/view in history."""
+    product_id_raw = body.get("product_id")
+    if not product_id_raw:
+        raise HTTPException(status_code=422, detail="product_id is required")
+
+    try:
+        product_id = UUID(str(product_id_raw))
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid product_id")
+
+    # Verify product exists
+    product_result = await db.execute(select(Product).where(Product.id == product_id))
+    product = product_result.scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    entry = ScanHistoryEntry(user_id=current_user.id, product_id=product_id)
+    db.add(entry)
+    await db.commit()
+    await db.refresh(entry)
+
+    return ScanHistoryItemResponse(
+        id=entry.id,
+        product_id=entry.product_id,
+        product_name=product.name,
+        product_brand=product.brand,
+        product_grade=product.grade or "C",
+        scanned_at=entry.scanned_at,
+    )
 
 
 @router.get("/me/subscription", response_model=SubscriptionResponse)

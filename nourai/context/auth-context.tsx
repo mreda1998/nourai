@@ -19,7 +19,7 @@ interface AuthState {
   onboardingProfile: OnboardingProfile | null;
   completeOnboarding: (profile?: OnboardingProfile) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, name: string) => Promise<void>;
+  signUp: (email: string, password: string, name: string) => Promise<{ needsEmailConfirmation: boolean }>;
   signOut: () => Promise<void>;
 }
 
@@ -108,12 +108,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await api.updateHealthProfile(token, {
         biological_sex:
           profile.biologicalSex === 'not_specified' ? 'other' : profile.biologicalSex,
-        is_pregnant: profile.isPregnant,
-        is_breastfeeding: profile.isBreastfeeding,
         age_range: profile.ageRange || undefined,
         focus_areas: profile.focusAreas,
         health_concerns: profile.healthConcerns,
-        goals: profile.goals,
+        health_goals: profile.goals,
+        is_pregnant: profile.isPregnant,
+        is_breastfeeding: profile.isBreastfeeding,
+        onboarding_completed: true,
       });
       console.log('[Auth] Profile synced to backend');
     } catch (err) {
@@ -150,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, name: string) => {
+  const signUp = async (email: string, password: string, name: string): Promise<{ needsEmailConfirmation: boolean }> => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -163,6 +164,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (session?.access_token && onboardingProfile) {
       await syncProfileToBackend(session.access_token, onboardingProfile);
     }
+
+    // When email confirmation is required, Supabase returns user but no session
+    return { needsEmailConfirmation: !session };
   };
 
   const signOut = async () => {

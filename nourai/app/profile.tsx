@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
   Colors,
@@ -19,6 +21,8 @@ import {
   scale,
   verticalScale,
 } from '@/constants/theme';
+import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
 
 // Skin type options matching moodboard
 const SKIN_TYPES = [
@@ -41,12 +45,15 @@ const DEFAULT_WATCHLIST = [
   { id: '3', name: 'Alcohol Denat.' },
 ];
 
+const SKIN_PROFILE_KEY = '@nourai_skin_profile';
+
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [selectedSkinType, setSelectedSkinType] = useState('dry');
   const [selectedTriggers, setSelectedTriggers] = useState<string[]>(['rosacea']);
   const [watchlist, setWatchlist] = useState(DEFAULT_WATCHLIST);
+  const [isSaving, setIsSaving] = useState(false);
 
   const toggleTrigger = (id: string) => {
     setSelectedTriggers((prev) =>
@@ -56,6 +63,36 @@ export default function ProfileScreen() {
 
   const removeFromWatchlist = (id: string) => {
     setWatchlist((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      // Always persist locally so skin profile works offline/guest
+      const localData = { skinType: selectedSkinType, triggers: selectedTriggers, watchlist };
+      await AsyncStorage.setItem(SKIN_PROFILE_KEY, JSON.stringify(localData));
+
+      // Sync to backend if authenticated
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await api.updateHealthProfile(session.access_token, {
+          // Store skin type and triggers as conditions (closest semantic fit)
+          conditions: [
+            `skin:${selectedSkinType}`,
+            ...selectedTriggers.map((t) => `trigger:${t}`),
+          ],
+          // Watchlist ingredients stored as medications for now
+          medications: watchlist.map((w) => w.name),
+        });
+      }
+
+      router.back();
+    } catch {
+      // Save succeeded locally — just go back
+      router.back();
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -180,8 +217,11 @@ export default function ProfileScreen() {
 
       {/* Save Button - matching moodboard */}
       <View style={[styles.saveBar, { paddingBottom: insets.bottom + Spacing.lg }]}>
-        <Pressable style={styles.saveButton} onPress={() => router.back()}>
-          <Text style={styles.saveButtonText}>Update Profile</Text>
+        <Pressable style={[styles.saveButton, isSaving && { opacity: 0.6 }]} onPress={handleSave} disabled={isSaving}>
+          {isSaving
+            ? <ActivityIndicator color={Colors.bone} />
+            : <Text style={styles.saveButtonText}>Update Profile</Text>
+          }
         </Pressable>
       </View>
     </View>

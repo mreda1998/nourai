@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -72,12 +71,11 @@ export default function ProductDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { stack, addToStack, removeFromStack } = useAppState();
-  const { onboardingProfile } = useAuth();
+  const { onboardingProfile, isSignedIn } = useAuth();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [imageError, setImageError] = useState(false);
 
   // ── Server-side personalization ────────────────────────────────────────────
   // Fires after the product loads. Server result is preferred; the client-side
@@ -126,11 +124,14 @@ export default function ProductDetailScreen() {
     if (!id) return;
     setLoading(true);
     setError(null);
-    setImageError(false);
     try {
       const data = await getProductWithFallback(id);
       if (data) {
         setProduct(data);
+        // Record in history (fire-and-forget, only for signed-in users)
+        if (isSignedIn) {
+          api.addToScanHistory(data.id).catch(() => {});
+        }
       } else {
         setError('Product not found');
       }
@@ -201,6 +202,21 @@ export default function ProductDetailScreen() {
   }
 
   const gradeStyle = getGradeStyle(product.grade);
+
+  // 6 fixed bio-domains — always shown; merged with any backend values
+  const BIO_DOMAIN_LABELS = [
+    'Gut Health',
+    'Dermal',
+    'Metabolic',
+    'Exposure Load',
+    'Hormonal Balance',
+    'Sleep Recovery',
+  ];
+  const bioDomains = BIO_DOMAIN_LABELS.map((label) => {
+    const found = product.bio_domains.find((d) => d.name === label);
+    return found ?? { name: label, value: 0, is_negative: false };
+  });
+
   const hasPersonalData =
     personalAnalysis && (personalAnalysis.hasConcernFlags || personalAnalysis.hasGoalSupports);
 
@@ -219,35 +235,6 @@ export default function ProductDetailScreen() {
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
           <Text style={styles.backBtnText}>← Back</Text>
         </Pressable>
-
-        {/* Hero: image + grade */}
-        <View style={styles.heroSection}>
-          <View style={styles.imageContainer}>
-            {product.image_url && !imageError ? (
-              <Image
-                source={{ uri: product.image_url }}
-                style={styles.productImage}
-                resizeMode="contain"
-                onError={() => setImageError(true)}
-              />
-            ) : (
-              <View style={styles.imagePlaceholder}>
-                <Text style={styles.imagePlaceholderIcon}>📦</Text>
-              </View>
-            )}
-          </View>
-
-          {product.grade && (
-            <View style={styles.gradeContainer}>
-              <View style={[styles.gradeBadge, { backgroundColor: gradeStyle.bg }]}>
-                <Text style={[styles.gradeText, { color: gradeStyle.text }]}>
-                  {product.grade}
-                </Text>
-              </View>
-              <Text style={styles.gradeLabel}>{gradeStyle.label}</Text>
-            </View>
-          )}
-        </View>
 
         {/* AI badge */}
         {product.is_ai_generated && (
@@ -268,8 +255,13 @@ export default function ProductDetailScreen() {
           <Text style={styles.productName}>{product.name}</Text>
           {product.brand && <Text style={styles.brandName}>{product.brand}</Text>}
           <View style={styles.tagRow}>
-            <View style={styles.categoryTag}>
-              <Text style={styles.categoryTagText}>{product.category}</Text>
+            {product.grade && (
+              <View style={styles.tag}>
+                <Text style={styles.tagText}>Grade {product.grade}</Text>
+              </View>
+            )}
+            <View style={styles.tag}>
+              <Text style={styles.tagText}>{product.category}</Text>
             </View>
             {product.tags?.map((tag, index) => (
               <Animated.View key={tag} entering={FadeInUp.duration(300).delay(index * 60)}>
@@ -390,18 +382,19 @@ export default function ProductDetailScreen() {
 
             {product.ingredients.map((ingredient, index) => {
               const personal = ingredientPersonalization?.get(ingredient.name);
-              return (
-                <Animated.View key={ingredient.name} entering={FadeInUp.duration(400).delay(index * 80)}>
-                  <View style={[
-                    styles.ingredientCard,
-                    !!personal?.concernFlags.length && styles.ingredientCardFlagged,
-                    !personal?.concernFlags.length && !!personal?.goalSupports.length && styles.ingredientCardGoal,
-                  ]}>
-                    <View style={styles.ingredientHeader}>
-                      <Text style={styles.ingredientName}>
-                        {ingredient.name}
-                        {ingredient.concentration && ` (${ingredient.concentration})`}
-                      </Text>
+              const canDive = !!ingredient.ingredient_id;
+              const cardContent = (
+                <View style={[
+                  styles.ingredientCard,
+                  !!personal?.concernFlags.length && styles.ingredientCardFlagged,
+                  !personal?.concernFlags.length && !!personal?.goalSupports.length && styles.ingredientCardGoal,
+                ]}>
+                  <View style={styles.ingredientHeader}>
+                    <Text style={styles.ingredientName}>
+                      {ingredient.name}
+                      {ingredient.concentration && ` (${ingredient.concentration})`}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
                       {ingredient.tag && (
                         <View style={[
                           styles.ingredientTag,
@@ -415,107 +408,82 @@ export default function ProductDetailScreen() {
                           </Text>
                         </View>
                       )}
+                      {/* Chevron indicates the ingredient has a deep dive page */}
+                      {canDive && (
+                        <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={Colors.inkTertiary} strokeWidth={2}>
+                          <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+                        </Svg>
+                      )}
                     </View>
-
-                    {ingredient.description && (
-                      <Text style={styles.ingredientDesc}>{ingredient.description}</Text>
-                    )}
-
-                    {/* Personal badges on this specific ingredient */}
-                    {personal && (
-                      <View style={styles.personalBadgeRow}>
-                        {personal.concernFlags.map(({ concern, label }) => (
-                          <View key={concern} style={styles.personalConcernBadge}>
-                            <Text style={styles.personalConcernBadgeText}>
-                              ⚠ {displayConcern(concern)}
-                            </Text>
-                          </View>
-                        ))}
-                        {personal.goalSupports.map(({ goal, label }) => (
-                          <View key={goal} style={styles.personalGoalBadge}>
-                            <Text style={styles.personalGoalBadgeText}>
-                              ✓ {displayGoal(goal)}
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
                   </View>
+
+                  {ingredient.description && (
+                    <Text style={styles.ingredientDesc}>{ingredient.description}</Text>
+                  )}
+
+                  {/* Personal badges on this specific ingredient */}
+                  {personal && (
+                    <View style={styles.personalBadgeRow}>
+                      {personal.concernFlags.map(({ concern, label }) => (
+                        <View key={concern} style={styles.personalConcernBadge}>
+                          <Text style={styles.personalConcernBadgeText}>
+                            ⚠ {displayConcern(concern)}
+                          </Text>
+                        </View>
+                      ))}
+                      {personal.goalSupports.map(({ goal, label }) => (
+                        <View key={goal} style={styles.personalGoalBadge}>
+                          <Text style={styles.personalGoalBadgeText}>
+                            ✓ {displayGoal(goal)}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              );
+              return (
+                <Animated.View key={ingredient.name} entering={FadeInUp.duration(400).delay(index * 80)}>
+                  {canDive ? (
+                    <Pressable
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        router.push(`/ingredient/${ingredient.ingredient_id}`);
+                      }}
+                    >
+                      {cardContent}
+                    </Pressable>
+                  ) : cardContent}
                 </Animated.View>
               );
             })}
           </View>
         )}
 
-        {/* Bio-Domain Impact */}
-        {product.bio_domains.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionDivider} />
-            <Text style={styles.sectionLabel}>Bio-Domain Impact</Text>
+        {/* Bio-Domain Impact — always shown, 6 fixed domains */}
+        <View style={styles.section}>
+          <View style={styles.sectionDivider} />
+          <Text style={styles.sectionLabel}>Bio-Domain Impact</Text>
 
-            {product.bio_domains.map((domain) => (
-              <View key={domain.name} style={styles.chartRow}>
-                <Text style={styles.chartLabel}>{domain.name}</Text>
-                <View style={styles.chartBarContainer}>
+          {bioDomains.map((domain) => (
+            <View key={domain.name} style={styles.chartRow}>
+              <Text style={styles.chartLabel}>{domain.name}</Text>
+              <View style={styles.chartBarContainer}>
+                {domain.value > 0 && (
                   <View
-                    className={`h-full ${domain.is_negative ? 'bg-accent-alert' : 'bg-ink'}`}
-                    style={{ width: `${domain.value}%` }}
+                    style={[
+                      styles.chartBarFill,
+                      { width: `${domain.value}%`, backgroundColor: domain.is_negative ? Colors.accentAlert : Colors.ink },
+                    ]}
                   />
-                </View>
-                <Text style={styles.chartValue}>
-                  {domain.is_negative ? '-' : '+'}{Math.round(domain.value / 10)}
-                </Text>
+                )}
               </View>
-            ))}
-          </View>
-        )}
-
-        {/* Clinical Recommendations */}
-        {product.recommendations.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionDivider} />
-            <Text style={styles.sectionLabel}>Clinical Recommendations</Text>
-
-            <View style={styles.table}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.tableHeaderText, { flex: 1 }]}>Context</Text>
-                <Text style={[styles.tableHeaderText, { flex: 2 }]}>Protocol</Text>
-              </View>
-              {product.recommendations.map((rec, index) => (
-                <View
-                  key={rec.context}
-                  style={[
-                    styles.tableRow,
-                    index < product.recommendations.length - 1 && styles.tableRowBorder,
-                  ]}
-                >
-                  <Text style={[styles.tableCell, styles.tableCellContext, { flex: 1 }]}>
-                    {rec.context}
-                  </Text>
-                  <Text style={[styles.tableCell, { flex: 2 }]}>{rec.protocol}</Text>
-                </View>
-              ))}
+              <Text style={styles.chartValue}>
+                {domain.value === 0 ? '—' : `${domain.is_negative ? '-' : '+'}${Math.round(domain.value / 10)}`}
+              </Text>
             </View>
-          </View>
-        )}
-
-        {/* Research Citations */}
-        {product.citations.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionDivider} />
-            <Text style={styles.sectionLabel}>Research Citations</Text>
-
-            {product.citations.map((citation, index) => (
-              <View key={index} style={styles.citation}>
-                <Text style={styles.citationText}>
-                  "{citation.text}"{citation.journal && (
-                    <Text style={styles.citationJournal}> {citation.journal}</Text>
-                  )}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
+          ))}
+        </View>
 
         <View style={{ height: verticalScale(40) }} />
       </ScrollView>
@@ -564,71 +532,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
     color: Colors.ink,
-  },
-  heroSection: {
-    flexDirection: 'row',
-    gap: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  imageContainer: {
-    width: scale(140),
-    height: scale(140),
-    backgroundColor: Colors.boneCard,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
-  productImage: {
-    width: '100%',
-    height: '100%',
-  },
-  imagePlaceholder: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.boneDark,
-  },
-  imagePlaceholderIcon: {
-    fontSize: scale(48),
-    opacity: 0.5,
-  },
-  gradeContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gradeBadge: {
-    width: scale(56),
-    height: scale(56),
-    borderRadius: scale(8),
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.xs,
-  },
-  gradeText: {
-    fontFamily: Fonts.mono,
-    fontSize: FontSizes.display,
-    fontWeight: '700',
-  },
-  gradeLabel: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: Colors.inkSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  categoryTag: {
-    paddingVertical: scale(4),
-    paddingHorizontal: scale(12),
-    backgroundColor: Colors.ink,
-    borderRadius: Radius.pill,
-  },
-  categoryTagText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    color: Colors.bone,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   aiBadgeIcon: {
     fontSize: FontSizes.title,
@@ -953,10 +856,11 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   chartLabel: {
-    width: scale(60),
+    width: scale(100),
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.caption,
     textTransform: 'uppercase',
+    letterSpacing: 0.4,
     color: Colors.ink,
   },
   chartBarContainer: {
@@ -966,6 +870,10 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     overflow: 'hidden',
   },
+  chartBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
   chartValue: {
     width: scale(30),
     fontFamily: Fonts.serif,
@@ -974,54 +882,4 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 
-  // ── Table ───────────────────────────────────────────────────────────────────
-  table: {
-    marginTop: Spacing.sm,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    paddingBottom: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderHairline,
-  },
-  tableHeaderText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: Colors.inkSecondary,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: Spacing.sm,
-  },
-  tableRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderHairline,
-  },
-  tableCell: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.ink,
-    lineHeight: FontSizes.body * 1.5,
-  },
-  tableCellContext: {
-    fontFamily: Fonts.sansSemiBold,
-  },
-
-  // ── Citations ───────────────────────────────────────────────────────────────
-  citation: {
-    paddingLeft: Spacing.sm,
-    borderLeftWidth: 1,
-    borderLeftColor: Colors.borderHairline,
-    marginBottom: Spacing.sm,
-  },
-  citationText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: Colors.inkSecondary,
-    lineHeight: FontSizes.caption * 1.5,
-  },
-  citationJournal: {
-    fontFamily: Fonts.serifItalic,
-    color: Colors.ink,
-  },
 });

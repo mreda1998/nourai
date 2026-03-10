@@ -40,18 +40,18 @@ class Product(Base, UUIDMixin, TimestampMixin):
     barcode: Mapped[str | None] = mapped_column(
         String(20), unique=True, index=True, nullable=True
     )
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    brand: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    brand: Mapped[str | None] = mapped_column(Text, nullable=True)
     category: Mapped[ProductCategory] = mapped_column(
         String(20), nullable=False, default=ProductCategory.SUPPLEMENT
     )
     subcategory: Mapped[str | None] = mapped_column(String(100), nullable=True)
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
-    summary: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     serving_size: Mapped[str | None] = mapped_column(String(100), nullable=True)
     servings_per_container: Mapped[int | None] = mapped_column(Integer, nullable=True)
     usage: Mapped[str | None] = mapped_column(Text, nullable=True)
-    key_actives: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    key_actives: Mapped[str | None] = mapped_column(Text, nullable=True)
     price: Mapped[str | None] = mapped_column(String(50), nullable=True)
     health_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     sugar: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -100,7 +100,7 @@ class ProductIngredient(Base, UUIDMixin):
         ForeignKey("ingredients.id", ondelete="SET NULL"),
         nullable=True,
     )
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[IngredientStatus | None] = mapped_column(String(20), nullable=True)
     amount: Mapped[str | None] = mapped_column(String(50), nullable=True)
     unit: Mapped[str | None] = mapped_column(String(20), nullable=True)

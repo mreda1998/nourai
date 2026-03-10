@@ -67,15 +67,17 @@ class ProductRepository(BaseRepository[Product]):
         if category:
             base_query = base_query.where(Product.category == category)
 
-        # Get total count
-        count_result = await self.db.execute(
-            select(Product.id).where(
-                or_(
-                    Product.name.ilike(search_pattern),
-                    Product.brand.ilike(search_pattern),
-                )
+        # Count query mirrors base_query filters exactly
+        count_query = select(Product.id).where(
+            or_(
+                Product.name.ilike(search_pattern),
+                Product.brand.ilike(search_pattern),
             )
         )
+        if category:
+            count_query = count_query.where(Product.category == category)
+
+        count_result = await self.db.execute(count_query)
         total = len(count_result.all())
 
         # Get paginated results
@@ -103,6 +105,35 @@ class ProductRepository(BaseRepository[Product]):
             .offset(offset)
         )
         return list(result.scalars().all())
+
+    async def list_products(
+        self,
+        category: ProductCategory | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[Product], int]:
+        """
+        List all products with optional category filter.
+        Returns (products, total_count).
+        """
+        base_query = select(Product)
+        count_query = select(Product.id)
+
+        if category:
+            base_query = base_query.where(Product.category == category)
+            count_query = count_query.where(Product.category == category)
+
+        count_result = await self.db.execute(count_query)
+        total = len(count_result.all())
+
+        result = await self.db.execute(
+            base_query.order_by(Product.health_score.desc().nullslast())
+            .limit(limit)
+            .offset(offset)
+        )
+        products = list(result.scalars().all())
+
+        return products, total
 
     async def get_top_rated(
         self,

@@ -22,6 +22,12 @@ class UserProfileResponse(BaseModel):
     medications: list[str] = []
     dietary_preferences: list[str] = []
     health_goals: list[str] = []
+    # Onboarding profile fields
+    age_range: str | None = None
+    focus_areas: list[str] = []
+    health_concerns: list[str] = []
+    is_pregnant: bool = False
+    is_breastfeeding: bool = False
     onboarding_completed: bool = False
     onboarding_step: int = 0
 
@@ -37,8 +43,34 @@ class UserProfileUpdate(BaseModel):
     medications: list[str] | None = None
     dietary_preferences: list[str] | None = None
     health_goals: list[str] | None = None
+    # Onboarding profile fields
+    age_range: str | None = None
+    focus_areas: list[str] | None = None
+    health_concerns: list[str] | None = None
+    is_pregnant: bool | None = None
+    is_breastfeeding: bool | None = None
     onboarding_completed: bool | None = None
     onboarding_step: int | None = None
+
+
+class ScanHistoryItemResponse(BaseModel):
+    """A single scan history entry with product details."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    product_id: UUID
+    product_name: str
+    product_brand: str | None = None
+    product_grade: str
+    scanned_at: datetime
+
+
+class ScanHistoryResponse(BaseModel):
+    """Paginated scan history."""
+
+    items: list[ScanHistoryItemResponse]
+    total: int
 
 
 class StackEntryCreate(BaseModel):

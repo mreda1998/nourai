@@ -165,6 +165,55 @@ SYNTHESIS_SYSTEM = (
     "study directly addresses them. Write findings in plain English."
 )
 
+# ─── Belief vs. reality summary tool ─────────────────────────────────────────
+# Called ONCE per ingredient after all individual study syntheses are done.
+# Uses Sonnet (not Haiku) — this is user-facing prose that appears on the
+# ingredient deep dive screen.
+
+BELIEF_TOOL: dict[str, Any] = {
+    "name": "record_belief_summary",
+    "description": (
+        "Write a two-part plain-English summary for an ingredient: "
+        "(1) what people commonly believe it does, and "
+        "(2) what the research evidence actually supports. "
+        "Called once per ingredient after all individual studies are synthesized."
+    ),
+    "input_schema": {
+        "type": "object",
+        "required": ["common_belief", "evidence_reality"],
+        "properties": {
+            "common_belief": {
+                "type": "string",
+                "description": (
+                    "2–3 sentences describing what most people believe this ingredient does "
+                    "and why they reach for it. Capture the marketing narrative and folk "
+                    "knowledge accurately — do not strawman it. "
+                    "Write in second person: 'People take X because...'"
+                ),
+            },
+            "evidence_reality": {
+                "type": "string",
+                "description": (
+                    "2–4 sentences summarizing what the human clinical evidence actually shows. "
+                    "Be honest about gaps: note when evidence is strong, limited, or only "
+                    "from animal/in-vitro studies. Include important nuances like "
+                    "population specificity (e.g. 'only in people with deficiency'), "
+                    "dose-response effects, or form differences. "
+                    "Start with what IS supported, then add caveats."
+                ),
+            },
+        },
+    },
+}
+
+BELIEF_SYSTEM = (
+    "You are a science communicator specializing in health ingredient research. "
+    "Your job is to bridge the gap between popular belief and clinical evidence — "
+    "fairly representing both the common narrative AND what trials actually show. "
+    "Be honest about weak evidence without being alarmist. Write for an intelligent "
+    "non-expert audience. Avoid jargon. Never make absolute claims."
+)
+
 # ─── PubMed helpers ───────────────────────────────────────────────────────────
 
 async def pubmed_search(
@@ -404,6 +453,56 @@ async def store_evidence(
     return evidence
 
 
+async def generate_belief_summary(
+    claude: anthropic.AsyncAnthropic,
+    ingredient_name: str,
+    findings: list[str],
+    mechanism_summary: str | None,
+) -> tuple[str, str] | None:
+    """
+    After all individual study syntheses are complete, make one final Claude
+    call (using Sonnet for quality) to produce the ingredient's belief vs.
+    reality summary.
+
+    `findings` is the list of plain-English finding sentences from every
+    synthesized study — Claude reads them as a body of evidence and writes
+    the two-paragraph synthesis.
+
+    Returns (common_belief, evidence_reality) or None on failure.
+    """
+    if not findings:
+        return None
+
+    findings_block = "\n".join(f"• {f}" for f in findings)
+
+    prompt = (
+        f"Ingredient: {ingredient_name}\n\n"
+        + (f"Known mechanism: {mechanism_summary}\n\n" if mechanism_summary else "")
+        + f"Synthesized research findings ({len(findings)} studies):\n"
+        + findings_block
+        + "\n\nUsing these findings, write the belief vs. reality summary "
+          "using the record_belief_summary tool."
+    )
+
+    try:
+        message = await claude.messages.create(
+            model="claude-sonnet-4-6",   # Sonnet for user-facing prose quality
+            max_tokens=600,
+            system=BELIEF_SYSTEM,
+            tools=[BELIEF_TOOL],
+            tool_choice={"type": "any"},
+            messages=[{"role": "user", "content": prompt}],
+        )
+        for block in message.content:
+            if block.type == "tool_use" and block.name == "record_belief_summary":
+                data = block.input
+                return data.get("common_belief"), data.get("evidence_reality")
+        return None
+    except anthropic.APIError as exc:
+        print(f"    [Claude/Sonnet] Belief summary error for '{ingredient_name}': {exc}")
+        return None
+
+
 def derive_evidence_level(evidence_records: list[dict]) -> str:
     """
     Compute an overall evidence level for the ingredient based on all
@@ -459,7 +558,7 @@ async def research_one_ingredient(
 
     try:
         # ── 2. Search PubMed ──────────────────────────────────────────────────
-        print(f"  [1/3] Searching PubMed...")
+        print(f"  [1/4] Searching PubMed...")
         pmids = await pubmed_search(http, name, pubmed_sem)
         print(f"        Found {len(pmids)} PMIDs: {', '.join(pmids[:5])}{'...' if len(pmids) > 5 else ''}")
 
@@ -479,7 +578,7 @@ async def research_one_ingredient(
             return
 
         # ── 3. Fetch abstracts (parallel, rate-limited) ───────────────────────
-        print(f"  [2/3] Fetching abstracts...")
+        print(f"  [2/4] Fetching abstracts...")
         fetch_tasks = [pubmed_fetch_abstract(http, pmid, pubmed_sem) for pmid in pmids]
         articles = await asyncio.gather(*fetch_tasks)
         valid_articles = [a for a in articles if a is not None]
@@ -489,7 +588,7 @@ async def research_one_ingredient(
             raise RuntimeError("All abstract fetches failed")
 
         # ── 4. Claude synthesis (parallel) ────────────────────────────────────
-        print(f"  [3/3] Synthesizing with Claude ({len(valid_articles)} abstracts)...")
+        print(f"  [3/4] Synthesizing with Claude ({len(valid_articles)} abstracts)...")
         synthesized: list[dict[str, Any]] = []
 
         async def _synthesize_and_store(article: dict) -> None:
@@ -510,7 +609,10 @@ async def research_one_ingredient(
             async with session_factory() as session:
                 ev = await store_evidence(session, iid, article, result)
                 await session.commit()
-                synthesized.append({"confidence": result.get("confidence", "low")})
+                synthesized.append({
+                    "confidence": result.get("confidence", "low"),
+                    "finding":    result.get("finding", ""),
+                })
 
             direction_icon = {
                 "benefit": "✓",
@@ -525,17 +627,41 @@ async def research_one_ingredient(
 
         await asyncio.gather(*[_synthesize_and_store(a) for a in valid_articles])
 
-        # ── 5. Update ingredient with aggregate evidence level ─────────────────
+        # ── 5. Generate belief vs. reality summary ────────────────────────────
+        # Collect all finding sentences from this run's synthesized records,
+        # then ask Sonnet to write the two-paragraph summary in one call.
+        print(f"  [4/4] Generating belief vs. reality summary...")
+        findings = [e["finding"] for e in synthesized if e.get("finding")]
+        belief_result = await generate_belief_summary(
+            claude,
+            name,
+            findings,
+            ingredient.mechanism_summary,
+        )
+        if belief_result:
+            common_belief, evidence_reality = belief_result
+            print(f"        Belief summary written ({len(common_belief or '')} chars)")
+        else:
+            common_belief, evidence_reality = None, None
+            print(f"        Belief summary skipped (no findings or API error)")
+
+        # ── 6. Update ingredient with aggregate evidence level + summaries ────
         evidence_level = derive_evidence_level(synthesized)
+        update_values: dict[str, Any] = {
+            "research_status": ResearchStatus.COMPLETE,
+            "researched_at": datetime.now(timezone.utc),
+            "evidence_level": evidence_level,
+        }
+        if common_belief:
+            update_values["common_belief"] = common_belief
+        if evidence_reality:
+            update_values["evidence_reality"] = evidence_reality
+
         async with session_factory() as session:
             await session.execute(
                 update(Ingredient)
                 .where(Ingredient.id == iid)
-                .values(
-                    research_status=ResearchStatus.COMPLETE,
-                    researched_at=datetime.now(timezone.utc),
-                    evidence_level=evidence_level,
-                )
+                .values(**update_values)
             )
             await session.commit()
 

@@ -26,7 +26,7 @@ import {
 } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { supabase } from '@/lib/supabase';
-import { api } from '@/services/api';
+import { api, type UserHealthProfile } from '@/services/api';
 
 // Subscription tier type
 type SubscriptionTier = 'free' | 'premium_monthly' | 'premium_annual' | 'family';
@@ -161,24 +161,36 @@ export default function ProfileHubScreen() {
     scansRemaining: 5,
     scansPerDay: 5,
   });
+  const [healthProfile, setHealthProfile] = useState<UserHealthProfile | null>(null);
 
   useEffect(() => {
-    const loadSubscription = async () => {
+    const loadProfileData = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
-        const sub = await api.getSubscription(session.access_token);
-        setSubscription({
-          tier: sub.tier,
-          expiresAt: sub.expires_at ?? null,
-          scansRemaining: sub.tier === 'free' ? 5 : -1, // -1 = unlimited
-          scansPerDay: sub.tier === 'free' ? 5 : -1,
-        });
+
+        const [sub, profile] = await Promise.allSettled([
+          api.getSubscription(session.access_token),
+          api.getHealthProfile(session.access_token),
+        ]);
+
+        if (sub.status === 'fulfilled') {
+          setSubscription({
+            tier: sub.value.tier,
+            expiresAt: sub.value.expires_at ?? null,
+            scansRemaining: sub.value.tier === 'free' ? 5 : -1,
+            scansPerDay: sub.value.tier === 'free' ? 5 : -1,
+          });
+        }
+
+        if (profile.status === 'fulfilled') {
+          setHealthProfile(profile.value);
+        }
       } catch {
-        // Keep free-tier defaults if API is unreachable
+        // Keep defaults if API is unreachable
       }
     };
-    loadSubscription();
+    loadProfileData();
   }, []);
 
   const userIsPremium = isPremium(subscription.tier);
@@ -305,6 +317,49 @@ export default function ProfileHubScreen() {
             </Pressable>
           )}
         </View>
+
+        {/* Onboarding Profile Summary */}
+        {isSignedIn && healthProfile && (healthProfile.focus_areas.length > 0 || healthProfile.health_goals.length > 0) && (
+          <View style={styles.profileSummaryCard}>
+            <Text style={styles.profileSummaryTitle}>Your Health Profile</Text>
+            {healthProfile.focus_areas.length > 0 && (
+              <View style={styles.profileSummaryRow}>
+                <Text style={styles.profileSummaryLabel}>Focus Areas</Text>
+                <View style={styles.profileSummaryTags}>
+                  {healthProfile.focus_areas.map((f) => (
+                    <View key={f} style={styles.profileSummaryTag}>
+                      <Text style={styles.profileSummaryTagText}>{f}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+            {healthProfile.health_concerns.length > 0 && (
+              <View style={styles.profileSummaryRow}>
+                <Text style={styles.profileSummaryLabel}>Concerns</Text>
+                <View style={styles.profileSummaryTags}>
+                  {healthProfile.health_concerns.map((c) => (
+                    <View key={c} style={styles.profileSummaryTag}>
+                      <Text style={styles.profileSummaryTagText}>{c}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+            {healthProfile.health_goals.length > 0 && (
+              <View style={styles.profileSummaryRow}>
+                <Text style={styles.profileSummaryLabel}>Goals</Text>
+                <View style={styles.profileSummaryTags}>
+                  {healthProfile.health_goals.map((g) => (
+                    <View key={g} style={styles.profileSummaryTag}>
+                      <Text style={styles.profileSummaryTagText}>{g}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Health Profiles Section */}
         <View style={styles.section}>
@@ -577,6 +632,53 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.sansMedium,
     fontSize: FontSizes.body,
     color: Colors.ink,
+  },
+  profileSummaryCard: {
+    marginHorizontal: Layout.screenPaddingHorizontal,
+    backgroundColor: Colors.boneCard,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.md,
+    padding: Spacing.lg,
+    marginBottom: Spacing.xl,
+    gap: Spacing.md,
+  },
+  profileSummaryTitle: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    color: Colors.inkSecondary,
+    marginBottom: Spacing.xs,
+  },
+  profileSummaryRow: {
+    gap: Spacing.xs,
+  },
+  profileSummaryLabel: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    color: Colors.inkTertiary,
+  },
+  profileSummaryTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+  },
+  profileSummaryTag: {
+    paddingVertical: 4,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    backgroundColor: Colors.bone,
+  },
+  profileSummaryTagText: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    color: Colors.inkSecondary,
+    textTransform: 'capitalize',
   },
   section: {
     paddingHorizontal: Layout.screenPaddingHorizontal,

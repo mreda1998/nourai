@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
   ActivityIndicator,
+  Dimensions,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,49 +10,132 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeInLeft, FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { BarChart, PieChart } from 'react-native-gifted-charts';
 
 import {
   Colors,
   Fonts,
-  Spacing,
-  Radius,
   FontSizes,
   Layout,
+  Radius,
   scale,
+  Spacing,
   verticalScale,
 } from '@/constants/theme';
 import { useAppState } from '@/context/app-state';
-import { api, ScanHistoryItem } from '@/services/api';
+import { useAuth } from '@/context/auth-context';
+import { api, type ScanHistoryItem } from '@/services/api';
+import ProductListItem from '@/components/ProductListItem';
 
-// Calendar helper
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_INNER_WIDTH = SCREEN_WIDTH - Layout.screenPaddingHorizontal * 2 - Spacing.md * 2;
+const BAR_CHART_WIDTH = CARD_INNER_WIDTH - scale(16); // leave room for initial spacing
+
+// ─── Calendar helpers ─────────────────────────────────────────────────────────
+
 function getWeekDays() {
   const today = new Date();
-  const days = [];
-  for (let i = -3; i <= 3; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + i);
-    days.push({
-      day: date.toLocaleDateString('en-US', { weekday: 'short' }).charAt(0),
-      date: date.getDate(),
-      isToday: i === 0,
-      fullDate: date,
-    });
-  }
-  return days;
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() + (i - 3));
+    return {
+      day: d.toLocaleDateString('en-US', { weekday: 'short' }).charAt(0),
+      date: d.getDate(),
+      isToday: i === 3,
+    };
+  });
 }
+
+// ─── Domain Drift ─────────────────────────────────────────────────────────────
+
+interface WeekBucket {
+  label: string;
+  total: number;
+  highQuality: number; // grade A or B
+}
+
+function buildWeekBuckets(items: ScanHistoryItem[]): WeekBucket[] {
+  const now = Date.now();
+  const MS_WEEK = 7 * 24 * 60 * 60 * 1000;
+  const labels = ['W−3', 'W−2', 'W−1', 'Now'];
+  const buckets: WeekBucket[] = labels.map((label) => ({ label, total: 0, highQuality: 0 }));
+
+  items.forEach((item) => {
+    const age = now - new Date(item.scanned_at).getTime();
+    const weekIndex = Math.floor(age / MS_WEEK);
+    if (weekIndex >= 4) return;
+    const bucket = buckets[3 - weekIndex];
+    bucket.total++;
+    if (item.product_grade === 'A' || item.product_grade === 'B') bucket.highQuality++;
+  });
+
+  return buckets;
+}
+
+function weekTrend(buckets: WeekBucket[]): 'improving' | 'declining' | 'stable' | 'insufficient' {
+  const filled = buckets.filter((b) => b.total > 0);
+  if (filled.length < 2) return 'insufficient';
+  const first = filled[0].highQuality / filled[0].total;
+  const last = filled[filled.length - 1].highQuality / filled[filled.length - 1].total;
+  if (last - first > 0.15) return 'improving';
+  if (first - last > 0.15) return 'declining';
+  return 'stable';
+}
+
+function trendLabel(t: ReturnType<typeof weekTrend>) {
+  switch (t) {
+    case 'improving': return { text: '↑ Improving', color: Colors.accentHill };
+    case 'declining': return { text: '↓ Declining', color: Colors.accentAlert };
+    case 'stable':    return { text: '→ Stable',    color: Colors.inkSecondary };
+    default:          return { text: '—',           color: Colors.inkTertiary };
+  }
+}
+
+// ─── Attention pattern ────────────────────────────────────────────────────────
+
+interface GradeDistribution {
+  grade: string;
+  count: number;
+  pct: number;
+  color: string;
+}
+
+function buildGradeDistribution(items: ScanHistoryItem[]): GradeDistribution[] {
+  if (items.length === 0) return [];
+  const counts: Record<string, number> = { A: 0, B: 0, C: 0, D: 0 };
+  items.forEach((i) => { counts[i.product_grade] = (counts[i.product_grade] ?? 0) + 1; });
+  const colors: Record<string, string> = {
+    A: Colors.accentHill,
+    B: 'rgba(28,28,28,0.55)',
+    C: Colors.accentClay,
+    D: Colors.accentAlert,
+  };
+  return ['A', 'B', 'C', 'D']
+    .filter((g) => counts[g] > 0)
+    .map((g) => ({
+      grade: g,
+      count: counts[g],
+      pct: Math.round((counts[g] / items.length) * 100),
+      color: colors[g],
+    }));
+}
+
+function buildInsight(items: ScanHistoryItem[]): string {
+  if (items.length === 0) return '';
+  const highQ = items.filter((i) => i.product_grade === 'A' || i.product_grade === 'B').length;
+  const pct = Math.round((highQ / items.length) * 100);
+  if (pct >= 70) return `${pct}% of what you've explored has strong evidence quality.`;
+  if (pct >= 40) return `${pct}% of explored products have good evidence quality. Worth refining.`;
+  return `Most products you're exploring have mixed or limited evidence.`;
+}
+
+// ─── History grouping ─────────────────────────────────────────────────────────
 
 interface HistoryGroup {
   date: string;
-  items: {
-    id: string;
-    productId: string;
-    name: string;
-    brand: string;
-    grade: string;
-    time: string;
-  }[];
+  items: { id: string; productId: string; name: string; brand: string; category: string; grade: string }[];
 }
 
 function groupHistoryByDate(items: ScanHistoryItem[]): HistoryGroup[] {
@@ -60,33 +144,24 @@ function groupHistoryByDate(items: ScanHistoryItem[]): HistoryGroup[] {
   const yesterday = new Date(Date.now() - 86400000).toDateString();
 
   items.forEach((item) => {
-    const date = new Date(item.scanned_at);
-    const dateStr = date.toDateString();
+    const d = new Date(item.scanned_at);
+    const ds = d.toDateString();
+    const label =
+      ds === today ? 'Today' :
+      ds === yesterday ? 'Yesterday' :
+      d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-    let label: string;
-    if (dateStr === today) {
-      label = 'Today';
-    } else if (dateStr === yesterday) {
-      label = 'Yesterday';
-    } else {
-      label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    }
-
-    if (!groups[label]) {
-      groups[label] = { date: label, items: [] };
-    }
-
+    if (!groups[label]) groups[label] = { date: label, items: [] };
     groups[label].items.push({
       id: item.id,
       productId: item.product_id,
       name: item.product_name,
-      brand: item.product_brand || 'Unknown',
+      brand: item.product_brand ?? '',
+      category: 'supplement',
       grade: item.product_grade,
-      time: date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
     });
   });
 
-  // Sort by date (Today first, then Yesterday, then by date descending)
   return Object.values(groups).sort((a, b) => {
     if (a.date === 'Today') return -1;
     if (b.date === 'Today') return 1;
@@ -96,243 +171,315 @@ function groupHistoryByDate(items: ScanHistoryItem[]): HistoryGroup[] {
   });
 }
 
+// ─── Main screen ──────────────────────────────────────────────────────────────
+
 export default function HistoryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { hasScannedBefore, stack } = useAppState();
+  const { isSignedIn } = useAuth();
   const weekDays = getWeekDays();
 
+  const [allItems, setAllItems] = useState<ScanHistoryItem[]>([]);
   const [history, setHistory] = useState<HistoryGroup[]>([]);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ total: 0, gradeA: 0, qualityScore: 0 });
 
-  useEffect(() => {
-    loadHistory();
-  }, []);
+  useEffect(() => { loadHistory(); }, []);
 
   const loadHistory = async () => {
     setLoading(true);
     try {
-      // For MVP, we don't have auth yet, so we'll call without token
-      // In production, this would include the auth token
-      const response = await api.getScanHistory('mock-token');
-      const grouped = groupHistoryByDate(response.items);
-      setHistory(grouped);
-
-      // Calculate stats
-      const total = response.items.length;
-      const gradeA = response.items.filter((i) => i.product_grade === 'A').length;
-      const qualityScore = total > 0 ? Math.round((gradeA / total) * 100) : 0;
-      setStats({ total, gradeA, qualityScore });
-    } catch (error) {
-      console.error('Error loading history:', error);
-      // Use local stack as fallback
+      if (!isSignedIn) throw new Error('not signed in');
+      const response = await api.getScanHistory({ limit: 100 });
+      setAllItems(response.items);
+      setHistory(groupHistoryByDate(response.items));
+    } catch {
       if (stack.length > 0) {
-        const stackHistory: HistoryGroup[] = [{
-          date: 'Recent',
-          items: stack.map((p) => ({
-            id: p.id,
-            productId: p.id,
-            name: p.name,
-            brand: p.brand,
-            grade: p.grade,
-            time: p.scannedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-          })),
-        }];
-        setHistory(stackHistory);
-
-        const gradeA = stack.filter((p) => p.grade === 'A').length;
-        setStats({
-          total: stack.length,
-          gradeA,
-          qualityScore: Math.round((gradeA / stack.length) * 100),
-        });
+        const fakeItems: ScanHistoryItem[] = stack.map((p) => ({
+          id: p.id,
+          product_id: p.id,
+          product_name: p.name,
+          product_brand: p.brand,
+          product_grade: p.grade,
+          scanned_at: p.scannedAt.toISOString(),
+        }));
+        setAllItems(fakeItems);
+        setHistory(groupHistoryByDate(fakeItems));
       }
     } finally {
       setLoading(false);
     }
   };
 
+  const weekBuckets = useMemo(() => buildWeekBuckets(allItems), [allItems]);
+  const trend = useMemo(() => weekTrend(weekBuckets), [weekBuckets]);
+  const trendDisplay = trendLabel(trend);
+  const gradeDistribution = useMemo(() => buildGradeDistribution(allItems), [allItems]);
+  const insight = useMemo(() => buildInsight(allItems), [allItems]);
+  const maxBucketTotal = Math.max(...weekBuckets.map((b) => b.total), 1);
+
+  // BarChart stacked data
+  const stackBarData = useMemo(() => weekBuckets.map((bucket) => {
+    const low = Math.max(0, bucket.total - bucket.highQuality);
+    const isEmpty = bucket.total === 0;
+    return {
+      stacks: [
+        { value: isEmpty ? 0 : bucket.highQuality, color: Colors.ink, borderRadius: isEmpty ? 0 : 3 },
+        { value: isEmpty ? 0 : low, color: Colors.boneDark, borderRadius: isEmpty ? 0 : 3 },
+      ],
+      label: bucket.label,
+      labelTextStyle: {
+        fontFamily: Fonts.mono,
+        fontSize: 10,
+        color: Colors.inkTertiary,
+        marginTop: 4,
+      },
+    };
+  }), [weekBuckets]);
+
+  // PieChart data
+  const pieData = useMemo(() => gradeDistribution.map((g) => ({
+    value: g.count,
+    color: g.color,
+    text: g.grade,
+    textSize: 11,
+    textColor: '#fff',
+    fontWeight: '700' as const,
+  })), [gradeDistribution]);
+
   const hasHistory = history.length > 0 || hasScannedBefore;
 
   return (
     <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={[
-          styles.container,
-          { paddingTop: insets.top + Spacing.lg },
-        ]}
+        contentContainerStyle={[styles.container, { paddingTop: insets.top + Spacing.lg }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* ── Header ──────────────────────────────────────────────────────── */}
         <View style={styles.header}>
-          <Text style={styles.title}>History</Text>
-          <Text style={styles.subtitle}>
-            {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          <View>
+            <Text style={styles.overline}>Behavioral Lens</Text>
+            <Text style={styles.title}>History</Text>
+          </View>
+          <Text style={styles.headerDate}>
+            {new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
           </Text>
         </View>
 
-        {/* Calendar Strip */}
+        {/* ── Calendar strip ───────────────────────────────────────────────── */}
         <View style={styles.calendarStrip}>
-          {weekDays.map((day, index) => (
+          {weekDays.map((day, i) => (
             <Pressable
-              key={index}
-              style={[
-                styles.calendarDay,
-                day.isToday && styles.calendarDayActive,
-              ]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
+              key={i}
+              style={[styles.calendarDay, day.isToday && styles.calendarDayActive]}
+              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
             >
-              <Text style={[
-                styles.calendarDayLabel,
-                day.isToday && styles.calendarDayLabelActive,
-              ]}>
+              <Text style={[styles.calDayLabel, day.isToday && styles.calDayLabelActive]}>
                 {day.day}
               </Text>
-              <Text style={[
-                styles.calendarDayNumber,
-                day.isToday && styles.calendarDayNumberActive,
-              ]}>
+              <Text style={[styles.calDayNum, day.isToday && styles.calDayNumActive]}>
                 {day.date}
               </Text>
             </Pressable>
           ))}
         </View>
 
-        {/* Loading State */}
         {loading && (
-          <View style={styles.loadingState}>
-            <ActivityIndicator size="large" color={Colors.ink} />
-            <Text style={styles.loadingText}>Loading history...</Text>
+          <View style={styles.center}>
+            <ActivityIndicator color={Colors.ink} />
           </View>
         )}
 
-        {/* Empty State */}
         {!loading && !hasHistory && (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No Scan History</Text>
-            <Text style={styles.emptyDescription}>
-              Your scanned products will appear here as a timeline.
+          <Animated.View entering={FadeIn.duration(400)} style={styles.center}>
+            <Text style={styles.emptyTitle}>Nothing yet</Text>
+            <Text style={styles.emptyBody}>
+              Products you scan or view will appear here as a timeline.
             </Text>
-            <Pressable
-              style={styles.scanButton}
-              onPress={() => router.push('/(tabs)/scan')}
-            >
-              <Text style={styles.scanButtonText}>Scan First Product</Text>
+            <Pressable style={styles.emptyBtn} onPress={() => router.push('/(tabs)/scan')}>
+              <Text style={styles.emptyBtnText}>Start Scanning</Text>
             </Pressable>
-          </View>
-        )}
-
-        {/* History Timeline */}
-        {!loading && hasHistory && (
-          <View style={styles.timeline}>
-            {history.map((group) => (
-              <View key={group.date} style={styles.timelineGroup}>
-                <View style={styles.timelineHeader}>
-                  <Text style={styles.timelineDate}>{group.date}</Text>
-                  <View style={styles.timelineLine} />
-                </View>
-                {group.items.map((item, index) => (
-                  <Animated.View
-                    key={item.id}
-                    entering={FadeInLeft.duration(400).delay(index * 80)}
-                  >
-                    <Pressable
-                      style={styles.timelineItem}
-                      onPress={() => router.push(`/product/${item.productId}`)}
-                    >
-                      <View style={styles.timelineDot} />
-                      <View style={styles.timelineContent}>
-                        <View style={styles.itemHeader}>
-                          <Text style={styles.itemTime}>{item.time}</Text>
-                          <View style={[
-                            styles.gradeBadge,
-                            item.grade === 'A' && styles.gradeBadgeA,
-                          ]}>
-                            <Text style={[
-                              styles.gradeText,
-                              item.grade === 'A' && styles.gradeTextA,
-                            ]}>
-                              {item.grade}
-                            </Text>
-                          </View>
-                        </View>
-                        <Text style={styles.itemBrand}>{item.brand}</Text>
-                        <Text style={styles.itemName}>{item.name}</Text>
-                      </View>
-                    </Pressable>
-                  </Animated.View>
-                ))}
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Statistics Card */}
-        {!loading && hasHistory && stats.total > 0 && (
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.statsSection}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionLabel}>Summary</Text>
-            </View>
-            <View style={styles.statsGrid}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stats.total}</Text>
-                <Text style={styles.statLabel}>Products Scanned</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stats.gradeA}</Text>
-                <Text style={styles.statLabel}>Grade A</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stats.qualityScore}%</Text>
-                <Text style={styles.statLabel}>Quality Score</Text>
-              </View>
-            </View>
           </Animated.View>
         )}
+
+        {!loading && hasHistory && (
+          <>
+            {/* ── Evidence Quality · 4 Weeks ─────────────────────────────── */}
+            <Animated.View entering={FadeInUp.duration(400)} style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionLabel}>Evidence Quality · 4 Weeks</Text>
+                <Text style={[styles.trendBadge, { color: trendDisplay.color }]}>
+                  {trendDisplay.text}
+                </Text>
+              </View>
+
+              <View style={styles.driftCard}>
+                <BarChart
+                  stackData={stackBarData}
+                  maxValue={Math.max(maxBucketTotal, 4)}
+                  height={verticalScale(90)}
+                  width={BAR_CHART_WIDTH}
+                  barWidth={scale(44)}
+                  spacing={scale(16)}
+                  initialSpacing={scale(20)}
+                  endSpacing={scale(8)}
+                  noOfSections={3}
+                  hideRules
+                  yAxisThickness={0}
+                  xAxisThickness={1}
+                  xAxisColor={Colors.borderHairline}
+                  hideYAxisText
+                  backgroundColor={Colors.boneCard}
+                  disableScroll
+                  isAnimated
+                  animationDuration={500}
+                />
+
+                <View style={styles.driftLegend}>
+                  <View style={styles.driftLegendItem}>
+                    <View style={[styles.driftLegendDot, { backgroundColor: Colors.ink }]} />
+                    <Text style={styles.driftLegendText}>Grade A/B</Text>
+                  </View>
+                  <View style={styles.driftLegendItem}>
+                    <View style={[styles.driftLegendDot, { backgroundColor: Colors.boneDark }]} />
+                    <Text style={styles.driftLegendText}>Grade C/D</Text>
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* ── Exploration Pattern ────────────────────────────────────── */}
+            {gradeDistribution.length > 0 && (
+              <Animated.View entering={FadeInUp.duration(400).delay(80)} style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionLabel}>Exploration Pattern</Text>
+                  <Text style={styles.totalCount}>{allItems.length} scanned</Text>
+                </View>
+
+                <View style={styles.patternCard}>
+                  <View style={styles.patternRow}>
+                    {/* Donut chart */}
+                    <PieChart
+                      data={pieData}
+                      donut
+                      radius={scale(56)}
+                      innerRadius={scale(38)}
+                      innerCircleColor={Colors.boneCard}
+                      backgroundColor={Colors.boneCard}
+                      isAnimated
+                      centerLabelComponent={() => (
+                        <View style={styles.pieCenterLabel}>
+                          <Text style={styles.pieCenterCount}>{allItems.length}</Text>
+                          <Text style={styles.pieCenterSub}>total</Text>
+                        </View>
+                      )}
+                    />
+
+                    {/* Grade breakdown */}
+                    <View style={styles.gradeBreakdown}>
+                      {gradeDistribution.map((g) => (
+                        <View key={g.grade} style={styles.gradeItem}>
+                          <View style={[styles.gradeDot, { backgroundColor: g.color }]} />
+                          <Text style={styles.gradeItemLabel}>Grade {g.grade}</Text>
+                          <Text style={styles.gradeItemPct}>{g.pct}%</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+
+                  {insight ? (
+                    <Text style={styles.insightText}>"{insight}"</Text>
+                  ) : null}
+                </View>
+              </Animated.View>
+            )}
+
+            {/* ── Timeline ──────────────────────────────────────────────── */}
+            <Animated.View entering={FadeInUp.duration(400).delay(160)} style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionLabel}>Timeline</Text>
+              </View>
+
+              {history.map((group, gi) => (
+                <Animated.View
+                  key={group.date}
+                  entering={FadeInDown.duration(300).delay(gi * 60)}
+                  style={styles.group}
+                >
+                  <View style={styles.groupHeader}>
+                    <Text style={styles.groupDate}>{group.date}</Text>
+                    <View style={styles.groupLine} />
+                    <Text style={styles.groupCount}>{group.items.length}</Text>
+                  </View>
+
+                  {group.items.map((item) => (
+                    <ProductListItem
+                      key={item.id}
+                      id={item.productId}
+                      name={item.name}
+                      brand={item.brand}
+                      category={item.category}
+                      grade={item.grade}
+                      onPress={() => router.push(`/product/${item.productId}`)}
+                    />
+                  ))}
+                </Animated.View>
+              ))}
+            </Animated.View>
+          </>
+        )}
+
+        <View style={{ height: verticalScale(100) }} />
       </ScrollView>
     </View>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: Colors.bone,
-  },
-  container: {
-    paddingBottom: Layout.bottomPadding,
-  },
+  screen: { flex: 1, backgroundColor: Colors.bone },
+  container: { paddingBottom: Layout.bottomPadding },
+
+  // ── Header
   header: {
     paddingHorizontal: Layout.screenPaddingHorizontal,
     marginBottom: Spacing.lg,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  overline: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    color: Colors.inkSecondary,
+    marginBottom: Spacing.xs,
   },
   title: {
     fontFamily: Fonts.serif,
     fontSize: FontSizes.display,
     color: Colors.ink,
   },
-  subtitle: {
+  headerDate: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
     color: Colors.inkSecondary,
-    marginTop: 4,
   },
+
+  // ── Calendar
   calendarStrip: {
     flexDirection: 'row',
     paddingHorizontal: Layout.screenPaddingHorizontal,
     marginBottom: Spacing.xl,
-    gap: Spacing.sm,
+    gap: Spacing.xs,
   },
   calendarDay: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: Spacing.md,
-    borderRadius: Radius.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.sm,
     backgroundColor: Colors.boneCard,
     borderWidth: 1,
     borderColor: Colors.borderHairline,
@@ -341,35 +488,23 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.ink,
     borderColor: Colors.ink,
   },
-  calendarDayLabel: {
+  calDayLabel: {
     fontFamily: Fonts.sans,
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.xs,
     textTransform: 'uppercase',
     color: Colors.inkTertiary,
-    marginBottom: 4,
+    marginBottom: 3,
   },
-  calendarDayLabelActive: {
-    color: 'rgba(233, 230, 223, 0.6)',
-  },
-  calendarDayNumber: {
+  calDayLabelActive: { color: 'rgba(233,230,223,0.55)' },
+  calDayNum: {
     fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.subtitle,
+    fontSize: FontSizes.body,
     color: Colors.ink,
   },
-  calendarDayNumberActive: {
-    color: Colors.bone,
-  },
-  loadingState: {
-    paddingVertical: verticalScale(60),
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.inkSecondary,
-    marginTop: Spacing.md,
-  },
-  emptyState: {
+  calDayNumActive: { color: Colors.bone },
+
+  // ── Center state
+  center: {
     paddingHorizontal: Layout.screenPaddingHorizontal,
     paddingVertical: verticalScale(60),
     alignItems: 'center',
@@ -380,7 +515,7 @@ const styles = StyleSheet.create({
     color: Colors.ink,
     marginBottom: Spacing.sm,
   },
-  emptyDescription: {
+  emptyBody: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.bodyLarge,
     color: Colors.inkSecondary,
@@ -389,113 +524,29 @@ const styles = StyleSheet.create({
     maxWidth: scale(280),
     marginBottom: Spacing.xl,
   },
-  scanButton: {
+  emptyBtn: {
     backgroundColor: Colors.ink,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: Radius.pill,
   },
-  scanButtonText: {
+  emptyBtnText: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.body,
     color: Colors.bone,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  timeline: {
+
+  // ── Section
+  section: {
     paddingHorizontal: Layout.screenPaddingHorizontal,
-  },
-  timelineGroup: {
     marginBottom: Spacing.xl,
   },
-  timelineHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-    gap: Spacing.md,
-  },
-  timelineDate: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.caption,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: Colors.ink,
-  },
-  timelineLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.borderStrong,
-  },
-  timelineItem: {
-    flexDirection: 'row',
-    marginBottom: Spacing.md,
-    paddingLeft: 4,
-  },
-  timelineDot: {
-    width: scale(8),
-    height: scale(8),
-    borderRadius: scale(4),
-    backgroundColor: Colors.ink,
-    marginTop: 6,
-    marginRight: Spacing.md,
-  },
-  timelineContent: {
-    flex: 1,
-    backgroundColor: Colors.boneCard,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    padding: Spacing.md,
-  },
-  itemHeader: {
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.xs,
-  },
-  itemTime: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.sm,
-    color: Colors.inkTertiary,
-  },
-  itemBrand: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: Colors.inkSecondary,
-    marginBottom: 2,
-  },
-  itemName: {
-    fontFamily: Fonts.sansMedium,
-    fontSize: FontSizes.bodyLarge,
-    color: Colors.ink,
-  },
-  gradeBadge: {
-    width: scale(24),
-    height: scale(24),
-    borderWidth: 1,
-    borderColor: Colors.ink,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  gradeBadgeA: {
-    backgroundColor: Colors.accentHill,
-    borderColor: Colors.accentHill,
-  },
-  gradeText: {
-    fontFamily: Fonts.mono,
-    fontSize: FontSizes.caption,
-    fontWeight: '700',
-    color: Colors.ink,
-  },
-  gradeTextA: {
-    color: Colors.bone,
-  },
-  statsSection: {
-    paddingHorizontal: Layout.screenPaddingHorizontal,
-    marginTop: Spacing.lg,
-  },
-  sectionHeader: {
     paddingBottom: Spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderStrong,
@@ -508,33 +559,145 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     color: Colors.ink,
   },
-  statsGrid: {
-    flexDirection: 'row',
+
+  // ── Evidence Quality (BarChart)
+  trendBadge: {
+    fontFamily: Fonts.sansMedium,
+    fontSize: FontSizes.caption,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  driftCard: {
     backgroundColor: Colors.boneCard,
     borderWidth: 1,
     borderColor: Colors.borderHairline,
-    padding: Spacing.md,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    paddingTop: Spacing.md,
+    paddingHorizontal: Spacing.sm,
   },
-  statItem: {
-    flex: 1,
+  driftLegend: {
+    flexDirection: 'row',
+    gap: Spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderHairline,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  driftLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(5),
+  },
+  driftLegendDot: {
+    width: scale(8),
+    height: scale(8),
+    borderRadius: scale(4),
+  },
+  driftLegendText: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    color: Colors.inkSecondary,
+  },
+
+  // ── Exploration pattern (PieChart)
+  totalCount: {
+    fontFamily: Fonts.mono,
+    fontSize: FontSizes.caption,
+    color: Colors.inkTertiary,
+  },
+  patternCard: {
+    backgroundColor: Colors.boneCard,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+  },
+  patternRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    gap: Spacing.lg,
+  },
+  pieCenterLabel: {
     alignItems: 'center',
   },
-  statDivider: {
-    width: 1,
-    backgroundColor: Colors.borderHairline,
-  },
-  statValue: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.display,
+  pieCenterCount: {
+    fontFamily: Fonts.mono,
+    fontSize: FontSizes.heading,
     color: Colors.ink,
-    marginBottom: 4,
+    lineHeight: FontSizes.heading * 1.1,
   },
-  statLabel: {
+  pieCenterSub: {
     fontFamily: Fonts.sans,
-    fontSize: FontSizes.sm,
+    fontSize: FontSizes.xs,
+    color: Colors.inkTertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  gradeBreakdown: {
+    flex: 1,
+    gap: scale(10),
+  },
+  gradeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  gradeDot: {
+    width: scale(8),
+    height: scale(8),
+    borderRadius: scale(4),
+  },
+  gradeItemLabel: {
+    flex: 1,
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+  },
+  gradeItemPct: {
+    fontFamily: Fonts.mono,
+    fontSize: FontSizes.body,
     color: Colors.inkSecondary,
-    textAlign: 'center',
+  },
+  insightText: {
+    fontFamily: Fonts.serifItalic,
+    fontSize: FontSizes.subtitle,
+    color: Colors.inkSecondary,
+    lineHeight: FontSizes.subtitle * 1.5,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderHairline,
+    paddingTop: Spacing.md,
+  },
+
+  // ── Timeline
+  group: {
+    marginBottom: Spacing.xl,
+  },
+  groupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  groupDate: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    color: Colors.ink,
+  },
+  groupLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.borderHairline,
+  },
+  groupCount: {
+    fontFamily: Fonts.mono,
+    fontSize: FontSizes.caption,
+    color: Colors.inkTertiary,
   },
 });

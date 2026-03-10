@@ -10,16 +10,17 @@ help:
 	@echo ""
 	@echo "  NourAI Backend"
 	@echo "  ─────────────────────────────────────────"
-	@echo "  make up         Start local PostgreSQL"
-	@echo "  make down       Stop containers"
-	@echo "  make migrate    Run all pending migrations"
-	@echo "  make seed       Seed the golden set (products + ingredients)"
-	@echo "  make images     Upload product images → Supabase Storage"
-	@echo "  make research   Run research agent on pending ingredients (limit 5)"
-	@echo "  make research-all  Run research agent on ALL pending ingredients"
-	@echo "  make dev        Start the API server (hot reload)"
-	@echo "  make reset      Full reset: wipe DB, re-migrate, re-seed"
-	@echo "  make logs       Tail PostgreSQL logs"
+	@echo "  make up                Start local PostgreSQL"
+	@echo "  make down              Stop containers"
+	@echo "  make migrate           Run all pending migrations"
+	@echo "  make seed              Seed the golden set (products + ingredients)"
+	@echo "  make fetch-products    Expand golden set from Open Food Facts + Beauty Facts"
+	@echo "  make images            Upload product images → Supabase Storage"
+	@echo "  make research          Run research agent on pending ingredients (limit 5)"
+	@echo "  make research-all      Run research agent on ALL pending ingredients"
+	@echo "  make dev               Start the API server (hot reload)"
+	@echo "  make reset             Full reset: wipe DB, re-migrate, re-seed"
+	@echo "  make logs              Tail PostgreSQL logs"
 	@echo ""
 
 # ─── Database ─────────────────────────────────────────────────────────────────
@@ -53,6 +54,17 @@ seed:
 	$(PYTHON) scripts/seed_golden_set.py
 	@echo ""
 	@echo "Golden set seeded. Run 'make research' to enrich with PubMed studies."
+
+fetch-products:
+	$(PYTHON) scripts/fetch_popular_products.py
+	@echo ""
+	@echo "Product fetch complete. Run 'make research-all' to enrich new ingredients."
+
+fetch-products-dry:
+	$(PYTHON) scripts/fetch_popular_products.py --dry-run
+
+fetch-products-test:
+	$(PYTHON) scripts/fetch_popular_products.py --limit 10
 
 # ─── Image uploader ───────────────────────────────────────────────────────────
 

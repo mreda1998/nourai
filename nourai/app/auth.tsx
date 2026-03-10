@@ -38,6 +38,7 @@ export default function AuthScreen() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [pendingConfirmation, setPendingConfirmation] = useState(false);
 
   const handleSubmit = async () => {
     setError('');
@@ -47,15 +48,20 @@ export default function AuthScreen() {
       if (mode === 'signup') {
         if (!name.trim()) {
           setError('Please enter your name');
+          setIsLoading(false);
           return;
         }
-        await signUp(email, password, name);
+        const { needsEmailConfirmation } = await signUp(email, password, name);
+        if (needsEmailConfirmation) {
+          setPendingConfirmation(true);
+          return;
+        }
       } else {
         await signIn(email, password);
       }
       router.replace('/(tabs)');
-    } catch (err) {
-      setError('Something went wrong. Please try again.');
+    } catch (err: any) {
+      setError(err?.message ?? 'Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -64,6 +70,40 @@ export default function AuthScreen() {
   const handleSkip = () => {
     router.replace('/(tabs)');
   };
+
+  // ── Email confirmation pending screen ──────────────────────────────────────
+  if (pendingConfirmation) {
+    return (
+      <View style={[styles.screen, styles.confirmScreen]}>
+        <Animated.View entering={FadeIn.duration(400)} style={styles.confirmContent}>
+          <Text style={styles.logo}>nourai</Text>
+          <Text style={styles.confirmTitle}>Check your email</Text>
+          <Text style={styles.confirmBody}>
+            We sent a confirmation link to{'\n'}
+            <Text style={styles.confirmEmail}>{email}</Text>
+          </Text>
+          <Text style={styles.confirmHint}>
+            Click the link in the email to activate your account, then sign in below.
+          </Text>
+          <Pressable
+            style={styles.submitButton}
+            onPress={() => {
+              setPendingConfirmation(false);
+              setMode('signin');
+              setPassword('');
+            }}
+          >
+            <Text style={styles.submitButtonText}>Go to Sign In</Text>
+          </Pressable>
+          <Pressable style={styles.toggleMode} onPress={() => router.replace('/(tabs)')}>
+            <Text style={styles.toggleModeText}>
+              <Text style={styles.toggleModeLink}>Continue as Guest</Text>
+            </Text>
+          </Pressable>
+        </Animated.View>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -325,5 +365,42 @@ const styles = StyleSheet.create({
   termsLink: {
     color: Colors.inkSecondary,
     textDecorationLine: 'underline',
+  },
+  confirmScreen: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmContent: {
+    paddingHorizontal: Layout.screenPaddingHorizontal,
+    alignItems: 'center',
+    width: '100%',
+  },
+  confirmTitle: {
+    fontFamily: Fonts.serif,
+    fontSize: FontSizes.display,
+    color: Colors.ink,
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.lg,
+    textAlign: 'center',
+  },
+  confirmBody: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.bodyLarge,
+    color: Colors.inkSecondary,
+    textAlign: 'center',
+    lineHeight: FontSizes.bodyLarge * 1.6,
+    marginBottom: Spacing.lg,
+  },
+  confirmEmail: {
+    fontFamily: Fonts.sansSemiBold,
+    color: Colors.ink,
+  },
+  confirmHint: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.inkTertiary,
+    textAlign: 'center',
+    lineHeight: FontSizes.body * 1.6,
+    marginBottom: Spacing.xl * 2,
   },
 });

@@ -18,7 +18,11 @@
       "Bash(python3:*)",
       "Bash(xcode-select:*)",
       "Bash(xcodebuild:*)",
-      "Bash(node --version:*)"
+      "Bash(node --version:*)",
+      "Bash(.:*)",
+      "Bash(source:*)",
+      "WebSearch",
+      "Bash(node:*)"
     ]
   }
 }

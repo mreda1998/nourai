@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import Constants from 'expo-constants';
 import {
   ActivityIndicator,
   Image,
@@ -354,7 +355,14 @@ export default function ScanScreen() {
         {/* Scan Mode — live camera + overlay */}
         {mode === 'scan' && (
           <>
-            {cameraPermission?.granted ? (
+            {!Constants.isDevice ? (
+              <Animated.View entering={FadeIn.duration(300)} style={styles.permissionContainer}>
+                <Text style={styles.permissionTitle}>Simulator Detected</Text>
+                <Text style={styles.permissionSubtitle}>
+                  Camera scanning requires a real device. Use the "Type" tab to search by product name instead.
+                </Text>
+              </Animated.View>
+            ) : cameraPermission?.granted ? (
               <CameraView
                 style={StyleSheet.absoluteFill}
                 facing="back"
@@ -384,7 +392,7 @@ export default function ScanScreen() {
                 <View style={[styles.corner, styles.cornerBR]} />
               </Animated.View>
 
-              {isScanning && cameraPermission?.granted && (
+              {isScanning && cameraPermission?.granted && Constants.isDevice && (
                 <Animated.View style={[styles.scanLine, scanLineStyle]} />
               )}
             </View>

@@ -1,14 +1,16 @@
 """Product Pydantic schemas."""
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, computed_field
 
 from app.models.product import IngredientStatus, ProductCategory
-from app.schemas.claim import ClaimResponse
+from app.schemas.claim import ClaimResponse  # kept for __init__ re-export
 
+
+# ─── Kept for backwards-compat (used in repositories / __init__) ──────────────
 
 class ProductIngredientResponse(BaseModel):
-    """Ingredient as it appears in a product."""
+    """Raw ingredient row — internal use only."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -19,85 +21,140 @@ class ProductIngredientResponse(BaseModel):
     note: str | None = None
 
 
-class QuickMetric(BaseModel):
-    """Quick metric for product display."""
+# ─── Mobile-facing types ──────────────────────────────────────────────────────
 
-    label: str
-    value: str
-    meta: str | None = None
+class MobileIngredient(BaseModel):
+    """Ingredient shape expected by the mobile Product interface."""
 
+    name: str
+    concentration: str | None = None  # e.g. "500 mg"
+    tag: str | None = None            # e.g. "avoid", "watch", "clean"
+    tag_type: str | None = None       # "warning" when tag is avoid/watch
+    description: str | None = None
+    ingredient_id: str | None = None  # FK → ingredients.id; present when matched to canonical
+
+
+class BioDomain(BaseModel):
+    name: str
+    value: float
+    is_negative: bool = False
+
+
+class Recommendation(BaseModel):
+    context: str
+    protocol: str
+
+
+class Citation(BaseModel):
+    text: str
+    journal: str | None = None
+
+
+# ─── List-level response (search / browse) ───────────────────────────────────
 
 class ProductResponse(BaseModel):
-    """Basic product response."""
+    """One card in a product list — matches mobile ProductListItem."""
 
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    barcode: str | None = None
     name: str
     brand: str | None = None
     category: ProductCategory
-    summary: str | None = None
-    image_url: str | None = Field(default=None, serialization_alias="heroImage")
-    health_score: int | None = Field(default=None, serialization_alias="healthScore")
+    image_url: str | None = None
+    health_score: int | None = None
 
+    @computed_field
+    @property
+    def grade(self) -> str:
+        if self.health_score is None:
+            return "C"
+        if self.health_score >= 80:
+            return "A"
+        if self.health_score >= 60:
+            return "B"
+        if self.health_score >= 40:
+            return "C"
+        return "D"
+
+    @computed_field
+    @property
+    def is_ai_generated(self) -> bool:
+        return False
+
+
+# ─── Detail-level response ────────────────────────────────────────────────────
 
 class ProductWithDetails(BaseModel):
-    """Full product response with ingredients and claims."""
+    """Full product — matches mobile Product interface exactly."""
 
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     barcode: str | None = None
     name: str
     brand: str | None = None
     category: ProductCategory
-    summary: str | None = None
-    heroImage: str | None = Field(default=None, validation_alias="image_url")
-    usage: str | None = None
-    servingSize: str | None = Field(default=None, validation_alias="serving_size")
-    keyActives: str | None = Field(default=None, validation_alias="key_actives")
-    price: str | None = None
-    healthScore: int | None = Field(default=None, validation_alias="health_score")
-    sugar: str | None = None
-    marketingClaims: list[str] | None = Field(default=None, validation_alias="marketing_claims")
-    scientificSupport: list[str] | None = Field(
-        default=None, validation_alias="scientific_support"
-    )
-    regulatoryAllowances: list[str] | None = Field(
-        default=None, validation_alias="regulatory_allowances"
-    )
-    disclaimers: list[str] | None = None
-    ingredients: list[ProductIngredientResponse] = []
-    claims: list[ClaimResponse] = []
-    metrics: list[QuickMetric] = []
+    description: str | None = None
+    image_url: str | None = None
+    grade: str = "C"
+    tags: list[str] = []
+    has_allergen_warning: bool = False
+    allergen_warning: str | None = None
+    is_ai_generated: bool = False
+    ingredients: list[MobileIngredient] = []
+    bio_domains: list[BioDomain] = []
+    recommendations: list[Recommendation] = []
+    citations: list[Citation] = []
+
+    @classmethod
+    def _grade_from_score(cls, score: int | None) -> str:
+        if score is None:
+            return "C"
+        if score >= 80:
+            return "A"
+        if score >= 60:
+            return "B"
+        if score >= 40:
+            return "C"
+        return "D"
 
     @classmethod
     def from_orm_with_details(cls, product) -> "ProductWithDetails":
-        """Convert SQLAlchemy model to response with nested data."""
-        ingredients = [
-            ProductIngredientResponse(
+        """Convert SQLAlchemy Product model → mobile-compatible response."""
+
+        # ── Ingredients ──────────────────────────────────────────────────────
+        ingredients: list[MobileIngredient] = []
+        for pi in (product.product_ingredients or []):
+            concentration: str | None = None
+            if pi.amount:
+                concentration = f"{pi.amount} {pi.unit}".strip() if pi.unit else pi.amount
+
+            tag: str | None = None
+            tag_type: str | None = None
+            if pi.status:
+                tag = pi.status if isinstance(pi.status, str) else pi.status.value
+                if tag in ("watch", "avoid"):
+                    tag_type = "warning"
+
+            ingredients.append(MobileIngredient(
                 name=pi.name,
-                status=pi.status,
-                amount=pi.amount,
-                unit=pi.unit,
-                note=pi.note,
-            )
-            for pi in (product.product_ingredients or [])
-        ]
+                concentration=concentration,
+                tag=tag,
+                tag_type=tag_type,
+                description=pi.note,
+                ingredient_id=str(pi.ingredient_id) if pi.ingredient_id else None,
+            ))
 
-        claims = [ClaimResponse.model_validate(claim) for claim in (product.claims or [])]
-
-        # Build metrics from product fields
-        metrics = []
-        if product.usage:
-            metrics.append(QuickMetric(label="Usage", value=product.usage))
-        if product.serving_size:
-            metrics.append(QuickMetric(label="Serving Size", value=product.serving_size))
-        if product.key_actives:
-            metrics.append(QuickMetric(label="Key Actives", value=product.key_actives))
-        if product.price:
-            metrics.append(QuickMetric(label="Price / Size", value=product.price))
+        # ── Citations from claim sources ──────────────────────────────────────
+        citations: list[Citation] = []
+        for claim in (product.claims or []):
+            for source in (claim.sources or []):
+                if source.summary:
+                    citations.append(Citation(
+                        text=source.summary,
+                        journal=source.label if source.label != claim.title else None,
+                    ))
 
         return cls(
             id=product.id,
@@ -105,26 +162,22 @@ class ProductWithDetails(BaseModel):
             name=product.name,
             brand=product.brand,
             category=product.category,
-            summary=product.summary,
-            heroImage=product.image_url,
-            usage=product.usage,
-            servingSize=product.serving_size,
-            keyActives=product.key_actives,
-            price=product.price,
-            healthScore=product.health_score,
-            sugar=product.sugar,
-            marketingClaims=product.marketing_claims,
-            scientificSupport=product.scientific_support,
-            regulatoryAllowances=product.regulatory_allowances,
-            disclaimers=product.disclaimers,
+            description=product.summary,
+            image_url=product.image_url,
+            grade=cls._grade_from_score(product.health_score),
+            is_ai_generated=False,
+            has_allergen_warning=False,
             ingredients=ingredients,
-            claims=claims,
-            metrics=metrics,
+            bio_domains=[],
+            recommendations=[],
+            citations=citations,
         )
 
 
+# ─── Paginated list response ──────────────────────────────────────────────────
+
 class ProductSearchResponse(BaseModel):
-    """Paginated product search response."""
+    """Paginated product list — wraps ProductResponse items."""
 
     products: list[ProductResponse]
     total: int

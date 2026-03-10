@@ -57,6 +57,13 @@ class UserProfile(Base, UUIDMixin, TimestampMixin):
     health_goals: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     notification_preferences: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
+    # Onboarding profile fields (collected during sign-up flow)
+    age_range: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    focus_areas: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    health_concerns: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    is_pregnant: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_breastfeeding: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     # Onboarding state
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     onboarding_step: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -130,3 +137,42 @@ class UserStackEntry(Base, UUIDMixin):
 
     def __repr__(self) -> str:
         return f"<UserStackEntry {self.id} for user {self.user_id}>"
+
+
+class ScanHistoryEntry(Base, UUIDMixin):
+    """A product scan/view logged for a user."""
+
+    __tablename__ = "scan_history"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("products.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    scanned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    product: Mapped["Product"] = relationship("Product")
+
+    __table_args__ = (
+        Index("ix_scan_history_user_id", "user_id"),
+        Index("ix_scan_history_scanned_at", "scanned_at"),
+        Index("ix_scan_history_user_scanned", "user_id", "scanned_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<ScanHistoryEntry {self.id} for user {self.user_id}>"

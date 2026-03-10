@@ -21,6 +21,34 @@ from app.services.product import ProductService
 router = APIRouter()
 
 
+@router.get("", response_model=ProductSearchResponse)
+async def list_products(
+    category: str | None = None,
+    pagination: Annotated[PaginationParams, Depends(get_pagination)] = None,
+    service: Annotated[ProductService, Depends(get_product_service)] = None,
+):
+    """List all products with optional category filter."""
+    category_enum = None
+    if category:
+        try:
+            category_enum = ProductCategory(category.lower())
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid category: {category}")
+
+    products, total = await service.list_products(
+        category=category_enum,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+
+    return ProductSearchResponse(
+        products=[ProductResponse.model_validate(p) for p in products],
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+
+
 @router.get("/search", response_model=ProductSearchResponse)
 async def search_products(
     q: str = Query(..., min_length=2),
