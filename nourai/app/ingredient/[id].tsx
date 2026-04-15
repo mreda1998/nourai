@@ -29,8 +29,9 @@ import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
 import { Colors, scale, verticalScale } from '@/constants/theme';
+import { BIODOMAIN_BY_KEY } from '@/constants/biodomains';
 import { api } from '@/services/api';
-import type { IngredientDetail, IngredientEvidenceRecord } from '@/services/api';
+import type { IngredientDetail, IngredientEvidenceRecord, IngredientBioDomainScore } from '@/services/api';
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -212,6 +213,88 @@ function SafetyChip({ label, isWarning }: { label: string; isWarning?: boolean }
   );
 }
 
+/**
+ * Single biodomain impact row — shows a labeled bar with direction color,
+ * dose context, and confidence badge.
+ */
+function BioDomainRow({ score, index }: { score: IngredientBioDomainScore; index: number }) {
+  const def = BIODOMAIN_BY_KEY[score.biodomain];
+  const displayName = def?.name ?? score.biodomain;
+  const barColor = def?.color ?? Colors.inkSecondary;
+
+  const barWidth = `${Math.round(score.magnitude * 100)}%` as const;
+
+  const directionColor =
+    score.direction === 'benefit' ? '#3B6E52' :
+    score.direction === 'harm'    ? '#A34B4B' :
+    score.direction === 'mixed'   ? '#8B6914' :
+                                    Colors.inkTertiary;
+
+  const directionLabel =
+    score.direction === 'benefit' ? 'benefit' :
+    score.direction === 'harm'    ? 'harm' :
+    score.direction === 'mixed'   ? 'mixed' : 'neutral';
+
+  const doseNote = score.dose_dependent && score.effective_dose_low
+    ? `Effective at ${score.effective_dose_low}${
+        score.effective_dose_high && score.effective_dose_high !== score.effective_dose_low
+          ? `–${score.effective_dose_high}`
+          : ''
+      } ${score.dose_unit ?? ''}`
+    : null;
+
+  return (
+    <Animated.View
+      entering={FadeInUp.delay(index * 50).duration(300)}
+      style={styles.bioDomainRow}
+    >
+      {/* Domain name + direction badge */}
+      <View style={styles.bioDomainHeader}>
+        <Text style={styles.bioDomainName}>{displayName}</Text>
+        <View style={[styles.bioDomainBadge, { borderColor: directionColor }]}>
+          <Text style={[styles.bioDomainBadgeText, { color: directionColor }]}>
+            {directionLabel}
+          </Text>
+        </View>
+      </View>
+
+      {/* Bar */}
+      <View style={styles.bioDomainBarTrack}>
+        <View
+          style={[
+            styles.bioDomainBarFill,
+            {
+              width: barWidth,
+              backgroundColor:
+                score.direction === 'harm'
+                  ? '#A34B4B'
+                  : score.direction === 'benefit'
+                  ? barColor
+                  : Colors.inkTertiary,
+              opacity: score.direction === 'neutral' ? 0.3 : 1,
+            },
+          ]}
+        />
+      </View>
+
+      {/* Dose context + confidence */}
+      <View style={styles.bioDomainMeta}>
+        {doseNote && (
+          <Text style={styles.bioDomainDoseNote}>{doseNote}</Text>
+        )}
+        <Text style={styles.bioDomainConfidence}>
+          {score.confidence} confidence · {score.evidence_count} {score.evidence_count === 1 ? 'study' : 'studies'}
+        </Text>
+      </View>
+
+      {/* Notes */}
+      {score.notes && (
+        <Text style={styles.bioDomainNotes}>{score.notes}</Text>
+      )}
+    </Animated.View>
+  );
+}
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function IngredientDetailScreen() {
@@ -326,6 +409,31 @@ export default function IngredientDetailScreen() {
               commonBelief={ingredient.common_belief!}
               evidenceReality={ingredient.evidence_reality!}
             />
+          </>
+        )}
+
+        {/* ── Biodomain impact scores ───────────────────────────────────── */}
+        {ingredient.biodomain_scores && ingredient.biodomain_scores.length > 0 && (
+          <>
+            <View style={styles.sectionDivider} />
+            <Text style={styles.sectionLabel}>Health domain impact</Text>
+            <Text style={styles.evidenceNote}>
+              Based on clinical evidence. Bar width = effect magnitude.
+            </Text>
+            {ingredient.biodomain_scores
+              .slice()
+              .sort((a, b) => {
+                // Sort: benefit first, then by magnitude desc, harm last
+                if (a.direction === b.direction) return b.magnitude - a.magnitude;
+                if (a.direction === 'benefit') return -1;
+                if (b.direction === 'benefit') return 1;
+                if (a.direction === 'harm') return 1;
+                if (b.direction === 'harm') return -1;
+                return 0;
+              })
+              .map((score, i) => (
+                <BioDomainRow key={score.biodomain} score={score} index={i} />
+              ))}
           </>
         )}
 
@@ -813,6 +921,72 @@ const styles = StyleSheet.create({
     fontSize: scale(11),
     color: Colors.inkSecondary,
     marginRight: scale(4),
+  },
+
+  // ── Biodomain impact rows ──────────────────────────────────────────────────
+  bioDomainRow: {
+    marginBottom: scale(14),
+    paddingHorizontal: scale(24),
+  },
+  bioDomainHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: scale(6),
+  },
+  bioDomainName: {
+    fontFamily: 'Manrope_600SemiBold',
+    fontSize: scale(13),
+    color: Colors.ink,
+    flex: 1,
+    marginRight: scale(8),
+  },
+  bioDomainBadge: {
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: scale(7),
+    paddingVertical: scale(2),
+  },
+  bioDomainBadgeText: {
+    fontFamily: 'Manrope_600SemiBold',
+    fontSize: scale(10),
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  bioDomainBarTrack: {
+    height: scale(5),
+    backgroundColor: Colors.boneDark,
+    borderRadius: scale(3),
+    overflow: 'hidden',
+    marginBottom: scale(5),
+  },
+  bioDomainBarFill: {
+    height: '100%',
+    borderRadius: scale(3),
+  },
+  bioDomainMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: scale(6),
+  },
+  bioDomainDoseNote: {
+    fontFamily: 'Manrope_400Regular',
+    fontSize: scale(11),
+    color: Colors.inkSecondary,
+  },
+  bioDomainConfidence: {
+    fontFamily: 'Manrope_400Regular',
+    fontSize: scale(11),
+    color: Colors.inkTertiary,
+  },
+  bioDomainNotes: {
+    fontFamily: 'Manrope_400Regular',
+    fontSize: scale(12),
+    color: Colors.inkSecondary,
+    marginTop: scale(4),
+    lineHeight: scale(17),
+    fontStyle: 'italic',
   },
 
   // ── Loading / error ────────────────────────────────────────────────────────

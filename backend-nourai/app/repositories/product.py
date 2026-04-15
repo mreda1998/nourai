@@ -5,6 +5,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 
 from app.models.product import Product, ProductCategory, ProductIngredient
+from app.models.ingredient import Ingredient
 from app.models.claim import Claim, ClaimSource
 from app.repositories.base import BaseRepository
 
@@ -22,24 +23,28 @@ class ProductRepository(BaseRepository[Product]):
         return result.scalar_one_or_none()
 
     async def get_with_details(self, id: UUID) -> Product | None:
-        """Get product with ingredients and claims eagerly loaded."""
+        """Get product with ingredients (including biodomain scores) and claims."""
         result = await self.db.execute(
             select(Product)
             .where(Product.id == id)
             .options(
-                selectinload(Product.product_ingredients),
+                selectinload(Product.product_ingredients)
+                    .selectinload(ProductIngredient.ingredient)
+                    .selectinload(Ingredient.biodomain_scores),
                 selectinload(Product.claims).selectinload(Claim.sources),
             )
         )
         return result.scalar_one_or_none()
 
     async def get_by_barcode_with_details(self, barcode: str) -> Product | None:
-        """Get product by barcode with ingredients and claims."""
+        """Get product by barcode with ingredients (including biodomain scores) and claims."""
         result = await self.db.execute(
             select(Product)
             .where(Product.barcode == barcode)
             .options(
-                selectinload(Product.product_ingredients),
+                selectinload(Product.product_ingredients)
+                    .selectinload(ProductIngredient.ingredient)
+                    .selectinload(Ingredient.biodomain_scores),
                 selectinload(Product.claims).selectinload(Claim.sources),
             )
         )

@@ -12,6 +12,7 @@ from app.db.base import Base, TimestampMixin, UUIDMixin
 if TYPE_CHECKING:
     from app.models.product import ProductIngredient
     from app.models.ingredient_evidence import IngredientEvidence
+    from app.models.ingredient_biodomain_score import IngredientBioDomainScore
 
 
 class IngredientCategory(str, Enum):
@@ -100,6 +101,12 @@ class Ingredient(Base, UUIDMixin, TimestampMixin):
         back_populates="ingredient",
         cascade="all, delete-orphan",
         order_by="IngredientEvidence.year.desc()",
+    )
+    biodomain_scores: Mapped[list["IngredientBioDomainScore"]] = relationship(
+        "IngredientBioDomainScore",
+        back_populates="ingredient",
+        cascade="all, delete-orphan",
+        order_by="IngredientBioDomainScore.biodomain",
     )
 
     def __repr__(self) -> str:
