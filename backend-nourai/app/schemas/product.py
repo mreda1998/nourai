@@ -156,6 +156,25 @@ class ProductWithDetails(BaseModel):
                         journal=source.label if source.label != claim.title else None,
                     ))
 
+        # ── Biodomain scoring ─────────────────────────────────────────────────
+        # Lazy import avoids circular dependency: schemas.product ↔ services.product
+        from app.services.biodomain_scorer import score_product_biodomains  # noqa: PLC0415
+        domain_scores, computed_health_score = score_product_biodomains(
+            product.product_ingredients or []
+        )
+
+        bio_domains = [
+            BioDomain(
+                name=ds.name,
+                value=ds.display_value,
+                is_negative=ds.is_negative,
+            )
+            for ds in sorted(domain_scores, key=lambda d: d.display_value, reverse=True)
+        ]
+
+        # Prefer computed score; fall back to manually seeded score if no domains found
+        effective_score = computed_health_score if domain_scores else product.health_score
+
         return cls(
             id=product.id,
             barcode=product.barcode,
@@ -164,11 +183,11 @@ class ProductWithDetails(BaseModel):
             category=product.category,
             description=product.summary,
             image_url=product.image_url,
-            grade=cls._grade_from_score(product.health_score),
+            grade=cls._grade_from_score(effective_score),
             is_ai_generated=False,
             has_allergen_warning=False,
             ingredients=ingredients,
-            bio_domains=[],
+            bio_domains=bio_domains,
             recommendations=[],
             citations=citations,
         )

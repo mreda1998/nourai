@@ -17,6 +17,7 @@ from sqlalchemy.orm import selectinload
 from app.db.session import get_db
 from app.models.ingredient import Ingredient
 from app.models.ingredient_evidence import IngredientEvidence
+from app.models.ingredient_biodomain_score import IngredientBioDomainScore
 from app.models.product import Product, ProductIngredient
 
 router = APIRouter()
@@ -39,6 +40,19 @@ class EvidenceRecord(BaseModel):
     confidence: str          # high | moderate | low
     concern_tags: list[str]
     goal_tags: list[str]
+
+
+class BioDomainScore(BaseModel):
+    biodomain: str
+    direction: str              # benefit | harm | neutral | mixed
+    magnitude: float            # 0.0 – 1.0
+    confidence: str             # high | moderate | low
+    dose_dependent: bool
+    effective_dose_low: float | None
+    effective_dose_high: float | None
+    dose_unit: str | None
+    evidence_count: int
+    notes: str | None
 
 
 class FoundInProduct(BaseModel):
@@ -77,6 +91,9 @@ class IngredientDetail(BaseModel):
 
     # Evidence records — sorted high→low confidence then newest→oldest
     evidence: list[EvidenceRecord]
+
+    # Biodomain impact scores — per-domain effect computed by the research agent
+    biodomain_scores: list[BioDomainScore]
 
     # Products in our DB that contain this ingredient
     found_in: list[FoundInProduct]
@@ -184,11 +201,14 @@ async def get_ingredient(
       • Search tab (ingredient search mode)
       • Any future surface (food log, stack, etc.)
     """
-    # Load ingredient with all evidence in one query
+    # Load ingredient with evidence and biodomain scores in one query
     stmt = (
         select(Ingredient)
         .where(Ingredient.id == ingredient_id)
-        .options(selectinload(Ingredient.evidence))
+        .options(
+            selectinload(Ingredient.evidence),
+            selectinload(Ingredient.biodomain_scores),
+        )
     )
     result = await db.execute(stmt)
     ingredient = result.scalar_one_or_none()
@@ -224,6 +244,22 @@ async def get_ingredient(
 
     sorted_evidence = _sort_evidence(ingredient.evidence)
 
+    biodomain_scores = [
+        BioDomainScore(
+            biodomain=bs.biodomain,
+            direction=bs.direction,
+            magnitude=bs.magnitude,
+            confidence=bs.confidence,
+            dose_dependent=bs.dose_dependent,
+            effective_dose_low=bs.effective_dose_low,
+            effective_dose_high=bs.effective_dose_high,
+            dose_unit=bs.dose_unit,
+            evidence_count=bs.evidence_count,
+            notes=bs.notes,
+        )
+        for bs in sorted(ingredient.biodomain_scores, key=lambda s: s.biodomain)
+    ]
+
     return IngredientDetail(
         id=str(ingredient.id),
         canonical_name=ingredient.canonical_name,
@@ -240,6 +276,7 @@ async def get_ingredient(
         drug_interactions=ingredient.drug_interactions or [],
         evidence_level=ingredient.evidence_level,
         research_status=ingredient.research_status,
+        biodomain_scores=biodomain_scores,
         evidence=[
             EvidenceRecord(
                 id=str(ev.id),

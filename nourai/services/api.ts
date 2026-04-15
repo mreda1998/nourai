@@ -129,6 +129,19 @@ export interface IngredientFoundInProduct {
   status: 'clean' | 'watch' | 'avoid' | null;
 }
 
+export interface IngredientBioDomainScore {
+  biodomain: string;
+  direction: 'benefit' | 'harm' | 'neutral' | 'mixed';
+  magnitude: number;          // 0.0 – 1.0
+  confidence: 'high' | 'moderate' | 'low';
+  dose_dependent: boolean;
+  effective_dose_low: number | null;
+  effective_dose_high: number | null;
+  dose_unit: string | null;
+  evidence_count: number;
+  notes: string | null;
+}
+
 export interface IngredientDetail {
   id: string;
   canonical_name: string;
@@ -148,6 +161,8 @@ export interface IngredientDetail {
   // Research
   evidence_level: string | null;
   research_status: string;
+  // Biodomain impact scores
+  biodomain_scores: IngredientBioDomainScore[];
   evidence: IngredientEvidenceRecord[];
   found_in: IngredientFoundInProduct[];
 }
