@@ -30,6 +30,12 @@ class UserProfileResponse(BaseModel):
     is_breastfeeding: bool = False
     onboarding_completed: bool = False
     onboarding_step: int = 0
+    # Extended onboarding profile fields
+    sleep_quality: str | None = None
+    activity_level: str | None = None
+    dietary_pattern: list[str] = []
+    environment: str | None = None
+    product_categories: list[str] = []
 
 
 class UserProfileUpdate(BaseModel):
@@ -51,6 +57,12 @@ class UserProfileUpdate(BaseModel):
     is_breastfeeding: bool | None = None
     onboarding_completed: bool | None = None
     onboarding_step: int | None = None
+    # Extended onboarding profile fields
+    sleep_quality: str | None = None
+    activity_level: str | None = None
+    dietary_pattern: list[str] | None = None
+    environment: str | None = None
+    product_categories: list[str] | None = None
 
 
 class ScanHistoryItemResponse(BaseModel):
@@ -63,6 +75,7 @@ class ScanHistoryItemResponse(BaseModel):
     product_name: str
     product_brand: str | None = None
     product_grade: str
+    product_category: str = "supplement"
     scanned_at: datetime
 
 

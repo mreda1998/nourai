@@ -1,1 +1,1 @@
-"""NourAI Backend Application."""
+"""Elory Backend Application."""

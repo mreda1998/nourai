@@ -57,6 +57,13 @@ class UserProfile(Base, UUIDMixin, TimestampMixin):
     health_goals: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     notification_preferences: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
+    # Extended onboarding profile fields
+    sleep_quality: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    activity_level: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    dietary_pattern: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    environment: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    product_categories: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+
     # Onboarding profile fields (collected during sign-up flow)
     age_range: Mapped[str | None] = mapped_column(String(20), nullable=True)
     focus_areas: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)

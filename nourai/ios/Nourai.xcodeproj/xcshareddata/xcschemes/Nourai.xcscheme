@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "Nourai.app"
-               BlueprintName = "Nourai"
-               ReferencedContainer = "container:Nourai.xcodeproj">
+               BuildableName = "Elory.app"
+               BlueprintName = "Elory"
+               ReferencedContainer = "container:Elory.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "NouraiTests.xctest"
-               BlueprintName = "NouraiTests"
-               ReferencedContainer = "container:Nourai.xcodeproj">
+               BuildableName = "EloryTests.xctest"
+               BlueprintName = "EloryTests"
+               ReferencedContainer = "container:Elory.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "Nourai.app"
-            BlueprintName = "Nourai"
-            ReferencedContainer = "container:Nourai.xcodeproj">
+            BuildableName = "Elory.app"
+            BlueprintName = "Elory"
+            ReferencedContainer = "container:Elory.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "Nourai.app"
-            BlueprintName = "Nourai"
-            ReferencedContainer = "container:Nourai.xcodeproj">
+            BuildableName = "Elory.app"
+            BlueprintName = "Elory"
+            ReferencedContainer = "container:Elory.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

@@ -45,6 +45,60 @@ const LIFE_STAGES = [
   { id: 'menopause', name: 'Menopause' },
 ];
 
+// ─── InsightCard ──────────────────────────────────────────────────────────────
+
+function InsightCard({ title, fact }: { title: string; fact: string }) {
+  return (
+    <View style={insightStyles.card}>
+      <View style={insightStyles.header}>
+        <Text style={insightStyles.icon}>🔬</Text>
+        <Text style={insightStyles.label}>HIDDEN INSIGHT</Text>
+      </View>
+      <Text style={insightStyles.title}>{title}</Text>
+      <Text style={insightStyles.fact}>{fact}</Text>
+    </View>
+  );
+}
+
+const insightStyles = StyleSheet.create({
+  card: {
+    backgroundColor: 'rgba(194, 147, 85, 0.12)',
+    borderLeftWidth: 2,
+    borderLeftColor: '#C29355',
+    borderRadius: Radius.md,
+    padding: scale(14),
+    marginBottom: Spacing.xl,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(6),
+    marginBottom: scale(6),
+  },
+  icon: {
+    fontSize: scale(13),
+  },
+  label: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 1.3,
+    color: '#C29355',
+  },
+  title: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
+    color: Colors.ink,
+    marginBottom: scale(4),
+  },
+  fact: {
+    fontFamily: Fonts.serifItalic,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+    lineHeight: FontSizes.body * 1.5,
+  },
+});
+
 export default function HormonalScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -78,6 +132,11 @@ export default function HormonalScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
+        <InsightCard
+          title="What sunscreen doesn't tell you"
+          fact="Benzophenone-3 (oxybenzone) — present in roughly 70% of chemical sunscreens — shows measurable serum levels within 2 hours of topical application and has confirmed agonist activity at oestrogen receptor α. Regular users have serum concentrations that exceed those shown to alter reproductive hormone markers in in vitro studies."
+        />
+
         {/* Life Stage */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Life Stage</Text>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import {
   ActivityIndicator,
@@ -45,7 +45,61 @@ const DEFAULT_WATCHLIST = [
   { id: '3', name: 'Alcohol Denat.' },
 ];
 
-const SKIN_PROFILE_KEY = '@nourai_skin_profile';
+const SKIN_PROFILE_KEY = '@elory_skin_profile';
+
+// ─── InsightCard ──────────────────────────────────────────────────────────────
+
+function InsightCard({ title, fact }: { title: string; fact: string }) {
+  return (
+    <View style={insightStyles.card}>
+      <View style={insightStyles.header}>
+        <Text style={insightStyles.icon}>🔬</Text>
+        <Text style={insightStyles.label}>HIDDEN INSIGHT</Text>
+      </View>
+      <Text style={insightStyles.title}>{title}</Text>
+      <Text style={insightStyles.fact}>{fact}</Text>
+    </View>
+  );
+}
+
+const insightStyles = StyleSheet.create({
+  card: {
+    backgroundColor: 'rgba(194, 147, 85, 0.12)',
+    borderLeftWidth: 2,
+    borderLeftColor: '#C29355',
+    borderRadius: Radius.md,
+    padding: scale(14),
+    marginBottom: Spacing.xl,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(6),
+    marginBottom: scale(6),
+  },
+  icon: {
+    fontSize: scale(13),
+  },
+  label: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 1.3,
+    color: '#C29355',
+  },
+  title: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
+    color: Colors.ink,
+    marginBottom: scale(4),
+  },
+  fact: {
+    fontFamily: Fonts.serifItalic,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+    lineHeight: FontSizes.body * 1.5,
+  },
+});
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -54,6 +108,21 @@ export default function ProfileScreen() {
   const [selectedTriggers, setSelectedTriggers] = useState<string[]>(['rosacea']);
   const [watchlist, setWatchlist] = useState(DEFAULT_WATCHLIST);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Load previously saved skin profile on mount
+  useEffect(() => {
+    AsyncStorage.getItem(SKIN_PROFILE_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        const saved = JSON.parse(raw);
+        if (saved.skinType) setSelectedSkinType(saved.skinType);
+        if (saved.triggers) setSelectedTriggers(saved.triggers);
+        if (saved.watchlist) setWatchlist(saved.watchlist);
+      } catch {
+        // Corrupt data — keep defaults
+      }
+    });
+  }, []);
 
   const toggleTrigger = (id: string) => {
     setSelectedTriggers((prev) =>
@@ -109,6 +178,11 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
+        <InsightCard
+          title="Your sunscreen may be ageing faster than you"
+          fact="Octocrylene — a UV filter in most broad-spectrum SPFs — photooxidises progressively after opening, converting to benzophenone-3 within 6 months regardless of expiry date. Benzophenone-3 has confirmed oestrogenic activity and is associated with contact allergies at concentrations found in routinely used sunscreens."
+        />
+
         {/* Primary Skin Type */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Primary Skin Type</Text>

@@ -30,7 +30,7 @@ from app.schemas.personalization import (
 )
 
 # ── Keyword pattern tables ────────────────────────────────────────────────────
-# Direct port of CONCERN_FLAGS / GOAL_SUPPORT from nourai/utils/personalization.ts.
+# Direct port of CONCERN_FLAGS / GOAL_SUPPORT from elory/utils/personalization.ts.
 # Kept in sync manually — if the TS side changes, update here too.
 
 _FlagEntry = tuple[str, str]  # (pattern, label)
@@ -83,6 +83,69 @@ CONCERN_FLAGS: dict[str, list[_FlagEntry]] = {
         ("benzoyl peroxide", "Not for infant proximity"),
         ("essential oil", "Many are sensitizing for infants"),
         ("menthol", "Can cause apnea in infants"),
+    ],
+    # ── Fragrance-specific concerns ───────────────────────────────────────────
+    # Based on EU Cosmetics Regulation 1223/2009 Annex III — 26 mandatory
+    # disclosure allergens (must be listed above 0.001% in leave-on products).
+    # Source: SCCS Opinion SCCS/1564/15 and CosIng database.
+    "fragrance_sensitivity": [
+        # Carriers / masking agents
+        ("parfum", "Fragrance mix — may contain contact allergens"),
+        ("fragrance", "Fragrance mix — may contain contact allergens"),
+        # EU 26 allergens — alphabetical
+        ("amyl cinnamal", "EU allergen — skin sensitizer (amyl cinnamal)"),
+        ("amylcinnamyl alcohol", "EU allergen — skin sensitizer"),
+        ("anise alcohol", "EU allergen — skin sensitizer (anisyl alcohol)"),
+        ("anisyl alcohol", "EU allergen — skin sensitizer (anisyl alcohol)"),
+        ("benzyl alcohol", "EU allergen — skin sensitizer (benzyl alcohol)"),
+        ("benzyl benzoate", "EU allergen — skin sensitizer (benzyl benzoate)"),
+        ("benzyl cinnamate", "EU allergen — skin sensitizer (benzyl cinnamate)"),
+        ("benzyl salicylate", "EU allergen — skin sensitizer (benzyl salicylate)"),
+        ("butylphenyl methylpropional", "EU allergen — skin sensitizer (lilial)"),
+        ("lilial", "EU allergen — skin sensitizer; EU banned (reprotoxic)"),
+        ("cinnamal", "EU allergen — skin sensitizer (cinnamal)"),
+        ("cinnamyl alcohol", "EU allergen — skin sensitizer (cinnamyl alcohol)"),
+        ("citral", "EU allergen — skin sensitizer (citral)"),
+        ("citronellol", "EU allergen — skin sensitizer (citronellol)"),
+        ("coumarin", "EU allergen — skin sensitizer (coumarin)"),
+        ("eugenol", "EU allergen — skin sensitizer (eugenol)"),
+        ("evernia furfuracea", "EU allergen — treemoss, skin sensitizer"),
+        ("evernia prunastri", "EU allergen — oakmoss, skin sensitizer"),
+        ("farnesol", "EU allergen — skin sensitizer (farnesol)"),
+        ("geraniol", "EU allergen — skin sensitizer (geraniol)"),
+        ("hexyl cinnamal", "EU allergen — skin sensitizer (hexyl cinnamal)"),
+        ("hydroxycitronellal", "EU allergen — skin sensitizer"),
+        ("hydroxyisohexyl 3-cyclohexene carboxaldehyde", "EU allergen — skin sensitizer (lyral/HICC); EU banned"),
+        ("isoeugenol", "EU allergen — skin sensitizer (isoeugenol)"),
+        ("lilial", "EU allergen — skin sensitizer; EU banned (reprotoxic Annex II)"),
+        ("limonene", "EU allergen — oxidises to sensitizing hydroperoxides"),
+        ("linalool", "EU allergen — oxidises to sensitizing hydroperoxides"),
+        ("lyral", "EU allergen — EU banned since 2021 (HICC)"),
+        ("methyl 2-octynoate", "EU allergen — skin sensitizer"),
+        ("oak moss", "EU allergen — oakmoss; heavily restricted Annex III"),
+        ("treemoss", "EU allergen — treemoss; heavily restricted"),
+    ],
+    "atopic_dermatitis": [
+        # Patients with eczema/atopic dermatitis are hypersensitive to
+        # fragrance allergens. Same allergen list + additional irritants.
+        ("parfum", "Fragrance mix — high eczema trigger risk"),
+        ("fragrance", "Fragrance mix — high eczema trigger risk"),
+        ("limonene", "Common eczema trigger — oxidised form sensitizes"),
+        ("linalool", "Common eczema trigger — oxidised form sensitizes"),
+        ("geraniol", "Common eczema trigger (EU allergen)"),
+        ("eugenol", "Common eczema trigger (EU allergen)"),
+        ("cinnamal", "Common eczema trigger (EU allergen)"),
+        ("isoeugenol", "Common eczema trigger (EU allergen)"),
+        ("citral", "Common eczema trigger (EU allergen)"),
+        ("coumarin", "Common eczema trigger (EU allergen)"),
+        ("benzyl alcohol", "Common eczema trigger (EU allergen)"),
+        ("methylisothiazolinone", "Strong skin sensitizer — eczema risk"),
+        ("methylchloroisothiazolinone", "Strong skin sensitizer — eczema risk"),
+        ("kathon", "MIT/CMIT preservative — eczema epidemic trigger"),
+        ("formaldehyde", "Strong sensitizer — avoid in atopic skin"),
+        ("propylene glycol", "Irritant at high concentrations — atopic risk"),
+        ("sodium lauryl sulfate", "Surfactant — disrupts atopic skin barrier"),
+        ("sodium laureth sulfate", "Surfactant — may compromise skin barrier"),
     ],
 }
 

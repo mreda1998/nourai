@@ -4,6 +4,7 @@ import { useEffect, useCallback } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFonts } from 'expo-font';
 import {
   CormorantGaramond_400Regular,
@@ -36,7 +37,7 @@ function RootLayoutNav() {
     if (!isOnboarded) {
       // User hasn't completed onboarding
       router.replace('/onboarding');
-    } else if (!inAuthGroup && segments[0] !== '(tabs)' && segments[0] !== 'profile-hub' && segments[0] !== 'profile' && segments[0] !== 'product' && segments[0] !== 'ingredient' && segments[0] !== 'newsletter' && segments[0] !== 'settings' && segments[0] !== 'health') {
+    } else if (!inAuthGroup && segments[0] !== '(tabs)' && segments[0] !== 'profile-hub' && segments[0] !== 'profile' && segments[0] !== 'product' && segments[0] !== 'ingredient' && segments[0] !== 'newsletter' && segments[0] !== 'settings' && segments[0] !== 'health' && segments[0] !== 'domain') {
       // After onboarding, go to main app
       router.replace('/(tabs)');
     }
@@ -149,6 +150,15 @@ function RootLayoutNav() {
         }}
       />
 
+      {/* Domain Detail */}
+      <Stack.Screen
+        name="domain/[name]"
+        options={{
+          presentation: 'card',
+          animation: 'slide_from_right',
+        }}
+      />
+
       {/* Ingredient Deep Dive */}
       <Stack.Screen
         name="ingredient/[id]"
@@ -226,12 +236,14 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <AppStateProvider>
-        <StatusBar style="dark" />
-        <RootLayoutNav />
-      </AppStateProvider>
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <AppStateProvider>
+          <StatusBar style="dark" />
+          <RootLayoutNav />
+        </AppStateProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
 

@@ -73,7 +73,7 @@ class Ingredient(Base, UUIDMixin, TimestampMixin):
     # Evidence level — updated by research agent after synthesis
     evidence_level: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
-    # Belief vs. reality — the core NourAI differentiator.
+    # Belief vs. reality — the core Elory differentiator.
     # Both fields are written by the research agent in a single Claude call
     # after all PubMed studies for this ingredient have been synthesized.
     # common_belief  = what people generally think this ingredient does
@@ -82,6 +82,15 @@ class Ingredient(Base, UUIDMixin, TimestampMixin):
     #                  (honest, plain-English, with caveats)
     common_belief: Mapped[str | None] = mapped_column(Text, nullable=True)
     evidence_reality: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Per-bio-domain effect summary (pre-computed by research agent).
+    # Keys: gut-health, skin, metabolism, sleep-recovery, cognition, exposure-load.
+    # Each value: {direction, confidence, evidence_count, top_finding}
+    domain_effects: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    # URL to the generated mechanism-of-action research board illustration.
+    # Set by the research agent after image generation (future step).
+    mechanism_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Research pipeline tracking
     research_status: Mapped[str] = mapped_column(

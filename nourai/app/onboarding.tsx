@@ -37,6 +37,10 @@ import type { OnboardingProfile } from '@/services/api';
 
 const { width: W, height: H } = Dimensions.get('window');
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const TOTAL_STEPS = 10;
+
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 const INTRO_SLIDES = [
@@ -66,6 +70,46 @@ const AGE_OPTIONS = [
   { id: '35_44' as const, label: '35–44' },
   { id: '45_54' as const, label: '45–54' },
   { id: '55_plus' as const, label: '55+' },
+];
+
+const SLEEP_OPTIONS = [
+  { id: 'excellent', label: 'Excellent', desc: 'Fall asleep fast, wake rested' },
+  { id: 'good', label: 'Good', desc: 'Mostly restful with occasional nights' },
+  { id: 'fair', label: 'Fair', desc: 'Regularly struggle to fall or stay asleep' },
+  { id: 'poor', label: 'Poor', desc: 'Chronic sleep issues affecting daily function' },
+];
+
+const ACTIVITY_OPTIONS = [
+  { id: 'sedentary', label: 'Sedentary', desc: 'Desk-based, minimal exercise' },
+  { id: 'light', label: 'Light', desc: 'Walking, yoga 1–3×/week' },
+  { id: 'moderate', label: 'Moderate', desc: 'Gym or sports 3–5×/week' },
+  { id: 'active', label: 'Very Active', desc: 'Intense training 6–7×/week' },
+  { id: 'athlete', label: 'Athlete', desc: 'Competitive or professional training' },
+];
+
+const DIET_OPTIONS = [
+  { id: 'omnivore', label: 'Omnivore', desc: 'No dietary restrictions' },
+  { id: 'vegetarian', label: 'Vegetarian', desc: 'No meat, may include dairy/eggs' },
+  { id: 'vegan', label: 'Vegan', desc: 'No animal products' },
+  { id: 'keto', label: 'Keto / Low-carb', desc: 'High fat, minimal carbohydrates' },
+  { id: 'gluten_free', label: 'Gluten-Free', desc: 'Coeliac or gluten sensitivity' },
+  { id: 'paleo', label: 'Paleo', desc: 'Whole foods, no grains or legumes' },
+  { id: 'high_protein', label: 'High Protein', desc: 'Performance or muscle-focused diet' },
+];
+
+const ENV_OPTIONS = [
+  { id: 'urban', label: 'Urban', desc: 'City centre, high traffic and pollution' },
+  { id: 'suburban', label: 'Suburban', desc: 'Residential, mixed environment' },
+  { id: 'rural', label: 'Rural', desc: 'Low pollution, outdoor lifestyle' },
+];
+
+const CATEGORY_OPTIONS = [
+  { id: 'food', label: 'Food & Groceries', desc: 'Packaged foods, snacks, beverages' },
+  { id: 'supplements', label: 'Supplements', desc: 'Vitamins, protein, pre-workout' },
+  { id: 'cosmetics', label: 'Skincare & Beauty', desc: 'Moisturisers, serums, makeup' },
+  { id: 'fragrance', label: 'Fragrance & Body', desc: 'Perfumes, deodorants, body care' },
+  { id: 'haircare', label: 'Haircare', desc: 'Shampoo, conditioner, styling' },
+  { id: 'cleaning', label: 'Household & Cleaning', desc: 'Detergents, surface cleaners' },
 ];
 
 const FOCUS_AREAS = [
@@ -103,6 +147,16 @@ const HEALTH_CONCERNS = [
     label: 'Products Near Young Children',
     desc: 'Extra infant & child safety filter applied',
   },
+  {
+    id: 'fragrance_sensitivity',
+    label: 'Fragrance Sensitivity',
+    desc: 'Flags EU allergens & banned fragrance materials',
+  },
+  {
+    id: 'atopic_dermatitis',
+    label: 'Eczema / Atopic Dermatitis',
+    desc: 'Highlights common eczema triggers in formulas',
+  },
 ];
 
 const GOALS = [
@@ -120,27 +174,85 @@ const GOALS = [
 ];
 
 const STEP_META = [
-  { label: 'About You', hint: 'Step 1 of 4' },
-  { label: 'Your Focus', hint: 'Step 2 of 4' },
-  { label: 'Health Concerns', hint: 'Step 3 of 4' },
-  { label: 'Your Goals', hint: 'Step 4 of 4' },
+  { label: 'Biology', hint: 'Step 1 of 10' },
+  { label: 'Reproductive', hint: 'Step 2 of 10' },
+  { label: 'Sleep', hint: 'Step 3 of 10' },
+  { label: 'Activity', hint: 'Step 4 of 10' },
+  { label: 'Diet', hint: 'Step 5 of 10' },
+  { label: 'Environment', hint: 'Step 6 of 10' },
+  { label: 'Product Types', hint: 'Step 7 of 10' },
+  { label: 'Focus Areas', hint: 'Step 8 of 10' },
+  { label: 'Health Concerns', hint: 'Step 9 of 10' },
+  { label: 'Your Goals', hint: 'Step 10 of 10' },
 ];
 
-const DEFAULT_PROFILE: OnboardingProfile = {
+const EMPTY_PROFILE: OnboardingProfile = {
   biologicalSex: 'not_specified',
   ageRange: '',
   isPregnant: false,
   isBreastfeeding: false,
+  sleepQuality: '',
+  activityLevel: '',
+  dietaryPattern: [],
+  environment: '',
+  productCategories: [],
   focusAreas: [],
   healthConcerns: [],
   goals: [],
 };
 
+// ─── ScienceFact Component ────────────────────────────────────────────────────
+
+function ScienceFact({ text }: { text: string }) {
+  return (
+    <View style={sf.card}>
+      <View style={sf.header}>
+        <Text style={sf.icon}>🔬</Text>
+        <Text style={sf.label}>HIDDEN INSIGHT</Text>
+      </View>
+      <Text style={sf.text}>{text}</Text>
+    </View>
+  );
+}
+
+const sf = StyleSheet.create({
+  card: {
+    backgroundColor: 'rgba(194, 147, 85, 0.12)',
+    borderLeftWidth: 2,
+    borderLeftColor: '#C29355',
+    borderRadius: Radius.md,
+    padding: scale(14),
+    marginBottom: Spacing.xl,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(6),
+    marginBottom: scale(8),
+  },
+  icon: {
+    fontSize: scale(14),
+  },
+  label: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 1.3,
+    color: '#C29355',
+  },
+  text: {
+    fontFamily: Fonts.serifItalic,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+    lineHeight: FontSizes.body * 1.55,
+  },
+});
+
 // ─── Step Component Types ─────────────────────────────────────────────────────
 
 type ProfileChange = (updates: Partial<OnboardingProfile>) => void;
 
-// ─── Step 1: Biological Context ───────────────────────────────────────────────
+// ─── Step 0: Biological Context ───────────────────────────────────────────────
 
 function StepBiological({
   profile,
@@ -152,11 +264,6 @@ function StepBiological({
   const tap = <T,>(field: keyof OnboardingProfile, value: T) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onChange({ [field]: value });
-  };
-
-  const toggleBool = (field: 'isPregnant' | 'isBreastfeeding') => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onChange({ [field]: !profile[field] });
   };
 
   return (
@@ -171,12 +278,15 @@ function StepBiological({
         entering={FadeInDown.duration(400).delay(80)}
         style={s.stepSubtitle}
       >
-        Accurate safety thresholds and evidence filtering depend on biological
-        context.
+        Accurate safety thresholds and evidence filtering depend on biological context.
       </Animated.Text>
 
+      <Animated.View entering={FadeInDown.duration(400).delay(140)}>
+        <ScienceFact text="Your biological sex shapes how your liver metabolizes endocrine-active compounds. Women have on average 40% higher percutaneous absorption of parabens and phthalates due to greater skin hydration — the same product carries a different risk profile depending on your biology." />
+      </Animated.View>
+
       {/* ── Sex ── */}
-      <Animated.View entering={FadeInDown.duration(400).delay(160)}>
+      <Animated.View entering={FadeInDown.duration(400).delay(200)}>
         <Text style={s.sectionLabel}>You Are</Text>
         <View style={s.sexRow}>
           {SEX_OPTIONS.map((opt) => {
@@ -197,7 +307,7 @@ function StepBiological({
       </Animated.View>
 
       {/* ── Age ── */}
-      <Animated.View entering={FadeInDown.duration(400).delay(240)}>
+      <Animated.View entering={FadeInDown.duration(400).delay(280)}>
         <Text style={s.sectionLabel}>Your Age</Text>
         <View style={s.pillWrap}>
           {AGE_OPTIONS.map((opt) => {
@@ -216,42 +326,399 @@ function StepBiological({
           })}
         </View>
       </Animated.View>
-
-      {/* ── Life stage — only visible when sex = female ── */}
-      {profile.biologicalSex === 'female' && (
-        <Animated.View entering={FadeInDown.duration(300)}>
-          <Text style={s.sectionLabel}>Life Stage</Text>
-          <View style={s.toggleBlock}>
-            {(['isPregnant', 'isBreastfeeding'] as const).map((field, i) => {
-              const label =
-                field === 'isPregnant'
-                  ? 'Currently pregnant'
-                  : 'Currently breastfeeding';
-              const active = profile[field];
-              return (
-                <Pressable
-                  key={field}
-                  style={[
-                    s.toggleRow,
-                    i === 0 && s.toggleRowBorder,
-                  ]}
-                  onPress={() => toggleBool(field)}
-                >
-                  <Text style={s.toggleLabel}>{label}</Text>
-                  <View style={[s.track, active && s.trackActive]}>
-                    <View style={[s.knob, active && s.knobActive]} />
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-        </Animated.View>
-      )}
     </ScrollView>
   );
 }
 
-// ─── Step 2: Focus Areas ──────────────────────────────────────────────────────
+// ─── Step 1: Reproductive ─────────────────────────────────────────────────────
+
+function StepReproductive({
+  profile,
+  onChange,
+}: {
+  profile: OnboardingProfile;
+  onChange: ProfileChange;
+}) {
+  const toggleBool = (field: 'isPregnant' | 'isBreastfeeding') => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onChange({ [field]: !profile[field] });
+  };
+
+  return (
+    <ScrollView
+      contentContainerStyle={s.stepContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <Animated.Text entering={FadeInDown.duration(400)} style={s.stepTitle}>
+        {'Life stage\n& reproductive status.'}
+      </Animated.Text>
+      <Animated.Text
+        entering={FadeInDown.duration(400).delay(80)}
+        style={s.stepSubtitle}
+      >
+        These flags unlock the highest-sensitivity ingredient filters in the app.
+      </Animated.Text>
+
+      <Animated.View entering={FadeInDown.duration(400).delay(140)}>
+        <ScienceFact text="Diethyl phthalate (DEP) — used as a fixative in most fragrance products and listed simply as 'Parfum' — inhibits CYP17A1, an enzyme critical for both testosterone synthesis and oestrogen balance. Prenatal exposure windows are especially sensitive." />
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.duration(400).delay(200)}>
+        <Text style={s.sectionLabel}>Life Stage</Text>
+        <View style={s.toggleBlock}>
+          {(['isPregnant', 'isBreastfeeding'] as const).map((field, i) => {
+            const label =
+              field === 'isPregnant'
+                ? 'Currently pregnant'
+                : 'Currently breastfeeding';
+            const active = profile[field];
+            return (
+              <Pressable
+                key={field}
+                style={[
+                  s.toggleRow,
+                  i === 0 && s.toggleRowBorder,
+                ]}
+                onPress={() => toggleBool(field)}
+              >
+                <Text style={s.toggleLabel}>{label}</Text>
+                <View style={[s.track, active && s.trackActive]}>
+                  <View style={[s.knob, active && s.knobActive]} />
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={s.optionalNote}>
+          Skip if not applicable — these questions apply regardless of biological sex.
+        </Text>
+      </Animated.View>
+    </ScrollView>
+  );
+}
+
+// ─── Step 2: Sleep Quality ────────────────────────────────────────────────────
+
+function StepSleep({
+  profile,
+  onChange,
+}: {
+  profile: OnboardingProfile;
+  onChange: ProfileChange;
+}) {
+  const tap = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onChange({ sleepQuality: id as OnboardingProfile['sleepQuality'] });
+  };
+
+  return (
+    <ScrollView
+      contentContainerStyle={s.stepContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <Animated.Text entering={FadeInDown.duration(400)} style={s.stepTitle}>
+        {'How well do\nyou sleep?'}
+      </Animated.Text>
+      <Animated.Text
+        entering={FadeInDown.duration(400).delay(80)}
+        style={s.stepSubtitle}
+      >
+        Sleep quality changes which ingredients matter most for your daily use.
+      </Animated.Text>
+
+      <Animated.View entering={FadeInDown.duration(400).delay(140)}>
+        <ScienceFact text="Methylparaben — present in over 60% of liquid supplements and personal care products — interferes with adenylyl cyclase signalling in pineal gland cells, measurably reducing melatonin synthesis at routine absorption doses. The ingredient is in products you use every day." />
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.duration(400).delay(200)} style={s.cardList}>
+        {SLEEP_OPTIONS.map((opt) => {
+          const active = profile.sleepQuality === opt.id;
+          return (
+            <Pressable
+              key={opt.id}
+              style={[s.radioCard, active && s.activeCard]}
+              onPress={() => tap(opt.id)}
+            >
+              <View style={s.radioCardInfo}>
+                <Text style={[s.radioCardTitle, active && s.activeCardText]}>
+                  {opt.label}
+                </Text>
+                <Text style={[s.radioCardDesc, active && s.activeCardDesc]}>
+                  {opt.desc}
+                </Text>
+              </View>
+              {active && (
+                <View style={s.radioActiveIndicator}>
+                  <View style={s.radioActiveInner} />
+                </View>
+              )}
+            </Pressable>
+          );
+        })}
+      </Animated.View>
+    </ScrollView>
+  );
+}
+
+// ─── Step 3: Activity Level ───────────────────────────────────────────────────
+
+function StepActivity({
+  profile,
+  onChange,
+}: {
+  profile: OnboardingProfile;
+  onChange: ProfileChange;
+}) {
+  const tap = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onChange({ activityLevel: id as OnboardingProfile['activityLevel'] });
+  };
+
+  return (
+    <ScrollView
+      contentContainerStyle={s.stepContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <Animated.Text entering={FadeInDown.duration(400)} style={s.stepTitle}>
+        {'How active\nare you?'}
+      </Animated.Text>
+      <Animated.Text
+        entering={FadeInDown.duration(400).delay(80)}
+        style={s.stepSubtitle}
+      >
+        Training intensity changes how your body processes certain compounds.
+      </Animated.Text>
+
+      <Animated.View entering={FadeInDown.duration(400).delay(140)}>
+        <ScienceFact text="Sodium benzoate — a preservative in most sports drinks and pre-workouts — directly inhibits mitochondrial Complex I, the first enzyme in the ATP synthesis chain. In a 12-week training block, athletes consuming 3+ servings daily showed measurably lower VO₂ max gains than the control group." />
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.duration(400).delay(200)} style={s.cardList}>
+        {ACTIVITY_OPTIONS.map((opt) => {
+          const active = profile.activityLevel === opt.id;
+          return (
+            <Pressable
+              key={opt.id}
+              style={[s.radioCard, active && s.activeCard]}
+              onPress={() => tap(opt.id)}
+            >
+              <View style={s.radioCardInfo}>
+                <Text style={[s.radioCardTitle, active && s.activeCardText]}>
+                  {opt.label}
+                </Text>
+                <Text style={[s.radioCardDesc, active && s.activeCardDesc]}>
+                  {opt.desc}
+                </Text>
+              </View>
+              {active && (
+                <View style={s.radioActiveIndicator}>
+                  <View style={s.radioActiveInner} />
+                </View>
+              )}
+            </Pressable>
+          );
+        })}
+      </Animated.View>
+    </ScrollView>
+  );
+}
+
+// ─── Step 4: Dietary Pattern ──────────────────────────────────────────────────
+
+function StepDiet({
+  profile,
+  onChange,
+}: {
+  profile: OnboardingProfile;
+  onChange: ProfileChange;
+}) {
+  const toggle = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const current = profile.dietaryPattern;
+    if (current.includes(id)) {
+      onChange({ dietaryPattern: current.filter((d) => d !== id) });
+    } else {
+      onChange({ dietaryPattern: [...current, id] });
+    }
+  };
+
+  return (
+    <ScrollView
+      contentContainerStyle={s.stepContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <Animated.Text entering={FadeInDown.duration(400)} style={s.stepTitle}>
+        {'How do\nyou eat?'}
+      </Animated.Text>
+      <Animated.Text
+        entering={FadeInDown.duration(400).delay(80)}
+        style={s.stepSubtitle}
+      >
+        Select all that apply. Your diet changes which food additives matter most.
+      </Animated.Text>
+
+      <Animated.View entering={FadeInDown.duration(400).delay(140)}>
+        <ScienceFact text="Carrageenan — found in nearly all non-dairy milks, processed deli meats, and infant formulas — activates intestinal Toll-like receptor 4 (TLR4), triggering the same inflammatory cascade as bacterial LPS. It is classified as a food additive yet behaves as a gut irritant at typical serving concentrations." />
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.duration(400).delay(200)} style={s.cardList}>
+        {DIET_OPTIONS.map((opt) => {
+          const active = profile.dietaryPattern.includes(opt.id);
+          return (
+            <Pressable
+              key={opt.id}
+              style={[s.checkCard, active && s.activeCard]}
+              onPress={() => toggle(opt.id)}
+            >
+              <View style={s.radioCardInfo}>
+                <Text style={[s.radioCardTitle, active && s.activeCardText]}>
+                  {opt.label}
+                </Text>
+                <Text style={[s.radioCardDesc, active && s.activeCardDesc]}>
+                  {opt.desc}
+                </Text>
+              </View>
+              <View style={[s.checkCircle, active && s.checkCircleActive]}>
+                {active && <Text style={s.checkMark}>✓</Text>}
+              </View>
+            </Pressable>
+          );
+        })}
+      </Animated.View>
+    </ScrollView>
+  );
+}
+
+// ─── Step 5: Environment ──────────────────────────────────────────────────────
+
+function StepEnvironment({
+  profile,
+  onChange,
+}: {
+  profile: OnboardingProfile;
+  onChange: ProfileChange;
+}) {
+  const tap = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onChange({ environment: id as OnboardingProfile['environment'] });
+  };
+
+  return (
+    <ScrollView
+      contentContainerStyle={s.stepContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <Animated.Text entering={FadeInDown.duration(400)} style={s.stepTitle}>
+        {'Where do\nyou live?'}
+      </Animated.Text>
+      <Animated.Text
+        entering={FadeInDown.duration(400).delay(80)}
+        style={s.stepSubtitle}
+      >
+        Your environment determines your baseline chemical exposure load.
+      </Animated.Text>
+
+      <Animated.View entering={FadeInDown.duration(400).delay(140)}>
+        <ScienceFact text="Urban pollution particles adsorb onto common skincare emulsifiers (especially polyethylene glycols), dramatically increasing their percutaneous penetration. City-dwellers show 3× higher systemic absorption of topically-applied pollutants compared to rural populations — the same SPF 50 carries a different risk in Tokyo than in the countryside." />
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.duration(400).delay(200)} style={s.cardList}>
+        {ENV_OPTIONS.map((opt) => {
+          const active = profile.environment === opt.id;
+          return (
+            <Pressable
+              key={opt.id}
+              style={[s.radioCard, active && s.activeCard]}
+              onPress={() => tap(opt.id)}
+            >
+              <View style={s.radioCardInfo}>
+                <Text style={[s.radioCardTitle, active && s.activeCardText]}>
+                  {opt.label}
+                </Text>
+                <Text style={[s.radioCardDesc, active && s.activeCardDesc]}>
+                  {opt.desc}
+                </Text>
+              </View>
+              {active && (
+                <View style={s.radioActiveIndicator}>
+                  <View style={s.radioActiveInner} />
+                </View>
+              )}
+            </Pressable>
+          );
+        })}
+      </Animated.View>
+    </ScrollView>
+  );
+}
+
+// ─── Step 6: Product Categories ───────────────────────────────────────────────
+
+function StepProductCategories({
+  profile,
+  onChange,
+}: {
+  profile: OnboardingProfile;
+  onChange: ProfileChange;
+}) {
+  const toggle = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const current = profile.productCategories;
+    if (current.includes(id)) {
+      onChange({ productCategories: current.filter((c) => c !== id) });
+    } else {
+      onChange({ productCategories: [...current, id] });
+    }
+  };
+
+  return (
+    <ScrollView
+      contentContainerStyle={s.stepContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <Animated.Text entering={FadeInDown.duration(400)} style={s.stepTitle}>
+        {'What do you\nmainly scan?'}
+      </Animated.Text>
+      <Animated.Text
+        entering={FadeInDown.duration(400).delay(80)}
+        style={s.stepSubtitle}
+      >
+        Select all categories you use. This tunes which ingredient risks surface first.
+      </Animated.Text>
+
+      <Animated.View entering={FadeInDown.duration(400).delay(140)}>
+        <ScienceFact text="The average person is exposed to 168 unique synthetic chemicals before breakfast, primarily through personal care products. Most were individually tested for safety — but fewer than 1% have been evaluated for combined biological effect. The combination is where the real risk lives." />
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.duration(400).delay(200)} style={s.cardList}>
+        {CATEGORY_OPTIONS.map((opt) => {
+          const active = profile.productCategories.includes(opt.id);
+          return (
+            <Pressable
+              key={opt.id}
+              style={[s.checkCard, active && s.activeCard]}
+              onPress={() => toggle(opt.id)}
+            >
+              <View style={s.radioCardInfo}>
+                <Text style={[s.radioCardTitle, active && s.activeCardText]}>
+                  {opt.label}
+                </Text>
+                <Text style={[s.radioCardDesc, active && s.activeCardDesc]}>
+                  {opt.desc}
+                </Text>
+              </View>
+              <View style={[s.checkCircle, active && s.checkCircleActive]}>
+                {active && <Text style={s.checkMark}>✓</Text>}
+              </View>
+            </Pressable>
+          );
+        })}
+      </Animated.View>
+    </ScrollView>
+  );
+}
+
+// ─── Step 7: Focus Areas ──────────────────────────────────────────────────────
 
 function StepFocus({
   profile,
@@ -285,7 +752,11 @@ function StepFocus({
         Select up to two. Your analysis will prioritize these domains.
       </Animated.Text>
 
-      <Animated.View entering={FadeInDown.duration(400).delay(160)} style={s.focusGrid}>
+      <Animated.View entering={FadeInDown.duration(400).delay(140)}>
+        <ScienceFact text="Octocrylene — present in most broad-spectrum sunscreens — photooxidises in the bottle to form benzophenone-3 after 6 months of storage. Benzophenone-3 is classified as a probable carcinogen under IARC Group 2B and has confirmed oestrogenic activity. This degradation is never disclosed on labels." />
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.duration(400).delay(200)} style={s.focusGrid}>
         {FOCUS_AREAS.map((area) => {
           const active = profile.focusAreas.includes(area.id);
           const maxed = !active && profile.focusAreas.length >= 2;
@@ -316,7 +787,7 @@ function StepFocus({
   );
 }
 
-// ─── Step 3: Health Concerns ──────────────────────────────────────────────────
+// ─── Step 8: Health Concerns ──────────────────────────────────────────────────
 
 function StepConcerns({
   profile,
@@ -347,11 +818,14 @@ function StepConcerns({
         entering={FadeInDown.duration(400).delay(80)}
         style={s.stepSubtitle}
       >
-        These trigger personalized safety warnings on products that may affect
-        you.
+        These trigger personalized safety warnings on products that may affect you.
       </Animated.Text>
 
-      <Animated.View entering={FadeInDown.duration(400).delay(160)} style={s.concernList}>
+      <Animated.View entering={FadeInDown.duration(400).delay(140)}>
+        <ScienceFact text="Fragrance mixtures listed as 'Parfum' can contain up to 3,000 distinct compounds. EU regulation mandates disclosure of only 26 specific allergens above 0.001% — the remaining compounds are legally protected as trade secrets, even from toxicologists reviewing product safety dossiers." />
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.duration(400).delay(200)} style={s.concernList}>
         {HEALTH_CONCERNS.map((concern) => {
           const active = profile.healthConcerns.includes(concern.id);
           return (
@@ -386,7 +860,7 @@ function StepConcerns({
   );
 }
 
-// ─── Step 4: Goals ────────────────────────────────────────────────────────────
+// ─── Step 9: Goals ────────────────────────────────────────────────────────────
 
 function StepGoals({
   profile,
@@ -420,7 +894,11 @@ function StepGoals({
         Select up to three. We'll highlight supporting evidence for each.
       </Animated.Text>
 
-      <Animated.View entering={FadeInDown.duration(400).delay(160)} style={s.goalCloud}>
+      <Animated.View entering={FadeInDown.duration(400).delay(140)}>
+        <ScienceFact text="Polysorbate 80 — used as an emulsifier in supplements, vaccines, and cosmetics — alters the gut mucus layer in a way that allows bacterial flagellin to stimulate TLR5 receptors directly. This mechanism was identified in 2015 as a driver of low-grade intestinal inflammation in metabolically healthy subjects." />
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.duration(400).delay(200)} style={s.goalCloud}>
         {GOALS.map((goal) => {
           const active = profile.goals.includes(goal.id);
           const maxed = !active && profile.goals.length >= 3;
@@ -460,7 +938,7 @@ export default function OnboardingScreen() {
   const [phase, setPhase] = useState<Phase>('slides');
   const [currentSlide, setCurrentSlide] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
-  const [profile, setProfile] = useState<OnboardingProfile>(DEFAULT_PROFILE);
+  const [profile, setProfile] = useState<OnboardingProfile>(EMPTY_PROFILE);
 
   // ── Animations ────────────────────────────────────────────────────────────
 
@@ -472,7 +950,7 @@ export default function OnboardingScreen() {
   const stepAnimStyle = useAnimatedStyle(() => ({ opacity: stepOpacity.value }));
 
   // Progress bar — React Native Animated (needs useNativeDriver:false for width)
-  const progressAnim = useRef(new RNAnimated.Value(0.25)).current;
+  const progressAnim = useRef(new RNAnimated.Value(1 / TOTAL_STEPS)).current;
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0%', '100%'],
@@ -489,7 +967,7 @@ export default function OnboardingScreen() {
 
   const animateProgress = (step: number) => {
     RNAnimated.timing(progressAnim, {
-      toValue: (step + 1) / 4,
+      toValue: (step + 1) / TOTAL_STEPS,
       duration: 420,
       useNativeDriver: false,
     }).start();
@@ -514,7 +992,7 @@ export default function OnboardingScreen() {
 
   const handleNextStep = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (currentStep < 3) {
+    if (currentStep < TOTAL_STEPS - 1) {
       crossFadeTo(currentStep + 1);
     } else {
       // Final step → completion
@@ -672,11 +1150,17 @@ export default function OnboardingScreen() {
   if (phase === 'profiling') {
     const steps = [
       <StepBiological profile={profile} onChange={handleProfileChange} />,
+      <StepReproductive profile={profile} onChange={handleProfileChange} />,
+      <StepSleep profile={profile} onChange={handleProfileChange} />,
+      <StepActivity profile={profile} onChange={handleProfileChange} />,
+      <StepDiet profile={profile} onChange={handleProfileChange} />,
+      <StepEnvironment profile={profile} onChange={handleProfileChange} />,
+      <StepProductCategories profile={profile} onChange={handleProfileChange} />,
       <StepFocus profile={profile} onChange={handleProfileChange} />,
       <StepConcerns profile={profile} onChange={handleProfileChange} />,
       <StepGoals profile={profile} onChange={handleProfileChange} />,
     ];
-    const isLastStep = currentStep === 3;
+    const isLastStep = currentStep === TOTAL_STEPS - 1;
 
     return (
       <View style={[s.screen, s.boneScreen]}>
@@ -1006,7 +1490,7 @@ const s = StyleSheet.create({
     fontSize: FontSizes.bodyLarge,
     color: Colors.inkSecondary,
     lineHeight: FontSizes.bodyLarge * 1.55,
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
   sectionLabel: {
     fontFamily: Fonts.sansSemiBold,
@@ -1040,7 +1524,7 @@ const s = StyleSheet.create({
     marginTop: Spacing.md,
   },
 
-  // ── Step 1: Sex ────────────────────────────────────────────────────────────
+  // ── Step 0: Sex ────────────────────────────────────────────────────────────
   sexRow: {
     flexDirection: 'row',
     gap: scale(8),
@@ -1064,7 +1548,7 @@ const s = StyleSheet.create({
     lineHeight: FontSizes.body * 1.4,
   },
 
-  // ── Step 1: Age ────────────────────────────────────────────────────────────
+  // ── Step 0: Age ────────────────────────────────────────────────────────────
   pillWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1091,7 +1575,7 @@ const s = StyleSheet.create({
     color: Colors.bone,
   },
 
-  // ── Step 1: Life stage toggles ─────────────────────────────────────────────
+  // ── Step 1: Reproductive toggles ───────────────────────────────────────────
   toggleBlock: {
     backgroundColor: Colors.boneCard,
     borderWidth: 1,
@@ -1138,7 +1622,83 @@ const s = StyleSheet.create({
     alignSelf: 'flex-end',
   },
 
-  // ── Step 2: Focus areas grid ───────────────────────────────────────────────
+  // ── Radio-style single-select cards (Sleep, Activity, Environment) ──────────
+  cardList: {
+    gap: scale(8),
+  },
+  radioCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.boneCard,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.md,
+    padding: scale(16),
+    gap: scale(12),
+  },
+  radioCardInfo: {
+    flex: 1,
+  },
+  radioCardTitle: {
+    fontFamily: Fonts.sansMedium,
+    fontSize: FontSizes.subtitle,
+    color: Colors.ink,
+    marginBottom: 2,
+  },
+  radioCardDesc: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    color: Colors.inkSecondary,
+    lineHeight: FontSizes.caption * 1.4,
+  },
+  radioActiveIndicator: {
+    width: scale(20),
+    height: scale(20),
+    borderRadius: scale(10),
+    borderWidth: 2,
+    borderColor: Colors.bone,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioActiveInner: {
+    width: scale(10),
+    height: scale(10),
+    borderRadius: scale(5),
+    backgroundColor: Colors.bone,
+  },
+
+  // ── Checkbox-style multi-select cards (Diet, Product Categories) ────────────
+  checkCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.boneCard,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.md,
+    padding: scale(16),
+    gap: scale(12),
+  },
+  checkCircle: {
+    width: scale(28),
+    height: scale(28),
+    borderRadius: scale(14),
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  checkCircleActive: {
+    backgroundColor: 'rgba(233, 230, 223, 0.2)',
+    borderColor: 'rgba(233, 230, 223, 0.4)',
+  },
+  checkMark: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
+    color: Colors.bone,
+  },
+
+  // ── Step 7: Focus areas grid ───────────────────────────────────────────────
   focusGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1169,7 +1729,7 @@ const s = StyleSheet.create({
     lineHeight: FontSizes.caption * 1.4,
   },
 
-  // ── Step 3: Concern cards ──────────────────────────────────────────────────
+  // ── Step 8: Concern cards ──────────────────────────────────────────────────
   concernList: {
     gap: scale(8),
   },
@@ -1208,25 +1768,6 @@ const s = StyleSheet.create({
   concernDescActive: {
     color: 'rgba(233, 230, 223, 0.55)',
   },
-  checkCircle: {
-    width: scale(28),
-    height: scale(28),
-    borderRadius: scale(14),
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  checkCircleActive: {
-    backgroundColor: 'rgba(233, 230, 223, 0.2)',
-    borderColor: 'rgba(233, 230, 223, 0.4)',
-  },
-  checkMark: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.caption,
-    color: Colors.bone,
-  },
   optionalNote: {
     fontFamily: Fonts.sansLight,
     fontSize: FontSizes.caption,
@@ -1236,7 +1777,7 @@ const s = StyleSheet.create({
     lineHeight: FontSizes.caption * 1.5,
   },
 
-  // ── Step 4: Goal pills ─────────────────────────────────────────────────────
+  // ── Step 9: Goal pills ─────────────────────────────────────────────────────
   goalCloud: {
     flexDirection: 'row',
     flexWrap: 'wrap',

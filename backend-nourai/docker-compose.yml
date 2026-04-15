@@ -5,7 +5,7 @@ services:
   # In production, use Supabase PostgreSQL instead
   postgres:
     image: postgres:16-alpine
-    container_name: nourai-postgres
+    container_name: elory-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -23,7 +23,7 @@ services:
   # Backend API (optional - can also run with uvicorn directly)
   api:
     build: .
-    container_name: nourai-api
+    container_name: elory-api
     ports:
       - "8000:8000"
     environment:

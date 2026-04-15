@@ -111,9 +111,23 @@ export default function SearchScreen() {
     setError(null);
     try {
       const category = selectedCategory !== 'all' ? selectedCategory : undefined;
-      const res = await api.searchProducts(q, { limit: SEARCH_LIMIT, category });
-      setSearchResults(res.products);
-      setTotalResults(res.total);
+      const includeUsda = selectedCategory === 'all' || selectedCategory === 'food';
+
+      // Run product DB search and USDA search in parallel
+      const [res, usdaRes] = await Promise.all([
+        api.searchProducts(q, { limit: SEARCH_LIMIT, category }),
+        includeUsda ? api.searchFoods(q, 8) : Promise.resolve({ products: [], total: 0, ai_generated: false }),
+      ]);
+
+      // Merge: local DB first, then USDA results not already in local results
+      const localIds = new Set(res.products.map((p) => p.id));
+      const merged = [
+        ...res.products,
+        ...usdaRes.products.filter((p) => !localIds.has(p.id)),
+      ];
+
+      setSearchResults(merged);
+      setTotalResults(merged.length);
     } catch (e: any) {
       if (e?.name !== 'AbortError') setError('Search failed');
     } finally {
@@ -127,7 +141,7 @@ export default function SearchScreen() {
 
   // Section label
   const sectionLabel = isSearchMode
-    ? (searching ? 'Searching…' : `${totalResults} result${totalResults !== 1 ? 's' : ''} for "${query}"`)
+    ? (searching ? 'Searching…' : `${totalResults} result${totalResults !== 1 ? 's' : ''}`)
     : `Top ${discoveryProducts.length} Products`;
 
   return (

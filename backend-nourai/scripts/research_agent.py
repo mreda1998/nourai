@@ -26,7 +26,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import json
+import re
 import sys
 import uuid
 import xml.etree.ElementTree as ET
@@ -35,6 +37,7 @@ from typing import Any
 
 import anthropic
 import httpx
+from openai import AsyncOpenAI
 from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -744,16 +747,160 @@ def derive_evidence_level(evidence_records: list[dict]) -> str:
     return "insufficient"
 
 
+# ─── Mechanism image generation ──────────────────────────────────────────────
+
+# Category → visual style hint used by the DALL-E prompt.
+_CATEGORY_STYLE: dict[str, str] = {
+    "vitamin":      "soft golden bioluminescent light, cellular organelles",
+    "mineral":      "crystalline ionic lattice structures, electrostatic fields",
+    "amino_acid":   "protein folding ribbon diagrams, peptide chains",
+    "herb":         "botanical cross-section with vivid natural pigments",
+    "probiotic":    "gut microbiome colony, intestinal epithelium surface",
+    "enzyme":       "enzyme active site lock-and-key with substrate",
+    "fatty_acid":   "phospholipid bilayer membrane, lipid droplets",
+    "antioxidant":  "free-radical neutralization, electron cloud transfer",
+    "preservative": "molecular barrier, antimicrobial membrane interaction",
+    "sweetener":    "receptor binding on taste cell microvilli",
+    "additive":     "molecular dispersion in food matrix",
+    "other":        "abstract molecular biology, space-filling model",
+}
+
+_CATEGORY_COLOR: dict[str, str] = {
+    "vitamin":      "warm amber, gold, and soft white",
+    "mineral":      "cool cobalt blue, silver, and electric cyan",
+    "amino_acid":   "deep violet, lavender, and pearl white",
+    "herb":         "rich forest green, earth sienna, and cream",
+    "probiotic":    "teal, warm rose, and translucent pearl",
+    "enzyme":       "cobalt blue, bright white, and molecular grey",
+    "fatty_acid":   "ocean blue, translucent gold, and soft green",
+    "antioxidant":  "vivid orange, deep crimson, and white",
+    "preservative": "steel blue, dark charcoal, and sharp white",
+    "sweetener":    "warm pink, bright white, and soft gold",
+    "additive":     "muted teal, off-white, and slate grey",
+    "other":        "midnight blue, bioluminescent green, and white",
+}
+
+
+def _build_image_prompt(
+    canonical_name: str,
+    category: str,
+    mechanism_summary: str | None,
+    findings: list[str],
+) -> str:
+    """
+    Build a gpt-image-1 prompt for a mechanism-of-action illustration.
+
+    The image is abstract and scientific — no text, no labels, no diagrams
+    with annotations. It should evoke the biological process, not explain it.
+    """
+    style = _CATEGORY_STYLE.get(category, _CATEGORY_STYLE["other"])
+    color = _CATEGORY_COLOR.get(category, _CATEGORY_COLOR["other"])
+
+    # Ground the visual in the actual mechanism and top finding
+    mechanism_clause = (
+        f"The compound's mechanism: {mechanism_summary[:180]}. "
+        if mechanism_summary else ""
+    )
+    finding_clause = (
+        f"Key effect to visualize: {findings[0][:120]}. "
+        if findings else ""
+    )
+
+    prompt = (
+        f"Abstract scientific visualization of {canonical_name}, "
+        f"a {category.replace('_', ' ')} compound interacting with human biology. "
+        f"Visual style: {style}. "
+        f"Color palette: {color}. "
+        f"{mechanism_clause}"
+        f"{finding_clause}"
+        "The image should feel like high-end scientific illustration — "
+        "ethereal, precise, and beautiful. Shot as if through an electron microscope "
+        "or rendered as a detailed 3-D molecular visualization. "
+        "No text, no labels, no numbers, no annotations anywhere in the image."
+    )
+    return prompt
+
+
+async def generate_and_upload_mechanism_image(
+    openai_client: AsyncOpenAI,
+    http: httpx.AsyncClient,
+    canonical_name: str,
+    prompt: str,
+) -> str | None:
+    """
+    Generate a mechanism illustration via gpt-image-1 and upload it to
+    Supabase Storage.
+
+    Returns the public URL on success, None on any failure.
+    Images are stored at: ingredient-mechanisms/{slug}.png
+    """
+    slug = re.sub(r"[^a-z0-9]+", "-", canonical_name.lower()).strip("-")
+    storage_path = f"ingredient-mechanisms/{slug}.png"
+    public_url = (
+        f"{settings.supabase_url.rstrip('/')}/storage/v1/object/public/"
+        f"{settings.supabase_storage_bucket}/{storage_path}"
+    )
+
+    # ── Generate via OpenAI ───────────────────────────────────────────────────
+    try:
+        response = await openai_client.images.generate(
+            model="gpt-image-1",
+            prompt=prompt,
+            n=1,
+            size="1024x1024",
+            quality="auto",
+        )
+        # gpt-image-1 returns b64_json by default
+        image_b64 = response.data[0].b64_json
+        if not image_b64:
+            print(f"    [OpenAI] Empty image response for '{canonical_name}'")
+            return None
+        image_bytes = base64.b64decode(image_b64)
+        print(f"    [OpenAI] Image generated ({len(image_bytes) // 1024} KB)")
+    except Exception as exc:
+        print(f"    [OpenAI] Image generation failed for '{canonical_name}': {exc}")
+        return None
+
+    # ── Upload to Supabase Storage ────────────────────────────────────────────
+    if not settings.supabase_url or not settings.supabase_service_role_key:
+        print(f"    [Supabase] Skipping upload — SUPABASE_URL or SERVICE_ROLE_KEY not set")
+        return None
+
+    upload_url = (
+        f"{settings.supabase_url.rstrip('/')}/storage/v1/object/"
+        f"{settings.supabase_storage_bucket}/{storage_path}"
+    )
+    try:
+        resp = await http.post(
+            upload_url,
+            content=image_bytes,
+            headers={
+                "Authorization": f"Bearer {settings.supabase_service_role_key}",
+                "Content-Type": "image/png",
+                "x-upsert": "true",
+            },
+            timeout=30.0,
+        )
+        resp.raise_for_status()
+        print(f"    [Supabase] Uploaded → {storage_path}")
+        return public_url
+    except Exception as exc:
+        print(f"    [Supabase] Upload failed for '{canonical_name}': {exc}")
+        return None
+
+
 # ─── Core research loop ───────────────────────────────────────────────────────
 
 async def research_one_ingredient(
     ingredient: Ingredient,
     claude: anthropic.AsyncAnthropic,
+    openai_client: AsyncOpenAI,
     http: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
     pubmed_sem: asyncio.Semaphore,
     claude_sem: asyncio.Semaphore,
     dry_run: bool = False,
+    skip_images: bool = False,
 ) -> None:
     """Full research pipeline for a single ingredient."""
     name = ingredient.canonical_name
@@ -898,7 +1045,36 @@ async def research_one_ingredient(
             await store_biodomain_scores(session, iid, impacts, len(synthesized))
             await session.commit()
 
-        # ── 7. Update ingredient aggregate fields ─────────────────────────────
+        # ── 7. Mechanism image generation (gpt-image-1) ───────────────────────
+        # Skipped when: --skip-images flag, no OPENAI_API_KEY, or image already exists.
+        mechanism_image_url: str | None = None
+        if (
+            not skip_images
+            and settings.openai_api_key
+            and not ingredient.mechanism_image_url
+        ):
+            print(f"  [6/6] Generating mechanism illustration...")
+            image_prompt = _build_image_prompt(
+                canonical_name=name,
+                category=str(ingredient.category),
+                mechanism_summary=ingredient.mechanism_summary,
+                findings=findings,
+            )
+            mechanism_image_url = await generate_and_upload_mechanism_image(
+                openai_client, http, name, image_prompt
+            )
+            if mechanism_image_url:
+                print(f"        Illustration uploaded")
+            else:
+                print(f"        Illustration skipped or failed")
+        elif skip_images:
+            print(f"  [6/6] Image generation skipped (--skip-images)")
+        elif not settings.openai_api_key:
+            print(f"  [6/6] Image generation skipped (no OPENAI_API_KEY)")
+        else:
+            print(f"  [6/6] Image already exists, skipping generation")
+
+        # ── 8. Update ingredient aggregate fields ─────────────────────────────
         evidence_level = derive_evidence_level(synthesized)
         update_values: dict[str, Any] = {
             "research_status": ResearchStatus.COMPLETE,
@@ -909,6 +1085,8 @@ async def research_one_ingredient(
             update_values["common_belief"] = common_belief
         if evidence_reality:
             update_values["evidence_reality"] = evidence_reality
+        if mechanism_image_url:
+            update_values["mechanism_image_url"] = mechanism_image_url
 
         async with session_factory() as session:
             await session.execute(
@@ -972,16 +1150,19 @@ async def main(args: argparse.Namespace) -> None:
         return
 
     total_pmids = sum(sum(TIER_CAPS.values()) for _ in ingredients)
+    has_images = bool(settings.openai_api_key) and not args.skip_images
     print(f"\nNourAI Research Agent")
     print(f"{'='*60}")
     print(f"  Mode:        {'DRY RUN' if args.dry_run else 'LIVE'}")
     print(f"  Ingredients: {len(ingredients)}")
     print(f"  Max PMIDs:   ~{total_pmids} ({'+'.join(str(v) for v in TIER_CAPS.values())} per ingredient)")
-    print(f"  Models:      Haiku (abstracts) + Sonnet (belief + biodomains)")
+    print(f"  Models:      Haiku (abstracts) + Sonnet (belief + biodomains) + gpt-image-1 (illustrations)")
     print(f"  NCBI key:    {'yes' if settings.ncbi_api_key else 'no (3 req/s limit)'}")
+    print(f"  Images:      {'yes (gpt-image-1)' if has_images else 'skipped'}")
     print(f"{'='*60}")
 
     claude = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    openai_client = AsyncOpenAI(api_key=settings.openai_api_key or "no-key")
     pubmed_sem = asyncio.Semaphore(PUBMED_CONCURRENCY)
     claude_sem = asyncio.Semaphore(CLAUDE_CONCURRENCY)
 
@@ -993,11 +1174,13 @@ async def main(args: argparse.Namespace) -> None:
             await research_one_ingredient(
                 ingredient=ingredient,
                 claude=claude,
+                openai_client=openai_client,
                 http=http,
                 session_factory=session_factory,
                 pubmed_sem=pubmed_sem,
                 claude_sem=claude_sem,
                 dry_run=args.dry_run,
+                skip_images=args.skip_images,
             )
 
     await engine.dispose()
@@ -1034,6 +1217,11 @@ def parse_args() -> argparse.Namespace:
         "--dry-run",
         action="store_true",
         help="Show what would be researched without making API calls",
+    )
+    parser.add_argument(
+        "--skip-images",
+        action="store_true",
+        help="Skip mechanism illustration generation (saves OpenAI cost)",
     )
     return parser.parse_args()
 

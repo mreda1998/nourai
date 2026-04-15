@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,6 +9,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useAuth } from '@/context/auth-context';
 
 import {
   Colors,
@@ -48,13 +51,79 @@ const AVOID_INGREDIENTS = [
   { id: '2', name: 'Artificial Dyes' },
 ];
 
+// ─── InsightCard ──────────────────────────────────────────────────────────────
+
+function InsightCard({ title, fact }: { title: string; fact: string }) {
+  return (
+    <View style={insightStyles.card}>
+      <View style={insightStyles.header}>
+        <Text style={insightStyles.icon}>🔬</Text>
+        <Text style={insightStyles.label}>HIDDEN INSIGHT</Text>
+      </View>
+      <Text style={insightStyles.title}>{title}</Text>
+      <Text style={insightStyles.fact}>{fact}</Text>
+    </View>
+  );
+}
+
+const insightStyles = StyleSheet.create({
+  card: {
+    backgroundColor: 'rgba(194, 147, 85, 0.12)',
+    borderLeftWidth: 2,
+    borderLeftColor: '#C29355',
+    borderRadius: Radius.md,
+    padding: scale(14),
+    marginBottom: Spacing.xl,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(6),
+    marginBottom: scale(6),
+  },
+  icon: {
+    fontSize: scale(13),
+  },
+  label: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 1.3,
+    color: '#C29355',
+  },
+  title: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
+    color: Colors.ink,
+    marginBottom: scale(4),
+  },
+  fact: {
+    fontFamily: Fonts.serifItalic,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+    lineHeight: FontSizes.body * 1.5,
+  },
+});
+
 export default function SleepScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [sleepQuality, setSleepQuality] = useState('fair');
+  const { onboardingProfile, updateOnboardingProfile } = useAuth();
+
+  const [sleepQuality, setSleepQuality] = useState(
+    onboardingProfile?.sleepQuality || 'fair'
+  );
   const [selectedConcerns, setSelectedConcerns] = useState<string[]>(['falling', 'quality']);
   const [sleepAidPref, setSleepAidPref] = useState('magnesium');
   const [avoidList, setAvoidList] = useState(AVOID_INGREDIENTS);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Load saved sleep quality on mount
+  useEffect(() => {
+    if (onboardingProfile?.sleepQuality) {
+      setSleepQuality(onboardingProfile.sleepQuality);
+    }
+  }, []);
 
   const toggleConcern = (id: string) => {
     setSelectedConcerns((prev) =>
@@ -82,6 +151,11 @@ export default function SleepScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
+        <InsightCard
+          title="The preservative disrupting your sleep"
+          fact="Methylparaben inhibits adenylyl cyclase activity in pineal gland cells, reducing the cAMP signalling that drives melatonin synthesis at night. At concentrations measured in chronic cosmetic users, the suppression is comparable to 30 minutes of screen exposure before bed — yet it is present in most liquid vitamins and leave-on skincare."
+        />
+
         {/* Sleep Quality */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Current Sleep Quality</Text>
@@ -204,8 +278,21 @@ export default function SleepScreen() {
 
       {/* Save Button */}
       <View style={[styles.saveBar, { paddingBottom: insets.bottom + Spacing.lg }]}>
-        <Pressable style={styles.saveButton} onPress={() => router.back()}>
-          <Text style={styles.saveButtonText}>Save Changes</Text>
+        <Pressable
+          style={[styles.saveButton, isSaving && { opacity: 0.6 }]}
+          onPress={async () => {
+            if (!onboardingProfile) { router.back(); return; }
+            setIsSaving(true);
+            await updateOnboardingProfile({ ...onboardingProfile, sleepQuality: sleepQuality as any });
+            setIsSaving(false);
+            router.back();
+          }}
+          disabled={isSaving}
+        >
+          {isSaving
+            ? <ActivityIndicator color={Colors.bone} />
+            : <Text style={styles.saveButtonText}>Save Changes</Text>
+          }
         </Pressable>
       </View>
     </View>

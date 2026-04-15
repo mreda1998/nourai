@@ -1,4 +1,4 @@
-# NourAI — Mobile App
+# Elory — Mobile App
 
 React Native / Expo app for iOS and Android. Scans product barcodes, surfaces evidence-backed ingredient analysis, and personalizes results to the user's health profile.
 
@@ -30,7 +30,7 @@ React Native / Expo app for iOS and Android. Scans product barcodes, surfaces ev
 ## Install
 
 ```bash
-cd nourai
+cd elory
 npm install
 ```
 
@@ -48,7 +48,7 @@ Then press:
 - `w` — open in browser (limited — no camera)
 - Scan the QR code with **Expo Go** on your phone
 
-The app points to `http://localhost:8001/api/v1` when running in development. Make sure the backend is running (`make dev` in `backend-nourai/`).
+The app points to `http://localhost:8001/api/v1` when running in development. Make sure the backend is running (`make dev` in `backend-elory/`).
 
 ---
 
@@ -60,7 +60,7 @@ Expo does not use a `.env` file directly. Configuration that varies per environm
 // services/api.ts
 const API_BASE_URL = __DEV__
   ? 'http://localhost:8001/api/v1'       // local backend
-  : 'https://api.nourai.app/api/v1';    // production — update this
+  : 'https://api.elory.app/api/v1';    // production — update this
 ```
 
 Change the production URL to your deployed backend before submitting to the App Store / Play Store.
@@ -72,7 +72,7 @@ For secrets (Clerk publishable key, etc.), use Expo's `extra` field in `app.json
 ## Project structure
 
 ```
-nourai/
+elory/
 ├── app/
 │   ├── (tabs)/          # Bottom tab screens (index, search, stack, profile)
 │   ├── product/
@@ -117,7 +117,7 @@ No type errors should be present on `main`. The `utils/personalization.ts` modul
 
 ## Building for production
 
-NourAI uses **EAS Build** (Expo Application Services) for production builds.
+Elory uses **EAS Build** (Expo Application Services) for production builds.
 
 ### 1. Install EAS CLI
 
@@ -179,13 +179,13 @@ If you need a local iOS build (e.g. debugging native modules):
 
 1. Install CocoaPods: `sudo gem install cocoapods`
 2. Install pods: `cd ios && pod install`
-3. Open in Xcode: `open ios/nourai.xcworkspace`
+3. Open in Xcode: `open ios/elory.xcworkspace`
 4. Select your simulator or connected device and press Run
 
 Camera permission is declared in `app.json`:
 
 ```json
-"NSCameraUsageDescription": "Nourai uses your camera to scan product labels and ingredients."
+"NSCameraUsageDescription": "Elory uses your camera to scan product labels and ingredients."
 ```
 
 ---

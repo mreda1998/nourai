@@ -82,13 +82,25 @@ async def get_scan_history(
     )
     entries = list(result.scalars().all())
 
+    def _grade(health_score: int | None) -> str:
+        if health_score is None:
+            return "C"
+        if health_score >= 80:
+            return "A"
+        if health_score >= 60:
+            return "B"
+        if health_score >= 40:
+            return "C"
+        return "D"
+
     items = [
         ScanHistoryItemResponse(
             id=e.id,
             product_id=e.product_id,
             product_name=e.product.name,
             product_brand=e.product.brand,
-            product_grade=e.product.grade or "C",
+            product_grade=_grade(e.product.health_score),
+            product_category=e.product.category.value if e.product.category else "supplement",
             scanned_at=e.scanned_at,
         )
         for e in entries
@@ -124,12 +136,24 @@ async def add_to_scan_history(
     await db.commit()
     await db.refresh(entry)
 
+    def _grade(health_score: int | None) -> str:
+        if health_score is None:
+            return "C"
+        if health_score >= 80:
+            return "A"
+        if health_score >= 60:
+            return "B"
+        if health_score >= 40:
+            return "C"
+        return "D"
+
     return ScanHistoryItemResponse(
         id=entry.id,
         product_id=entry.product_id,
         product_name=product.name,
         product_brand=product.brand,
-        product_grade=product.grade or "C",
+        product_grade=_grade(product.health_score),
+        product_category=product.category.value if product.category else "supplement",
         scanned_at=entry.scanned_at,
     )
 

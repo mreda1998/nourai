@@ -9,6 +9,10 @@ export interface Product {
   grade: 'A' | 'B' | 'C' | 'D';
   ingredients: string[];
   scannedAt: Date;
+  // Stack context — set when added via AddToStackModal
+  timeOfDay?: 'morning' | 'afternoon' | 'evening' | 'night';
+  protocol?: 'meal' | 'supplement' | 'skincare' | 'treatment' | 'other';
+  quantity?: string;
 }
 
 export interface BioSignal {
@@ -27,6 +31,9 @@ interface AppState {
   // Product stack
   stack: Product[];
 
+  // Logged meals for today (ephemeral — not persisted across sessions)
+  meals: Product[];
+
   // Biosignals (calculated from stack)
   biosignals: BioSignal[];
 
@@ -34,12 +41,15 @@ interface AppState {
   addToStack: (product: Product) => void;
   removeFromStack: (id: string) => void;
   clearStack: () => void;
+  addMeal: (product: Product) => void;
+  clearMeals: () => void;
 }
 
 const AppStateContext = createContext<AppState | undefined>(undefined);
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [stack, setStack] = useState<Product[]>([]);
+  const [meals, setMeals] = useState<Product[]>([]);
   const [hasScannedBefore, setHasScannedBefore] = useState(false);
 
   const addToStack = useCallback((product: Product) => {
@@ -55,6 +65,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setStack([]);
   }, []);
 
+  const addMeal = useCallback((product: Product) => {
+    setMeals((prev) => [product, ...prev]);
+  }, []);
+
+  const clearMeals = useCallback(() => {
+    setMeals([]);
+  }, []);
+
   // Biosignals are derived from the user's real stack data (populated by backend)
   const biosignals: BioSignal[] = [];
 
@@ -63,10 +81,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       value={{
         hasScannedBefore,
         stack,
+        meals,
         biosignals,
         addToStack,
         removeFromStack,
         clearStack,
+        addMeal,
+        clearMeals,
       }}
     >
       {children}

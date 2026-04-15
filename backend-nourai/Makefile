@@ -1,20 +1,25 @@
-# NourAI Backend — development commands
+# Elory Backend — development commands
 # Usage: make <target>
 
 VENV = . venv/bin/activate &&
 PYTHON = $(VENV) python3
 
-.PHONY: help up down logs migrate seed images research dev reset test
+.PHONY: help up down logs migrate seed images research dev reset test backfill-links backfill-usda seed-whole-foods seed-fragrance seed-luxury-perfumes fetch-sephora enrich-pubchem fetch-cosing
 
 help:
 	@echo ""
-	@echo "  NourAI Backend"
+	@echo "  Elory Backend"
 	@echo "  ─────────────────────────────────────────"
 	@echo "  make up                Start local PostgreSQL"
 	@echo "  make down              Stop containers"
 	@echo "  make migrate           Run all pending migrations"
 	@echo "  make seed              Seed the golden set (products + ingredients)"
-	@echo "  make fetch-products    Expand golden set from Open Food Facts + Beauty Facts"
+	@echo "  make fetch-products    Expand product catalogue from Open Food Facts + Beauty Facts"
+	@echo "  make seed-fragrance    Seed EU fragrance allergen ingredients (run before fetch-products)"
+	@echo "  make seed-luxury-perfumes  Seed ~70 curated luxury perfumes (Chanel, Dior, LV, Creed...)"
+	@echo "  make fetch-sephora         Fetch thousands of luxury fragrances from Sephora (RAPIDAPI_KEY)"
+	@echo "  make enrich-pubchem        Enrich ingredients with NIH PubChem GHS safety data (free)"
+	@echo "  make fetch-cosing          Apply EU CosIng ban/restriction data to ingredients (free)"
 	@echo "  make images            Upload product images → Supabase Storage"
 	@echo "  make research          Run research agent on pending ingredients (limit 5)"
 	@echo "  make research-all      Run research agent on ALL pending ingredients"
@@ -83,6 +88,98 @@ research:
 
 research-all:
 	$(PYTHON) scripts/research_agent.py
+
+research-no-images:
+	$(PYTHON) scripts/research_agent.py --skip-images
+
+backfill-links:
+	$(PYTHON) scripts/backfill_ingredient_links.py --show-unmatched
+
+backfill-links-dry:
+	$(PYTHON) scripts/backfill_ingredient_links.py --dry-run --show-unmatched
+
+backfill-usda:
+	$(PYTHON) scripts/backfill_usda_nutrients.py
+	@echo ""
+	@echo "USDA nutriments backfill complete. Reload product screens to see nutrition data."
+
+backfill-usda-dry:
+	$(PYTHON) scripts/backfill_usda_nutrients.py --dry-run
+
+backfill-usda-test:
+	$(PYTHON) scripts/backfill_usda_nutrients.py --limit 5
+
+seed-whole-foods:
+	$(PYTHON) scripts/seed_whole_foods.py
+
+seed-whole-foods-dry:
+	$(PYTHON) scripts/seed_whole_foods.py --dry-run
+
+seed-whole-foods-test:
+	$(PYTHON) scripts/seed_whole_foods.py --limit 5
+
+seed-fragrance:
+	$(PYTHON) scripts/seed_fragrance_ingredients.py
+	@echo ""
+	@echo "Fragrance ingredients seeded. Run 'make fetch-products' to import perfumes from Open Beauty Facts."
+
+seed-fragrance-dry:
+	$(PYTHON) scripts/seed_fragrance_ingredients.py --dry-run
+
+seed-luxury-perfumes:
+	$(PYTHON) scripts/seed_luxury_perfumes.py
+	@echo ""
+	@echo "Luxury perfumes seeded. Run 'make research-all' to enrich with PubMed data."
+
+seed-luxury-perfumes-dry:
+	$(PYTHON) scripts/seed_luxury_perfumes.py --dry-run
+
+seed-luxury-perfumes-brand:
+	$(PYTHON) scripts/seed_luxury_perfumes.py --brand $(BRAND)
+
+# ─── Fragrance data pipeline ──────────────────────────────────────────────────
+# Full pipeline order:
+#   1. make seed-fragrance          ← seed canonical allergen ingredients
+#   2. make seed-luxury-perfumes    ← seed 70 hand-curated luxury perfumes
+#   3. make fetch-sephora           ← fetch thousands more from Sephora (needs RAPIDAPI_KEY)
+#   4. make fetch-products          ← fetch from Open Beauty Facts (perfumes + all cosmetics)
+#   5. make enrich-pubchem          ← add GHS safety data from NIH PubChem (free)
+#   6. make fetch-cosing            ← apply EU CosIng ban/restriction data (free)
+#   7. make research-all            ← PubMed clinical evidence per ingredient
+#   8. make backfill-links          ← re-link any unmatched product ingredients
+
+fetch-sephora:
+	$(PYTHON) scripts/fetch_sephora_products.py
+	@echo ""
+	@echo "Sephora fetch complete. Requires RAPIDAPI_KEY in .env"
+
+fetch-sephora-dry:
+	$(PYTHON) scripts/fetch_sephora_products.py --dry-run
+
+fetch-sephora-women:
+	$(PYTHON) scripts/fetch_sephora_products.py --category women
+
+fetch-sephora-men:
+	$(PYTHON) scripts/fetch_sephora_products.py --category men
+
+enrich-pubchem:
+	$(PYTHON) scripts/enrich_ingredients_pubchem.py
+	@echo ""
+	@echo "PubChem enrichment complete (GHS hazard codes, molecular data, synonyms)"
+
+enrich-pubchem-dry:
+	$(PYTHON) scripts/enrich_ingredients_pubchem.py --dry-run
+
+fetch-cosing:
+	$(PYTHON) scripts/fetch_cosing_data.py
+	@echo ""
+	@echo "EU CosIng data applied (Annex II bans, Annex III restrictions)"
+
+fetch-cosing-dry:
+	$(PYTHON) scripts/fetch_cosing_data.py --dry-run
+
+fetch-cosing-report:
+	$(PYTHON) scripts/fetch_cosing_data.py --dry-run --report-banned
 
 research-dry:
 	$(PYTHON) scripts/research_agent.py --dry-run

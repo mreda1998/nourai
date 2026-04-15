@@ -1,11 +1,11 @@
-# NourAI
+# Elory
 
 Evidence-backed health product scanner for iOS and Android. Scan any food, supplement, or cosmetic to see what its ingredients actually do — filtered to your health profile.
 
 ```
-nourai/
-├── nourai/           # React Native / Expo app  (iOS & Android)
-└── backend-nourai/   # FastAPI backend          (Python 3.13)
+elory/
+├── elory/           # React Native / Expo app  (iOS & Android)
+└── backend-elory/   # FastAPI backend          (Python 3.13)
 ```
 
 ---
@@ -27,7 +27,7 @@ nourai/
 ### 1 — Backend
 
 ```bash
-cd backend-nourai
+cd backend-elory
 
 # First time only
 make setup              # creates venv, installs deps, copies .env.example → .env
@@ -44,7 +44,7 @@ API docs → http://localhost:8001/docs
 ### 2 — Frontend
 
 ```bash
-cd nourai
+cd elory
 
 npm install
 
@@ -58,5 +58,5 @@ npx expo start          # press i for iOS simulator, a for Android
 
 ## Detailed docs
 
-- [Backend →](./backend-nourai/README.md) — environment variables, scripts, migrations, deployment
-- [Frontend →](./nourai/README.md) — environment setup, EAS build, App Store submission
+- [Backend →](./backend-elory/README.md) — environment variables, scripts, migrations, deployment
+- [Frontend →](./elory/README.md) — environment setup, EAS build, App Store submission

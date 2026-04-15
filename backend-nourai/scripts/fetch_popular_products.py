@@ -65,6 +65,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.core.config import settings
 from app.models.ingredient import Ingredient, IngredientCategory
 from app.models.product import Product, ProductCategory, ProductIngredient, IngredientStatus
+from app.services.usda import USDAService, _is_nutriments_sparse
 
 # ─── API endpoints ────────────────────────────────────────────────────────────
 
@@ -76,7 +77,8 @@ PAGE_SIZE = 100   # OFF maximum per page
 # Fields we actually need — keeps response payloads small
 _FIELDS = (
     "code,product_name,brands,categories_tags,"
-    "image_front_url,ingredients_text,ingredients_text_en,ingredients"
+    "image_front_url,ingredients_text,ingredients_text_en,ingredients,"
+    "nutriments,serving_size,serving_quantity"
 )
 
 # ─── Category configuration ───────────────────────────────────────────────────
@@ -98,7 +100,7 @@ class CategoryConfig:
 
 CATEGORIES: list[CategoryConfig] = [
     # ── Open Food Facts ────────────────────────────────────────────────────
-    # Supplements — biggest priority for NourAI
+    # Supplements — biggest priority for Elory
     CategoryConfig(OFF_BASE, "en:dietary-supplements",     ProductCategory.SUPPLEMENT, "Supplement",    600),
     CategoryConfig(OFF_BASE, "en:proteins",                ProductCategory.SUPPLEMENT, "Protein",       400),
     CategoryConfig(OFF_BASE, "en:vitamins-and-minerals",   ProductCategory.SUPPLEMENT, "Vitamin",       300),
@@ -116,8 +118,17 @@ CATEGORIES: list[CategoryConfig] = [
     CategoryConfig(OBF_BASE, "en:shampoos",                ProductCategory.COSMETIC,   "Shampoo",       300),
     CategoryConfig(OBF_BASE, "en:face-cleansers",          ProductCategory.COSMETIC,   "Cleanser",      200),
     CategoryConfig(OBF_BASE, "en:body-lotions",            ProductCategory.COSMETIC,   "Body Lotion",   200),
+    # ── Perfumes / Fragrances ───────────────────────────────────────────────
+    # Note: full fragrance formulas are trade secrets. OBF records disclose
+    # EU-mandated allergen ingredients (Linalool, Limonene, Geraniol, etc.)
+    # plus the carrier blend (Alcohol Denat., Aqua). This is high-value data
+    # for users with fragrance sensitivities or contact dermatitis.
+    CategoryConfig(OBF_BASE, "en:perfumes",                ProductCategory.COSMETIC,   "Perfume",       400),
+    CategoryConfig(OBF_BASE, "en:eau-de-parfum",           ProductCategory.COSMETIC,   "Eau de Parfum", 200),
+    CategoryConfig(OBF_BASE, "en:eau-de-toilette",         ProductCategory.COSMETIC,   "Eau de Toilette", 200),
+    CategoryConfig(OBF_BASE, "en:deodorants",              ProductCategory.COSMETIC,   "Deodorant",     200),
 ]
-# Target total: ~4,500 products across 15 categories
+# Target total: ~5,500 products across 19 categories
 
 # ─── Ingredient text parsing ──────────────────────────────────────────────────
 
@@ -129,6 +140,11 @@ _SKIP_TOKENS = {
     "natural and artificial flavors", "other ingredients",
     "less than 2% of", "contains less than", "may contain", "manufactured in",
     "produced in a facility", "processed on equipment", "allergen info",
+    # Perfume legal boilerplate / non-ingredient tokens
+    "ingredients", "inci", "ingrédients", "composition", "composición",
+    "contains allergens", "contient des allergènes", "avertissement",
+    "warning", "for external use only", "keep out of reach of children",
+    "avoid contact with eyes", "flammable", "inflammable",
 }
 
 _RE_PARENS  = re.compile(r'\([^)]*\)')          # remove (parenthetical notes)
@@ -157,7 +173,7 @@ def parse_ingredient_names(product: dict[str, Any]) -> list[str]:
       3. `ingredients_text` — language-neutral free-text last resort.
 
     Returns an empty list when no ingredient data is available (these
-    products are skipped entirely — they offer no value to NourAI).
+    products are skipped entirely — they offer no value to Elory).
     """
     # 1. Structured array
     structured = product.get("ingredients") or []
@@ -329,6 +345,8 @@ async def insert_product(
     cfg: CategoryConfig,
     lookup: IngredientLookup,
     dry_run: bool,
+    http_client: httpx.AsyncClient | None = None,
+    usda: USDAService | None = None,
 ) -> bool:
     """
     Validate, transform, and persist one OFF/OBF product.
@@ -350,7 +368,7 @@ async def insert_product(
         return False
 
     # Parse the ingredient list — products with no ingredients are skipped.
-    # They offer NourAI no analytical value.
+    # They offer Elory no analytical value.
     ing_names = parse_ingredient_names(raw)
     if not ing_names:
         return False
@@ -385,6 +403,26 @@ async def insert_product(
     key_actives = ", ".join(matched_names[:3]) or None
     summary = f"Contains {key_actives}" if key_actives else None
 
+    # ── Nutrition data: OFF nutriments with USDA fallback ─────────────────────
+    # For food products, OFF often has empty nutriments for whole/specialty foods
+    # (moringa, watercress, spinach, etc.). When sparse, try USDA FoodData Central
+    # which has research-grade micronutrient data for whole foods.
+    off_nutriments: dict = raw.get("nutriments") or {}
+    final_nutriments = off_nutriments
+    nutriments_source = "openfoodfacts"
+
+    if (
+        cfg.category == ProductCategory.FOOD
+        and _is_nutriments_sparse(off_nutriments)
+        and usda is not None
+        and usda.available
+    ):
+        usda_nutriments = await usda.fetch_nutriments(name, client=http_client)
+        if usda_nutriments:
+            final_nutriments = usda_nutriments
+            nutriments_source = "usda"
+            print(f"    [USDA] Enriched '{name[:50]}' ({len(usda_nutriments)} nutrients)")
+
     product = Product(
         barcode=barcode,
         name=name[:255],
@@ -394,8 +432,14 @@ async def insert_product(
         image_url=raw.get("image_front_url"),
         summary=summary,
         key_actives=key_actives,
+        serving_size=raw.get("serving_size"),
         # health_score is left None intentionally — computed by the research
         # agent once ingredient evidence is available.
+        extra_data={
+            "source": nutriments_source,
+            "nutriments": final_nutriments,
+            "serving_quantity": raw.get("serving_quantity"),
+        },
     )
     session.add(product)
     await session.flush()   # materialise product.id before creating links
@@ -418,6 +462,7 @@ async def process_category(
     sem: asyncio.Semaphore,
     lookup: IngredientLookup,
     dry_run: bool,
+    usda: USDAService | None = None,
 ) -> tuple[int, int]:
     """
     Fetch all pages for one category until we hit the target or run out of results.
@@ -443,7 +488,10 @@ async def process_category(
         async with session_factory() as session:
             batch = 0
             for raw_product in products_on_page:
-                ok = await insert_product(session, raw_product, cfg, lookup, dry_run)
+                ok = await insert_product(
+                    session, raw_product, cfg, lookup, dry_run,
+                    http_client=client, usda=usda,
+                )
                 if ok:
                     inserted += 1
                     batch += 1
@@ -495,18 +543,21 @@ async def main(args: argparse.Namespace) -> None:
     async with session_factory() as session:
         lookup = await build_ingredient_lookup(session)
 
-    print(f"\nNourAI Product Fetcher — Open Food Facts + Open Beauty Facts")
+    print(f"\nElory Product Fetcher — Open Food Facts + Open Beauty Facts")
     print(f"{'=' * 60}")
+    usda = USDAService()
+
     print(f"  Mode:        {'DRY RUN' if args.dry_run else 'LIVE'}")
     print(f"  Categories:  {len(categories)}")
     print(f"  Target:      {total_target:,} products")
     print(f"  Source:      OFF (food/supplement), OBF (cosmetic)")
+    print(f"  USDA key:    {'yes — nutriments fallback active' if usda.available else 'no — set USDA_API_KEY to enable'}")
     print(f"{'=' * 60}")
 
     sem = asyncio.Semaphore(3)   # max 3 concurrent requests
 
     headers = {
-        "User-Agent": f"{settings.openfoodfacts_user_agent} (hello@nourai.app)",
+        "User-Agent": f"{settings.openfoodfacts_user_agent} (hello@elory.app)",
     }
 
     total_inserted = 0
@@ -515,7 +566,8 @@ async def main(args: argparse.Namespace) -> None:
     async with httpx.AsyncClient(headers=headers, follow_redirects=True) as client:
         for cfg in categories:
             ins, skip = await process_category(
-                client, session_factory, cfg, sem, lookup, args.dry_run
+                client, session_factory, cfg, sem, lookup, args.dry_run,
+                usda=usda,
             )
             total_inserted += ins
             total_skipped  += skip

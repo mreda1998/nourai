@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,6 +9,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useAuth } from '@/context/auth-context';
 
 import {
   Colors,
@@ -41,12 +44,78 @@ const INGREDIENT_ALERTS = [
   { id: '3', name: 'Emulsifiers (E471, E472)' },
 ];
 
+// ─── InsightCard ──────────────────────────────────────────────────────────────
+
+function InsightCard({ title, fact }: { title: string; fact: string }) {
+  return (
+    <View style={insightStyles.card}>
+      <View style={insightStyles.header}>
+        <Text style={insightStyles.icon}>🔬</Text>
+        <Text style={insightStyles.label}>HIDDEN INSIGHT</Text>
+      </View>
+      <Text style={insightStyles.title}>{title}</Text>
+      <Text style={insightStyles.fact}>{fact}</Text>
+    </View>
+  );
+}
+
+const insightStyles = StyleSheet.create({
+  card: {
+    backgroundColor: 'rgba(194, 147, 85, 0.12)',
+    borderLeftWidth: 2,
+    borderLeftColor: '#C29355',
+    borderRadius: Radius.md,
+    padding: scale(14),
+    marginBottom: Spacing.xl,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(6),
+    marginBottom: scale(6),
+  },
+  icon: {
+    fontSize: scale(13),
+  },
+  label: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 1.3,
+    color: '#C29355',
+  },
+  title: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
+    color: Colors.ink,
+    marginBottom: scale(4),
+  },
+  fact: {
+    fontFamily: Fonts.serifItalic,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+    lineHeight: FontSizes.body * 1.5,
+  },
+});
+
 export default function GutHealthScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { onboardingProfile, updateOnboardingProfile } = useAuth();
+
   const [selectedSensitivities, setSelectedSensitivities] = useState<string[]>(['lactose']);
-  const [selectedDiet, setSelectedDiet] = useState<string[]>([]);
+  const [selectedDiet, setSelectedDiet] = useState<string[]>(
+    onboardingProfile?.dietaryPattern ?? []
+  );
   const [alerts, setAlerts] = useState(INGREDIENT_ALERTS);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Load saved dietary pattern on mount
+  useEffect(() => {
+    if (onboardingProfile?.dietaryPattern?.length) {
+      setSelectedDiet(onboardingProfile.dietaryPattern);
+    }
+  }, []);
 
   const toggleSensitivity = (id: string) => {
     setSelectedSensitivities((prev) =>
@@ -80,6 +149,11 @@ export default function GutHealthScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
+        <InsightCard
+          title="Hidden in your daily staples"
+          fact="Carboxymethylcellulose (CMC) and polysorbate 80 — emulsifiers in most processed foods — have been shown to thin the protective mucus layer separating gut bacteria from intestinal epithelial cells. This structural change precedes the low-grade inflammation found in metabolic syndrome, independent of calorie intake."
+        />
+
         {/* Digestive Sensitivities */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Digestive Sensitivities</Text>
@@ -175,8 +249,21 @@ export default function GutHealthScreen() {
 
       {/* Save Button */}
       <View style={[styles.saveBar, { paddingBottom: insets.bottom + Spacing.lg }]}>
-        <Pressable style={styles.saveButton} onPress={() => router.back()}>
-          <Text style={styles.saveButtonText}>Save Changes</Text>
+        <Pressable
+          style={[styles.saveButton, isSaving && { opacity: 0.6 }]}
+          onPress={async () => {
+            if (!onboardingProfile) { router.back(); return; }
+            setIsSaving(true);
+            await updateOnboardingProfile({ ...onboardingProfile, dietaryPattern: selectedDiet });
+            setIsSaving(false);
+            router.back();
+          }}
+          disabled={isSaving}
+        >
+          {isSaving
+            ? <ActivityIndicator color={Colors.bone} />
+            : <Text style={styles.saveButtonText}>Save Changes</Text>
+          }
         </Pressable>
       </View>
     </View>

@@ -1,4 +1,4 @@
-# Technical Specification: NourAI
+# Technical Specification: Elory
 
 **Version:** 2.0.0
 **Last Updated:** March 9, 2026
@@ -25,7 +25,7 @@
 
 ## 1. Executive Summary
 
-NourAI is a mobile-first application that empowers users to make evidence-based decisions about health and wellness products across four categories: food, cosmetics, supplements, and OTC medications. Unlike apps that provide opaque scores, NourAI surfaces ingredient-level intelligence — specifically the gap between **what people believe** an ingredient does and **what clinical evidence actually supports**.
+Elory is a mobile-first application that empowers users to make evidence-based decisions about health and wellness products across four categories: food, cosmetics, supplements, and OTC medications. Unlike apps that provide opaque scores, Elory surfaces ingredient-level intelligence — specifically the gap between **what people believe** an ingredient does and **what clinical evidence actually supports**.
 
 ### Core Value Proposition
 
@@ -113,7 +113,7 @@ NourAI is a mobile-first application that empowers users to make evidence-based 
 ### 2.3 Backend Project Structure (Actual)
 
 ```
-backend-nourai/
+backend-elory/
 ├── app/
 │   ├── main.py
 │   ├── api/v1/
@@ -145,7 +145,7 @@ backend-nourai/
 ### 2.4 Frontend App Structure (Actual)
 
 ```
-nourai/app/
+elory/app/
 ├── (tabs)/
 │   ├── index.tsx          # Home: daily composite, newsletter cards
 │   ├── scan.tsx           # Barcode scanner (expo-camera)
@@ -369,7 +369,7 @@ Multiple profiles under one account (e.g. managing supplements for a parent with
 Surface where to buy the best-graded alternative and at what price. Affiliate revenue model.
 
 **11. AI Product Chat**
-"Ask NourAI" — a conversational interface over the ingredient knowledge base. "Is this safe if I'm on metformin?" "What's the best magnesium form for sleep?"
+"Ask Elory" — a conversational interface over the ingredient knowledge base. "Is this safe if I'm on metformin?" "What's the best magnesium form for sleep?"
 
 ### Long-Term (v2.0+) — Platform plays
 
@@ -377,13 +377,13 @@ Surface where to buy the best-graded alternative and at what price. Affiliate re
 Web portal for dietitians, naturopaths, and pharmacists to review patient stacks, annotate products, and share curated protocols. B2B revenue stream.
 
 **13. Brand/Manufacturer API**
-Let brands submit products for analysis and display a "NourAI Verified" badge. Creates a direct data partnership model and inbound product database growth.
+Let brands submit products for analysis and display a "Elory Verified" badge. Creates a direct data partnership model and inbound product database growth.
 
 **14. Community Layer**
 User-submitted product reviews anchored to specific ingredients, not vibes. "5 people with rosacea flagged this product's fragrance concentration." Evidence-quality community signal.
 
 **15. Lab Integration**
-Connect with at-home testing services (Everlywell, Thriva). Upload bloodwork results and NourAI automatically personalizes recommendations based on actual deficiencies.
+Connect with at-home testing services (Everlywell, Thriva). Upload bloodwork results and Elory automatically personalizes recommendations based on actual deficiencies.
 
 **16. Wearable / Health App Sync**
 Import Apple Health / Google Fit data (sleep score, HRV, activity) and cross-reference with stack changes. Closes the feedback loop from ingredient → observable outcome.
@@ -524,7 +524,7 @@ subscriptions (
 
 ### Base URL
 - Development: `http://localhost:8001/api/v1`
-- Production: `https://api.nourai.com/api/v1` (TBD)
+- Production: `https://api.elory.com/api/v1` (TBD)
 
 ### Endpoints
 

@@ -1,10 +1,10 @@
 /**
- * API Service for NourAI Backend
+ * API Service for Elory Backend
  */
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ??
-  (__DEV__ ? 'http://localhost:8001/api/v1' : '');
+  (__DEV__ ? 'http://192.168.0.163:8081/api/v1' : '');
 
 export interface Ingredient {
   name: string;
@@ -13,6 +13,7 @@ export interface Ingredient {
   tag_type?: string;
   description?: string;
   ingredient_id?: string | null;   // FK to canonical ingredient — present when matched
+  is_nutrient?: boolean;           // True for rows from the OFF nutrition panel
 }
 
 export interface BioDomain {
@@ -163,6 +164,15 @@ export interface IngredientDetail {
   research_status: string;
   // Biodomain impact scores
   biodomain_scores: IngredientBioDomainScore[];
+  // Mechanism image (set by research agent after illustration generation)
+  mechanism_image_url: string | null;
+  // Pre-computed per-bio-domain effect signal (JSONB from model)
+  domain_effects: Record<string, {
+    direction: 'benefit' | 'risk' | 'neutral' | 'mixed';
+    confidence: 'high' | 'moderate' | 'low';
+    evidence_count: number;
+    top_finding: string | null;
+  }> | null;
   evidence: IngredientEvidenceRecord[];
   found_in: IngredientFoundInProduct[];
 }
@@ -179,6 +189,85 @@ export interface IngredientListItem {
 export interface IngredientSearchResponse {
   ingredients: IngredientListItem[];
   total: number;
+}
+
+// ─── Domain Analysis ─────────────────────────────────────────────────────────
+
+export interface IngredientImpact {
+  ingredient_id: string;
+  name: string;
+  category: string;
+  /** "benefit" | "risk" | "neutral" | "mixed" — from real PubMed evidence */
+  direction: 'benefit' | 'risk' | 'neutral' | 'mixed';
+  /** "high" | "moderate" | "low" — best confidence across relevant studies */
+  confidence: 'high' | 'moderate' | 'low';
+  evidence_count: number;
+  domain_relevance: number; // 0–1
+  top_finding: string | null;
+  typical_dose_range: string | null;
+}
+
+export interface MissingIngredient {
+  ingredient_id: string;
+  canonical_name: string;
+  category: string;
+  evidence_level: string | null;
+  description: string | null;
+  mechanism_summary: string | null;
+  typical_dose_range: string | null;
+  top_finding: string | null;
+}
+
+export interface DomainEvidenceHighlight {
+  ingredient_name: string;
+  finding: string;
+  journal: string | null;
+  year: number | null;
+  study_type: string | null;
+  sample_size: number | null;
+  direction: string;
+  confidence: string;
+  pmid: string | null;
+}
+
+export interface GoalCoverage {
+  goal: string;
+  /** "covered" | "partial" | "gap" */
+  status: 'covered' | 'partial' | 'gap';
+  /** canonical ingredient names that have evidence supporting this goal */
+  covered_by: string[];
+}
+
+export interface DomainAnalysis {
+  slug: string;
+  ingredient_impacts: IngredientImpact[];
+  missing_ingredients: MissingIngredient[];
+  evidence_highlight: DomainEvidenceHighlight | null;
+  goal_coverage: GoalCoverage[];
+}
+
+// ─── Stack Assistant Chat ─────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface StackProduct {
+  name: string;
+  brand?: string;
+  category: string;
+  grade: string;
+  ingredients: string[];
+}
+
+export interface ChatRequest {
+  messages: ChatMessage[];
+  stack_context: {
+    products: StackProduct[];
+    domain_scores: Record<string, number>;
+    goals: string[];
+  };
 }
 
 // ─── Meal Analysis ───────────────────────────────────────────────────────────
@@ -204,6 +293,11 @@ export interface OnboardingProfile {
   ageRange: 'under_25' | '25_34' | '35_44' | '45_54' | '55_plus' | '';
   isPregnant: boolean;
   isBreastfeeding: boolean;
+  sleepQuality: 'excellent' | 'good' | 'fair' | 'poor' | '';
+  activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | 'athlete' | '';
+  dietaryPattern: string[];
+  environment: 'urban' | 'suburban' | 'rural' | '';
+  productCategories: string[];
   // max 2 — determines which bio-domains are prioritized
   focusAreas: string[];
   // triggers personalized safety warnings on product pages
@@ -231,6 +325,11 @@ export interface UserHealthProfile {
   is_pregnant: boolean;
   is_breastfeeding: boolean;
   onboarding_completed: boolean;
+  sleep_quality?: string;
+  activity_level?: string;
+  dietary_pattern: string[];
+  environment?: string;
+  product_categories: string[];
 }
 
 export interface UserHealthProfileUpdate {
@@ -249,6 +348,11 @@ export interface UserHealthProfileUpdate {
   is_pregnant?: boolean;
   is_breastfeeding?: boolean;
   onboarding_completed?: boolean;
+  sleep_quality?: string;
+  activity_level?: string;
+  dietary_pattern?: string[];
+  environment?: string;
+  product_categories?: string[];
 }
 
 // Subscription Types
@@ -270,6 +374,7 @@ export interface ScanHistoryItem {
   product_name: string;
   product_brand?: string;
   product_grade: string;
+  product_category: string;
   scanned_at: string;
 }
 
@@ -345,9 +450,14 @@ class APIService {
   }
 
   /**
-   * Get product by ID
+   * Get product by ID.
+   * IDs prefixed with "usda-" are routed to the USDA foods endpoint.
    */
   async getProduct(productId: string): Promise<Product> {
+    if (productId.startsWith('usda-')) {
+      const fdcId = productId.slice(5); // strip "usda-"
+      return this.fetch<Product>(`/foods/${fdcId}`);
+    }
     return this.fetch<Product>(`/products/${productId}`);
   }
 
@@ -370,6 +480,15 @@ class APIService {
     if (params?.limit) qp.append('limit', params.limit.toString());
     if (params?.category) qp.append('category', params.category);
     return this.fetch<ProductSearchResponse>(`/products/search?${qp.toString()}`);
+  }
+
+  /**
+   * Search USDA Foundation + SR Legacy whole foods (salmon, broccoli, eggs, etc.)
+   * Returns ProductListItem-compatible results with id = "usda-{fdcId}".
+   */
+  async searchFoods(query: string, limit = 10): Promise<ProductSearchResponse> {
+    const qp = new URLSearchParams({ q: query, limit: String(limit) });
+    return this.fetch<ProductSearchResponse>(`/foods/search?${qp.toString()}`);
   }
 
   // ============================================
@@ -549,6 +668,41 @@ class APIService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Full scientific domain analysis for the user's stack.
+   *
+   * Sends the stack's product IDs and user goals to the backend which:
+   *   • Resolves ingredient_ids via product_ingredients FK
+   *   • Aggregates evidence direction from PubMed records (goal_tags filtered)
+   *   • Identifies missing high-evidence ingredients for this domain
+   *   • Picks the strongest clinical highlight from the stack
+   *   • Computes per-goal coverage from actual evidence goal_tags
+   *
+   * Returns an empty-ish response (no impacts/missing) when the research
+   * pipeline hasn't been run yet — the UI falls back to hardcoded constants.
+   */
+  async analyzeDomain(
+    slug: string,
+    productIds: string[],
+    goals: string[],
+  ): Promise<DomainAnalysis> {
+    const params = new URLSearchParams();
+    if (productIds.length > 0) params.set('product_ids', productIds.join(','));
+    if (goals.length > 0) params.set('goals', goals.join(','));
+    return this.fetch<DomainAnalysis>(`/domains/${slug}/analyze?${params.toString()}`);
+  }
+
+  /**
+   * Send a message to the Elory stack assistant.
+   * Passes full conversation history + stack context; returns Claude's reply.
+   */
+  async chatMessage(request: ChatRequest): Promise<{ message: string }> {
+    return this.fetch<{ message: string }>('/chat/message', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
   }
 
   /**

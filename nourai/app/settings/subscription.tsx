@@ -27,7 +27,7 @@ import {
 import { useAuth } from '@/context/auth-context';
 
 // Subscription types
-type SubscriptionTier = 'free' | 'premium_monthly' | 'premium_annual' | 'family';
+type SubscriptionTier = 'free' | 'premium_monthly' | 'premium_annual';
 
 interface SubscriptionPlan {
   id: string;
@@ -42,68 +42,41 @@ interface SubscriptionPlan {
   savings?: string;
 }
 
-// Available plans (matching TECH_SPEC.md)
+// Available plans
 const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
-    id: 'free',
-    productId: 'nourai_free',
-    tier: 'free',
-    name: 'Free',
-    price: '$0',
-    pricePerMonth: '$0',
-    billing: 'Forever free',
-    features: [
-      '5 scans per day',
-      'Basic ingredient info',
-      'Limited stack size',
-    ],
-  },
-  {
     id: 'premium_monthly',
-    productId: 'nourai_premium_monthly',
+    productId: 'elory_premium_monthly',
     tier: 'premium_monthly',
     name: 'Premium',
     price: '$9.99',
     pricePerMonth: '$9.99',
     billing: 'per month',
     features: [
-      'Unlimited scans',
-      'Full evidence cards',
-      'Personalized risk alerts',
+      'AI Chat — ask your stack anything',
+      'Stack Synergy Engine',
+      'Chrono-Stack Protocols',
+      'Exposure Load Tracking',
       'Unlimited stack',
-      'Priority support',
+      'Goal-based filtering',
+      'Export & share reports',
+      'Full scan history & comparison',
     ],
     popular: true,
   },
   {
     id: 'premium_annual',
-    productId: 'nourai_premium_annual',
+    productId: 'elory_premium_annual',
     tier: 'premium_annual',
     name: 'Premium Annual',
-    price: '$79.99',
-    pricePerMonth: '$6.67',
+    price: '$63.99',
+    pricePerMonth: '$5.33',
     billing: 'per year',
     features: [
       'Everything in Premium',
-      '2 months free',
       'Early access to new features',
     ],
-    savings: 'Save $40/year',
-  },
-  {
-    id: 'family',
-    productId: 'nourai_family_monthly',
-    tier: 'family',
-    name: 'Family',
-    price: '$14.99',
-    pricePerMonth: '$14.99',
-    billing: 'per month',
-    features: [
-      'Premium for up to 5 members',
-      'Shared family stack',
-      'Individual health profiles',
-      'Parental controls',
-    ],
+    savings: 'Save $56/year',
   },
 ];
 
@@ -141,7 +114,7 @@ export default function SubscriptionScreen() {
   const [purchasing, setPurchasing] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
-  // Mock current subscription - replace with RevenueCat
+  // Mock current subscription — replace with RevenueCat
   const currentTier: SubscriptionTier = 'free';
   const isPremium = currentTier !== 'free';
 
@@ -234,17 +207,23 @@ export default function SubscriptionScreen() {
           <View style={styles.heroIconContainer}>
             <CrownIcon size={32} color={Colors.ink} />
           </View>
-          <Text style={styles.heroTitle}>Unlock Full Access</Text>
+          <Text style={styles.heroTitle}>Your Health Intelligence</Text>
           <Text style={styles.heroSubtitle}>
-            Get unlimited scans, full evidence cards, and personalized health insights
+            AI Chat, Stack Synergy Engine, and clinical evidence — all in one place
           </Text>
+        </View>
+
+        {/* Free tier summary */}
+        <View style={styles.freeSummary}>
+          <Text style={styles.freeSummaryLabel}>Free — always included</Text>
+          <Text style={styles.freeSummaryText}>Unlimited scans · Full ingredient data · Domain signals (read-only) · Stack up to 10 items · Basic flagging</Text>
         </View>
 
         {/* Plans */}
         <View style={styles.plansSection}>
-          <Text style={styles.sectionLabel}>Choose Your Plan</Text>
+          <Text style={styles.sectionLabel}>Unlock Premium</Text>
 
-          {SUBSCRIPTION_PLANS.filter(p => p.tier !== 'free').map((plan) => (
+          {SUBSCRIPTION_PLANS.map((plan) => (
             <Pressable
               key={plan.id}
               style={[
@@ -435,6 +414,28 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: FontSizes.bodyLarge * 1.5,
     maxWidth: scale(300),
+  },
+  freeSummary: {
+    backgroundColor: Colors.boneCard,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  freeSummaryLabel: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    color: Colors.inkTertiary,
+    marginBottom: 4,
+  },
+  freeSummaryText: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.inkSecondary,
+    lineHeight: FontSizes.body * 1.5,
   },
   plansSection: {
     marginBottom: Spacing.xl,

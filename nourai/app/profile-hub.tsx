@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import Constants from 'expo-constants';
 import {
   Linking,
@@ -11,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path, Circle } from 'react-native-svg';
+import Svg, { Path, Circle, Polyline } from 'react-native-svg';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 
 import {
@@ -28,19 +29,53 @@ import { useAuth } from '@/context/auth-context';
 import { supabase } from '@/lib/supabase';
 import { api, type UserHealthProfile } from '@/services/api';
 
+// ─── Label maps (mirrors onboarding + edit-profile screens) ─────────────────
+
+const CONCERN_LABELS: Record<string, string> = {
+  fertility:             'Trying to Conceive',
+  thyroid:               'Thyroid Condition',
+  hormonal_condition:    'Hormone-Sensitive',
+  medications:           'On Medications',
+  infant_proximity:      'Near Young Children',
+  fragrance_sensitivity: 'Fragrance Sensitivity',
+  atopic_dermatitis:     'Eczema / Atopic Dermatitis',
+};
+
+const GOAL_LABELS: Record<string, string> = {
+  clear_skin:        'Clear Skin',
+  anti_aging:        'Anti-Aging',
+  brighter_skin:     'Brighter Skin',
+  hair_growth:       'Hair Growth',
+  prevent_hair_loss: 'Prevent Hair Loss',
+  build_muscle:      'Build Muscle',
+  fat_loss:          'Fat Loss',
+  more_energy:       'More Energy',
+  gut_health:        'Gut Health',
+  less_inflammation: 'Less Inflammation',
+  mental_focus:      'Mental Focus',
+};
+
+const FOCUS_LABELS: Record<string, string> = {
+  skin:        'Skin',
+  performance: 'Performance',
+  gut:         'Gut',
+  hormonal:    'Hormonal',
+  hair:        'Hair',
+  wellness:    'Wellness',
+};
+
 // Subscription tier type
-type SubscriptionTier = 'free' | 'premium_monthly' | 'premium_annual' | 'family';
+type SubscriptionTier = 'free' | 'premium_monthly' | 'premium_annual';
 
 interface SubscriptionInfo {
   tier: SubscriptionTier;
   expiresAt: string | null;
-  scansRemaining: number;
-  scansPerDay: number;
 }
 
 const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
 
-// Icons
+// ─── Icons ─────────────────────────────────────────────────────────────────
+
 function CrownIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2}>
@@ -57,12 +92,120 @@ function CheckIcon({ size = 16, color = Colors.accentHill }: { size?: number; co
   );
 }
 
-// Health profile sections
-const HEALTH_PROFILES = [
+// Health Profile Icons
+function SkinIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
+      <Circle cx="12" cy="8" r="4" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M6 20v-1a6 6 0 0112 0v1" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function GutIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
+      <Path d="M12 3c2 0 4 1.5 4 3.5S13 10 13 12s3 2.5 3 4.5-2 3-4 3-4-1-4-3 3-2.5 3-4.5S8 6.5 8 4.5C8 2.5 10 3 12 3z" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function FitnessIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
+      <Polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function HairIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
+      <Path d="M12 2c-2 0-4 1-4 4 0 2 1 3 1 5s-2 3-2 5c0 3 2 5 5 6" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M12 2c2 0 4 1 4 4 0 2-1 3-1 5s2 3 2 5c0 3-2 5-5 6" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M12 2v20" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function HormonalIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
+      <Circle cx="12" cy="12" r="9" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M12 7v5l3 3" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function SleepIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
+      <Path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// Settings Icons
+function AccountIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
+      <Path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx="12" cy="7" r="4" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function CameraIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
+      <Path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx="12" cy="13" r="4" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function BellIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
+      <Path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M13.73 21a2 2 0 01-3.46 0" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function ShieldIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
+      <Path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function InfoIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
+      <Circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M12 16v-4M12 8h.01" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// ─── Data ────────────────────────────────────────────────────────────────────
+
+type IconProps = { size?: number; color?: string };
+
+const HEALTH_PROFILES: {
+  id: string;
+  name: string;
+  Icon: (props: IconProps) => JSX.Element;
+  description: string;
+  route: string;
+  color: string;
+}[] = [
   {
     id: 'skin',
     name: 'Skin Health',
-    icon: '✦',
+    Icon: SkinIcon,
     description: 'Skin type, sensitivity, and ingredient watchlist',
     route: '/profile',
     color: '#D4A574',
@@ -70,7 +213,7 @@ const HEALTH_PROFILES = [
   {
     id: 'gut',
     name: 'Gut Health',
-    icon: '◎',
+    Icon: GutIcon,
     description: 'Digestive sensitivities and dietary preferences',
     route: '/health/gut',
     color: '#8C6A54',
@@ -78,7 +221,7 @@ const HEALTH_PROFILES = [
   {
     id: 'fitness',
     name: 'Fitness & Recovery',
-    icon: '△',
+    Icon: FitnessIcon,
     description: 'Activity level, recovery goals, and supplements',
     route: '/health/fitness',
     color: '#5C6E5C',
@@ -86,7 +229,7 @@ const HEALTH_PROFILES = [
   {
     id: 'hair',
     name: 'Hair & Scalp',
-    icon: '◇',
+    Icon: HairIcon,
     description: 'Hair type, concerns, and ingredient sensitivities',
     route: '/health/hair',
     color: '#6B5B4F',
@@ -94,7 +237,7 @@ const HEALTH_PROFILES = [
   {
     id: 'hormonal',
     name: 'Hormonal Balance',
-    icon: '○',
+    Icon: HormonalIcon,
     description: 'Hormonal concerns and related sensitivities',
     route: '/health/hormonal',
     color: '#7A6B8A',
@@ -102,29 +245,33 @@ const HEALTH_PROFILES = [
   {
     id: 'sleep',
     name: 'Sleep & Recovery',
-    icon: '◐',
+    Icon: SleepIcon,
     description: 'Sleep quality factors and aid preferences',
     route: '/health/sleep',
     color: '#4A5568',
   },
 ];
 
-// Settings sections
-const SETTINGS_ITEMS = [
-  { id: 'account', name: 'Account', icon: '○', route: '/settings/account' },
-  { id: 'subscription', name: 'Subscription', icon: '★', route: '/settings/subscription' },
-  { id: 'camera', name: 'Camera & Permissions', icon: '◉', route: '/settings/permissions' },
-  { id: 'notifications', name: 'Notifications', icon: '◆', route: '/settings/notifications' },
-  { id: 'privacy', name: 'Privacy & Data', icon: '◈', route: '/settings/privacy' },
-  { id: 'about', name: 'About Elory', icon: '◎', route: '/settings/about' },
+const SETTINGS_ITEMS: {
+  id: string;
+  name: string;
+  Icon: (props: IconProps) => JSX.Element;
+  route: string;
+}[] = [
+  { id: 'account', name: 'Account', Icon: AccountIcon, route: '/settings/account' },
+  { id: 'subscription', name: 'Subscription', Icon: CrownIcon, route: '/settings/subscription' },
+  { id: 'camera', name: 'Camera & Permissions', Icon: CameraIcon, route: '/settings/permissions' },
+  { id: 'notifications', name: 'Notifications', Icon: BellIcon, route: '/settings/notifications' },
+  { id: 'privacy', name: 'Privacy & Data', Icon: ShieldIcon, route: '/settings/privacy' },
+  { id: 'about', name: 'About Elory', Icon: InfoIcon, route: '/settings/about' },
 ];
 
-// Subscription helpers
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 function getSubscriptionLabel(tier: SubscriptionTier): string {
   switch (tier) {
-    case 'premium_monthly': return 'Premium Monthly';
+    case 'premium_monthly': return 'Premium';
     case 'premium_annual': return 'Premium Annual';
-    case 'family': return 'Family Plan';
     default: return 'Free';
   }
 }
@@ -132,8 +279,7 @@ function getSubscriptionLabel(tier: SubscriptionTier): string {
 function getSubscriptionPrice(tier: SubscriptionTier): string {
   switch (tier) {
     case 'premium_monthly': return '$9.99/month';
-    case 'premium_annual': return '$79.99/year';
-    case 'family': return '$14.99/month';
+    case 'premium_annual': return '$63.99/year';
     default: return 'Free';
   }
 }
@@ -158,40 +304,38 @@ export default function ProfileHubScreen() {
   const [subscription, setSubscription] = useState<SubscriptionInfo>({
     tier: 'free',
     expiresAt: null,
-    scansRemaining: 5,
-    scansPerDay: 5,
   });
   const [healthProfile, setHealthProfile] = useState<UserHealthProfile | null>(null);
 
-  useEffect(() => {
-    const loadProfileData = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
+  useFocusEffect(
+    useCallback(() => {
+      const loadProfileData = async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) return;
 
-        const [sub, profile] = await Promise.allSettled([
-          api.getSubscription(session.access_token),
-          api.getHealthProfile(session.access_token),
-        ]);
+          const [sub, profile] = await Promise.allSettled([
+            api.getSubscription(session.access_token),
+            api.getHealthProfile(session.access_token),
+          ]);
 
-        if (sub.status === 'fulfilled') {
-          setSubscription({
-            tier: sub.value.tier,
-            expiresAt: sub.value.expires_at ?? null,
-            scansRemaining: sub.value.tier === 'free' ? 5 : -1,
-            scansPerDay: sub.value.tier === 'free' ? 5 : -1,
-          });
+          if (sub.status === 'fulfilled') {
+            setSubscription({
+              tier: sub.value.tier,
+              expiresAt: sub.value.expires_at ?? null,
+            });
+          }
+
+          if (profile.status === 'fulfilled') {
+            setHealthProfile(profile.value);
+          }
+        } catch {
+          // Keep defaults if API is unreachable
         }
-
-        if (profile.status === 'fulfilled') {
-          setHealthProfile(profile.value);
-        }
-      } catch {
-        // Keep defaults if API is unreachable
-      }
-    };
-    loadProfileData();
-  }, []);
+      };
+      loadProfileData();
+    }, [])
+  );
 
   const userIsPremium = isPremium(subscription.tier);
 
@@ -213,7 +357,7 @@ export default function ProfileHubScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header with Back Button */}
+        {/* Header */}
         <View style={styles.header}>
           <Pressable style={styles.backBtn} onPress={() => router.back()}>
             <Text style={styles.backBtnIcon}>‹</Text>
@@ -251,14 +395,9 @@ export default function ProfileHubScreen() {
           <View style={styles.subscriptionHeader}>
             <View style={styles.subscriptionTierBadge}>
               {userIsPremium ? (
-                <CrownIcon size={16} color={Colors.bone} />
-              ) : (
-                <Text style={styles.subscriptionTierIcon}>◇</Text>
-              )}
-              <Text style={[
-                styles.subscriptionTierText,
-                userIsPremium && styles.subscriptionTierTextPremium,
-              ]}>
+                <CrownIcon size={14} color={Colors.bone} />
+              ) : null}
+              <Text style={styles.subscriptionTierText}>
                 {getSubscriptionLabel(subscription.tier)}
               </Text>
             </View>
@@ -271,21 +410,13 @@ export default function ProfileHubScreen() {
 
           {!userIsPremium ? (
             <>
-              <View style={styles.subscriptionUsage}>
-                <View style={styles.usageRow}>
-                  <Text style={styles.usageLabel}>Daily Scans</Text>
-                  <Text style={styles.usageValue}>
-                    {subscription.scansRemaining}/{subscription.scansPerDay} remaining
-                  </Text>
-                </View>
-                <View style={styles.usageBar}>
-                  <View
-                    style={[
-                      styles.usageBarFill,
-                      { width: `${(subscription.scansRemaining / subscription.scansPerDay) * 100}%` }
-                    ]}
-                  />
-                </View>
+              <View style={styles.freeIncludes}>
+                {['Unlimited scans', 'Full ingredient data', 'Stack up to 10 items'].map((f) => (
+                  <View key={f} style={styles.featureItem}>
+                    <CheckIcon size={14} color={Colors.inkTertiary} />
+                    <Text style={styles.freeFeatureText}>{f}</Text>
+                  </View>
+                ))}
               </View>
 
               <Pressable style={styles.upgradeBtn} onPress={handleUpgrade}>
@@ -294,69 +425,98 @@ export default function ProfileHubScreen() {
               </Pressable>
 
               <View style={styles.premiumFeatures}>
-                <View style={styles.featureItem}>
-                  <CheckIcon />
-                  <Text style={styles.featureText}>Unlimited scans</Text>
-                </View>
-                <View style={styles.featureItem}>
-                  <CheckIcon />
-                  <Text style={styles.featureText}>Full evidence cards</Text>
-                </View>
-                <View style={styles.featureItem}>
-                  <CheckIcon />
-                  <Text style={styles.featureText}>Personalized risk alerts</Text>
-                </View>
+                <Text style={styles.premiumFeaturesLabel}>Premium unlocks</Text>
+                {[
+                  'AI Chat — ask your stack anything',
+                  'Stack Synergy Engine',
+                  'Chrono-Stack Protocols',
+                  'Exposure Load Tracking',
+                  'Goal-based filtering',
+                  'Export & share reports',
+                ].map((f) => (
+                  <View key={f} style={styles.featureItem}>
+                    <CheckIcon size={14} />
+                    <Text style={styles.featureText}>{f}</Text>
+                  </View>
+                ))}
               </View>
             </>
           ) : (
-            <Pressable
-              style={styles.manageSubscriptionBtn}
-              onPress={openSubscriptionManagement}
-            >
-              <Text style={styles.manageSubscriptionBtnText}>Manage Subscription</Text>
-            </Pressable>
+            <>
+              <Text style={styles.subscriptionPriceLabel}>
+                {getSubscriptionPrice(subscription.tier)}
+              </Text>
+              <Pressable
+                style={styles.manageSubscriptionBtn}
+                onPress={openSubscriptionManagement}
+              >
+                <Text style={styles.manageSubscriptionBtnText}>Manage Subscription</Text>
+              </Pressable>
+            </>
           )}
         </View>
 
         {/* Onboarding Profile Summary */}
-        {isSignedIn && healthProfile && (healthProfile.focus_areas.length > 0 || healthProfile.health_goals.length > 0) && (
+        {isSignedIn && healthProfile && (
           <View style={styles.profileSummaryCard}>
-            <Text style={styles.profileSummaryTitle}>Your Health Profile</Text>
+            <View style={styles.profileSummaryHeader}>
+              <Text style={styles.profileSummaryTitle}>Your Health Profile</Text>
+              <Pressable onPress={() => router.push('/health/edit-profile' as any)}>
+                <Text style={styles.profileSummaryEdit}>Edit</Text>
+              </Pressable>
+            </View>
+
             {healthProfile.focus_areas.length > 0 && (
               <View style={styles.profileSummaryRow}>
                 <Text style={styles.profileSummaryLabel}>Focus Areas</Text>
                 <View style={styles.profileSummaryTags}>
                   {healthProfile.focus_areas.map((f) => (
                     <View key={f} style={styles.profileSummaryTag}>
-                      <Text style={styles.profileSummaryTagText}>{f}</Text>
+                      <Text style={styles.profileSummaryTagText}>
+                        {FOCUS_LABELS[f] ?? f}
+                      </Text>
                     </View>
                   ))}
                 </View>
               </View>
             )}
+
             {healthProfile.health_concerns.length > 0 && (
               <View style={styles.profileSummaryRow}>
                 <Text style={styles.profileSummaryLabel}>Concerns</Text>
                 <View style={styles.profileSummaryTags}>
                   {healthProfile.health_concerns.map((c) => (
                     <View key={c} style={styles.profileSummaryTag}>
-                      <Text style={styles.profileSummaryTagText}>{c}</Text>
+                      <Text style={styles.profileSummaryTagText}>
+                        {CONCERN_LABELS[c] ?? c}
+                      </Text>
                     </View>
                   ))}
                 </View>
               </View>
             )}
+
             {healthProfile.health_goals.length > 0 && (
               <View style={styles.profileSummaryRow}>
                 <Text style={styles.profileSummaryLabel}>Goals</Text>
                 <View style={styles.profileSummaryTags}>
                   {healthProfile.health_goals.map((g) => (
                     <View key={g} style={styles.profileSummaryTag}>
-                      <Text style={styles.profileSummaryTagText}>{g}</Text>
+                      <Text style={styles.profileSummaryTagText}>
+                        {GOAL_LABELS[g] ?? g}
+                      </Text>
                     </View>
                   ))}
                 </View>
               </View>
+            )}
+
+            {healthProfile.focus_areas.length === 0 &&
+              healthProfile.health_concerns.length === 0 &&
+              healthProfile.health_goals.length === 0 && (
+              <Text style={styles.profileSummaryEmpty}>
+                Tap Edit to set your health concerns and goals.
+              </Text>
             )}
           </View>
         )}
@@ -378,9 +538,7 @@ export default function ProfileHubScreen() {
                   onPress={() => router.push(profile.route as any)}
                 >
                   <View style={[styles.profileIconBg, { backgroundColor: profile.color + '20' }]}>
-                    <Text style={[styles.profileIcon, { color: profile.color }]}>
-                      {profile.icon}
-                    </Text>
+                    <profile.Icon size={20} color={profile.color} />
                   </View>
                   <Text style={styles.profileName}>{profile.name}</Text>
                   <Text style={styles.profileDescription} numberOfLines={2}>
@@ -409,7 +567,9 @@ export default function ProfileHubScreen() {
                   ]}
                   onPress={() => router.push(item.route as any)}
                 >
-                  <Text style={styles.settingsIcon}>{item.icon}</Text>
+                  <View style={styles.settingsIconWrap}>
+                    <item.Icon size={18} color={Colors.inkSecondary} />
+                  </View>
                   <Text style={styles.settingsName}>{item.name}</Text>
                   <Text style={styles.settingsArrow}>›</Text>
                 </Pressable>
@@ -426,7 +586,7 @@ export default function ProfileHubScreen() {
         )}
 
         {/* App Version */}
-        <Text style={styles.version}>nourai v{APP_VERSION}</Text>
+        <Text style={styles.version}>elory v{APP_VERSION}</Text>
       </ScrollView>
     </View>
   );
@@ -542,10 +702,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xs,
     borderRadius: Radius.pill,
   },
-  subscriptionTierIcon: {
-    fontSize: FontSizes.body,
-    color: Colors.bone,
-  },
   subscriptionTierText: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.sm,
@@ -553,43 +709,25 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  subscriptionTierTextPremium: {
-    color: Colors.bone,
-  },
   subscriptionExpiry: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.caption,
     color: Colors.inkTertiary,
   },
-  subscriptionUsage: {
-    marginBottom: Spacing.md,
-  },
-  usageRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.xs,
-  },
-  usageLabel: {
+  subscriptionPriceLabel: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
     color: Colors.inkSecondary,
+    marginBottom: Spacing.md,
   },
-  usageValue: {
-    fontFamily: Fonts.mono,
+  freeIncludes: {
+    gap: Spacing.xs,
+    marginBottom: Spacing.md,
+  },
+  freeFeatureText: {
+    fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
-    color: Colors.ink,
-  },
-  usageBar: {
-    height: scale(6),
-    backgroundColor: Colors.boneDark,
-    borderRadius: scale(3),
-    overflow: 'hidden',
-  },
-  usageBarFill: {
-    height: '100%',
-    backgroundColor: Colors.accentHill,
-    borderRadius: scale(3),
+    color: Colors.inkTertiary,
   },
   upgradeBtn: {
     flexDirection: 'row',
@@ -610,6 +748,14 @@ const styles = StyleSheet.create({
   },
   premiumFeatures: {
     gap: Spacing.xs,
+  },
+  premiumFeaturesLabel: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    color: Colors.inkTertiary,
+    marginBottom: 4,
   },
   featureItem: {
     flexDirection: 'row',
@@ -643,13 +789,30 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
     gap: Spacing.md,
   },
+  profileSummaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
   profileSummaryTitle: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.sm,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     color: Colors.inkSecondary,
-    marginBottom: Spacing.xs,
+  },
+  profileSummaryEdit: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+    textDecorationLine: 'underline',
+  },
+  profileSummaryEmpty: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.inkTertiary,
+    fontStyle: 'italic',
   },
   profileSummaryRow: {
     gap: Spacing.xs,
@@ -721,9 +884,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.sm,
   },
-  profileIcon: {
-    fontSize: FontSizes.subtitle,
-  },
   profileName: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.bodyLarge,
@@ -760,11 +920,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderHairline,
   },
-  settingsIcon: {
-    fontSize: FontSizes.subtitle,
-    color: Colors.inkSecondary,
+  settingsIconWrap: {
     width: scale(24),
-    textAlign: 'center',
+    height: scale(24),
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   settingsName: {
     flex: 1,

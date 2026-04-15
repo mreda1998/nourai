@@ -1,6 +1,6 @@
-# NourAI Backend
+# Elory Backend
 
-FastAPI backend for the NourAI health product scanner. Manages products, ingredients, evidence from PubMed research, and user health profiles.
+FastAPI backend for the Elory health product scanner. Manages products, ingredients, evidence from PubMed research, and user health profiles.
 
 ---
 
@@ -128,14 +128,14 @@ Copy `.env.example` to `.env` and fill in the values below.
 |----------|---------|-------------|
 | `ENVIRONMENT` | `development` | `development` or `production` |
 | `DEBUG` | `true` | Enables SQL query logging |
-| `OPENFOODFACTS_USER_AGENT` | `NourAI/1.0` | Identifies your app to OpenFoodFacts |
+| `OPENFOODFACTS_USER_AGENT` | `Elory/1.0` | Identifies your app to OpenFoodFacts |
 
 ---
 
 ## Project structure
 
 ```
-backend-nourai/
+backend-elory/
 ├── app/
 │   ├── api/v1/          # FastAPI route handlers
 │   ├── core/
@@ -314,7 +314,7 @@ railway run alembic upgrade head
 
 ### Render
 
-1. New Web Service → connect repo → select `backend-nourai/` as root directory
+1. New Web Service → connect repo → select `backend-elory/` as root directory
 2. Build command: `pip install -r requirements.txt`
 3. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 4. Add a PostgreSQL database add-on
@@ -323,13 +323,13 @@ railway run alembic upgrade head
 ### Docker (self-hosted)
 
 ```bash
-docker build -t nourai-api .
+docker build -t elory-api .
 docker run -p 8000:8000 \
   -e DATABASE_URL="postgresql+asyncpg://..." \
   -e SUPABASE_URL="..." \
   -e SUPABASE_JWT_SECRET="..." \
   -e ANTHROPIC_API_KEY="..." \
-  nourai-api
+  elory-api
 ```
 
 ### Production checklist

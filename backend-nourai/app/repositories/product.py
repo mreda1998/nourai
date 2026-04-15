@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 
+from app.models.ingredient import Ingredient
 from app.models.product import Product, ProductCategory, ProductIngredient
 from app.models.ingredient import Ingredient
 from app.models.claim import Claim, ClaimSource

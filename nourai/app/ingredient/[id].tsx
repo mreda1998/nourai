@@ -1,66 +1,47 @@
 /**
  * Ingredient Deep Dive Screen
  *
- * The core analytical view of NourAI — shows what a molecule actually does,
- * the gap between popular belief and clinical evidence, and every PubMed
- * study we've synthesized for it.
+ * Layered information architecture:
+ *   Layer 1 — Verdict (answer in 1 line, above the fold)
+ *   Layer 2 — Mechanism image + Belief vs Reality (the "why")
+ *   Layer 3 — Evidence snapshot + Dose + Safety (the "how much")
+ *   Layer 4 — Found in products (context)
  *
- * Accessible from:
- *   • Product page → tapping any ingredient row (when ingredient_id is present)
- *   • Search tab → ingredient search results
- *   • Any future surface (food log, stack, etc.)
- *
- * Navigation: expo-router dynamic route /ingredient/[id]
+ * Users who want the signal stop at layer 1.
+ * Power users expand each section for the full science.
  */
 
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ActivityIndicator,
+  Image,
+  LayoutAnimation,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  UIManager,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path, Circle } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
-import { Colors, scale, verticalScale } from '@/constants/theme';
+import { Colors, Fonts, FontSizes, Radius, scale, verticalScale, Spacing } from '@/constants/theme';
 import { BIODOMAIN_BY_KEY } from '@/constants/biodomains';
 import { api } from '@/services/api';
 import type { IngredientDetail, IngredientEvidenceRecord, IngredientBioDomainScore } from '@/services/api';
+import { useAuth } from '@/context/auth-context';
 
-// ─── Icons ────────────────────────────────────────────────────────────────────
-
-function BackIcon() {
-  return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.ink} strokeWidth={2}>
-      <Path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-function AlertIcon() {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#A34B4B" strokeWidth={2}>
-      <Path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-      <Path d="M12 9v4M12 17h.01" strokeLinecap="round" />
-    </Svg>
-  );
-}
-
-function FlaskIcon() {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={Colors.inkSecondary} strokeWidth={2}>
-      <Path d="M9 3h6M9 3v8l-4.5 9A1 1 0 005.4 21h13.2a1 1 0 00.9-1.45L15 11V3" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
-
-// ─── Evidence helpers ─────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const STUDY_TYPE_LABEL: Record<string, string> = {
   rct:               'RCT',
@@ -83,22 +64,24 @@ const EVIDENCE_LEVEL_LABEL: Record<string, string> = {
   insufficient: 'Insufficient Evidence',
 };
 
-function confidenceStyle(confidence: string): { bg: string; text: string } {
-  switch (confidence) {
-    case 'high':     return { bg: Colors.ink,          text: Colors.bone };
-    case 'moderate': return { bg: Colors.inkSecondary,  text: Colors.bone };
-    default:         return { bg: Colors.boneDark,      text: Colors.inkSecondary };
-  }
-}
+const GOAL_LABELS: Record<string, string> = {
+  clear_skin:        'Clear Skin',
+  anti_aging:        'Anti-Aging',
+  brighter_skin:     'Brighter Skin',
+  hair_growth:       'Hair Growth',
+  prevent_hair_loss: 'Hair Loss Prevention',
+  build_muscle:      'Build Muscle',
+  fat_loss:          'Fat Loss',
+  more_energy:       'More Energy',
+  gut_health:        'Gut Health',
+  less_inflammation: 'Less Inflammation',
+  mental_focus:      'Mental Focus',
+  reduce_stress:     'Reduce Stress',
+  better_sleep:      'Better Sleep',
+  recovery:          'Recovery',
+};
 
-function directionColor(direction: string): string {
-  switch (direction) {
-    case 'benefit': return '#3B6E52';   // muted forest green
-    case 'risk':    return '#A34B4B';   // muted alert red (matches moodboard)
-    case 'mixed':   return '#8B6914';   // muted amber
-    default:        return Colors.inkTertiary;
-  }
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function categoryLabel(cat: string): string {
   const map: Record<string, string> = {
@@ -118,82 +101,391 @@ function categoryLabel(cat: string): string {
   return map[cat] ?? cat;
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+const STUDY_RANK: Record<string, number> = {
+  meta_analysis: 5, systematic_review: 4, rct: 3, cohort: 2, other: 1,
+};
+const CONF_RANK: Record<string, number> = { high: 3, moderate: 2, low: 1 };
 
-/**
- * The core differentiating section — shows the gap between what people believe
- * this ingredient does and what the clinical evidence actually supports.
- * Visually prominent so it's the first thing users read after the title.
- */
-function BeliefRealityCard({ commonBelief, evidenceReality }: {
-  commonBelief: string;
-  evidenceReality: string;
-}) {
+function getBestStudy(ev: IngredientEvidenceRecord[]): IngredientEvidenceRecord | null {
+  if (!ev.length) return null;
+  return [...ev].sort((a, b) => {
+    const cd = (CONF_RANK[b.confidence] ?? 0) - (CONF_RANK[a.confidence] ?? 0);
+    if (cd !== 0) return cd;
+    const sd = (STUDY_RANK[b.study_type ?? 'other'] ?? 0) - (STUDY_RANK[a.study_type ?? 'other'] ?? 0);
+    if (sd !== 0) return sd;
+    return (b.sample_size ?? 0) - (a.sample_size ?? 0);
+  })[0];
+}
+
+function aggregateVerdict(ev: IngredientEvidenceRecord[]): {
+  direction: string; confidence: string;
+} {
+  if (!ev.length) return { direction: 'neutral', confidence: 'low' };
+  const counts = { benefit: 0, risk: 0, neutral: 0, mixed: 0 };
+  let bestConf = 'low';
+  ev.forEach((e) => {
+    counts[e.direction as keyof typeof counts] = (counts[e.direction as keyof typeof counts] ?? 0) + 1;
+    if ((CONF_RANK[e.confidence] ?? 0) > (CONF_RANK[bestConf] ?? 0)) bestConf = e.confidence;
+  });
+  const total = ev.length;
+  let direction = 'neutral';
+  if (counts.benefit / total >= 0.6) direction = 'benefit';
+  else if (counts.risk / total >= 0.5) direction = 'risk';
+  else if (counts.mixed > 0 || (counts.benefit > 0 && counts.risk > 0)) direction = 'mixed';
+  return { direction, confidence: bestConf };
+}
+
+function directionColor(d: string) {
+  switch (d) {
+    case 'benefit': return '#3B6E52';
+    case 'risk':    return '#A34B4B';
+    case 'mixed':   return '#8B6914';
+    default:        return Colors.inkTertiary;
+  }
+}
+
+function directionIcon(d: string) {
+  switch (d) {
+    case 'benefit': return '↑';
+    case 'risk':    return '↓';
+    case 'mixed':   return '↕';
+    default:        return '→';
+  }
+}
+
+function directionLabel(d: string) {
+  switch (d) {
+    case 'benefit': return 'Benefit';
+    case 'risk':    return 'Risk';
+    case 'mixed':   return 'Mixed';
+    default:        return 'Neutral';
+  }
+}
+
+function toggle(setFn: React.Dispatch<React.SetStateAction<boolean>>) {
+  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  setFn((v) => !v);
+}
+
+// ─── Icons ────────────────────────────────────────────────────────────────────
+
+function BackIcon() {
   return (
-    <Animated.View entering={FadeInUp.delay(100).duration(400)} style={styles.beliefCard}>
-      {/* Common belief side */}
-      <View style={styles.beliefHalf}>
-        <Text style={styles.beliefLabel}>Common belief</Text>
-        <Text style={styles.beliefText}>{commonBelief}</Text>
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.ink} strokeWidth={2}>
+      <Path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function AlertIcon() {
+  return (
+    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#A34B4B" strokeWidth={2}>
+      <Path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+      <Path d="M12 9v4M12 17h.01" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+// ─── Relevance Banner ─────────────────────────────────────────────────────────
+// Shows which of the user's goals this ingredient directly supports (via evidence goal_tags).
+
+function RelevanceBanner({
+  evidence,
+  userGoals,
+}: {
+  evidence: IngredientEvidenceRecord[];
+  userGoals: string[];
+}) {
+  const matchedGoals = userGoals.filter((g) =>
+    evidence.some((ev) => (ev.goal_tags ?? []).includes(g) && ev.direction === 'benefit')
+  );
+  if (!matchedGoals.length) return null;
+
+  return (
+    <Animated.View entering={FadeIn.duration(300)} style={styles.relevanceBanner}>
+      <Text style={styles.relevanceIcon}>✦</Text>
+      <Text style={styles.relevanceText}>
+        Supports your goals:{' '}
+        <Text style={styles.relevanceGoals}>
+          {matchedGoals.map((g) => GOAL_LABELS[g] ?? g).join(' · ')}
+        </Text>
+      </Text>
+    </Animated.View>
+  );
+}
+
+// ─── Verdict Strip ────────────────────────────────────────────────────────────
+// The single most important line on the page: what does the evidence say?
+
+function VerdictStrip({
+  evidence,
+  evidenceLevel,
+}: {
+  evidence: IngredientEvidenceRecord[];
+  evidenceLevel: string | null;
+}) {
+  const { direction, confidence } = aggregateVerdict(evidence);
+  const color = directionColor(direction);
+  const levelLabel = evidenceLevel ? EVIDENCE_LEVEL_LABEL[evidenceLevel] : null;
+
+  return (
+    <Animated.View entering={FadeIn.delay(80).duration(300)} style={styles.verdictStrip}>
+      <View style={[styles.verdictIconWrap, { backgroundColor: color + '18' }]}>
+        <Text style={[styles.verdictIcon, { color }]}>{directionIcon(direction)}</Text>
       </View>
-
-      {/* Hairline divider */}
-      <View style={styles.beliefDivider} />
-
-      {/* Evidence reality side */}
-      <View style={styles.beliefHalf}>
-        <View style={styles.beliefRealityHeader}>
-          <FlaskIcon />
-          <Text style={[styles.beliefLabel, styles.beliefRealityLabel]}>
-            What research shows
-          </Text>
+      <View style={styles.verdictBody}>
+        <Text style={[styles.verdictDirection, { color }]}>{directionLabel(direction)}</Text>
+        <View style={styles.verdictMeta}>
+          {levelLabel && <Text style={styles.verdictMetaText}>{levelLabel}</Text>}
+          {levelLabel && evidence.length > 0 && (
+            <Text style={styles.verdictMetaDot}>·</Text>
+          )}
+          {evidence.length > 0 && (
+            <Text style={styles.verdictMetaText}>
+              {evidence.length} {evidence.length === 1 ? 'study' : 'studies'}
+            </Text>
+          )}
+          {confidence === 'high' && (
+            <>
+              <Text style={styles.verdictMetaDot}>·</Text>
+              <Text style={[styles.verdictMetaText, { color: Colors.accentHill }]}>
+                High confidence
+              </Text>
+            </>
+          )}
         </View>
-        <Text style={[styles.beliefText, styles.beliefRealityText]}>{evidenceReality}</Text>
       </View>
     </Animated.View>
   );
 }
 
-/**
- * One synthesized PubMed study — shows the plain-English finding,
- * study type, year, population, and confidence/direction badges.
- */
+// ─── Mechanism Section ────────────────────────────────────────────────────────
+// Image when available, placeholder when not. Full mechanism text collapsed by default.
+
+// Local mechanism illustrations (temporary until DB-backed URLs are generated)
+const LOCAL_MECHANISM_IMAGES: Record<string, ReturnType<typeof require>> = {
+  'creatine monohydrate': require('@/assets/images/creatine-mechanism.png'),
+};
+
+function MechanismSection({
+  mechanismSummary,
+  imageUrl,
+  canonicalName,
+}: {
+  mechanismSummary: string | null;
+  imageUrl: string | null;
+  canonicalName?: string | null;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (!mechanismSummary) return null;
+
+  // Caption: first sentence of mechanism summary
+  const firstSentence = mechanismSummary.split(/\.\s/)[0].replace(/\.$/, '');
+  const hasMore = mechanismSummary.length > firstSentence.length + 2;
+
+  const localImage = canonicalName ? LOCAL_MECHANISM_IMAGES[canonicalName.toLowerCase()] : undefined;
+
+  return (
+    <Animated.View entering={FadeInUp.delay(120).duration(350)}>
+      <Text style={styles.sectionLabel}>How it works</Text>
+
+      {/* Image or placeholder */}
+      <View style={styles.mechanismImageWrap}>
+        {imageUrl ? (
+          <Image
+            source={{ uri: imageUrl }}
+            style={styles.mechanismImage}
+            resizeMode="contain"
+          />
+        ) : localImage ? (
+          <Image
+            source={localImage}
+            style={styles.mechanismImage}
+            resizeMode="contain"
+          />
+        ) : (
+          <View style={styles.mechanismPlaceholder}>
+            <Text style={styles.mechanismPlaceholderIcon}>⬡</Text>
+            <Text style={styles.mechanismPlaceholderText}>Illustration coming soon</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Caption (always visible) */}
+      <Text style={styles.mechanismCaption}>{firstSentence}.</Text>
+
+      {/* Full text (collapsed by default) */}
+      {hasMore && (
+        <>
+          {expanded && (
+            <Text style={styles.mechanismFull}>{mechanismSummary}</Text>
+          )}
+          <Pressable onPress={() => toggle(setExpanded)} style={styles.expandBtn}>
+            <Text style={styles.expandBtnText}>
+              {expanded ? 'Show less ↑' : 'Read full mechanism ↓'}
+            </Text>
+          </Pressable>
+        </>
+      )}
+    </Animated.View>
+  );
+}
+
+// ─── Belief vs Reality ────────────────────────────────────────────────────────
+// Updated with expand toggle — shows 2 lines by default.
+
+function BeliefRealityCard({
+  commonBelief,
+  evidenceReality,
+}: {
+  commonBelief: string;
+  evidenceReality: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <Animated.View entering={FadeInUp.delay(100).duration(400)} style={styles.beliefCard}>
+      {/* Common belief */}
+      <View style={styles.beliefHalf}>
+        <Text style={styles.beliefLabel}>Common belief</Text>
+        <Text style={styles.beliefText} numberOfLines={expanded ? undefined : 2}>
+          {commonBelief}
+        </Text>
+      </View>
+
+      <View style={styles.beliefDivider} />
+
+      {/* Evidence reality */}
+      <View style={styles.beliefHalf}>
+        <Text style={[styles.beliefLabel, styles.beliefRealityLabel]}>What research shows</Text>
+        <Text style={[styles.beliefText, styles.beliefRealityText]} numberOfLines={expanded ? undefined : 2}>
+          {evidenceReality}
+        </Text>
+      </View>
+
+      <Pressable onPress={() => toggle(setExpanded)} style={styles.beliefExpandBtn}>
+        <Text style={styles.beliefExpandText}>{expanded ? 'Show less' : 'Read more'}</Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// ─── Evidence Snapshot ────────────────────────────────────────────────────────
+// Distribution bar + best study always visible; rest collapsed behind "See all".
+
+function EvidenceSnapshot({ evidence }: { evidence: IngredientEvidenceRecord[] }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!evidence.length) return null;
+
+  const counts = { benefit: 0, risk: 0, neutral: 0, mixed: 0 };
+  evidence.forEach((ev) => {
+    counts[ev.direction as keyof typeof counts] = (counts[ev.direction as keyof typeof counts] ?? 0) + 1;
+  });
+
+  const bestStudy = getBestStudy(evidence);
+  const restStudies = evidence.filter((ev) => ev !== bestStudy);
+
+  return (
+    <Animated.View entering={FadeInUp.delay(140).duration(350)}>
+      <Text style={styles.sectionLabel}>
+        Research · {evidence.length} {evidence.length === 1 ? 'study' : 'studies'}
+      </Text>
+
+      {/* Distribution bar */}
+      <View style={styles.evidenceBarWrap}>
+        <View style={styles.evidenceBar}>
+          {counts.benefit > 0 && (
+            <View style={[styles.evidenceBarSeg, { flex: counts.benefit, backgroundColor: '#3B6E52' }]} />
+          )}
+          {counts.mixed > 0 && (
+            <View style={[styles.evidenceBarSeg, { flex: counts.mixed, backgroundColor: '#8B6914' }]} />
+          )}
+          {counts.neutral > 0 && (
+            <View style={[styles.evidenceBarSeg, { flex: counts.neutral, backgroundColor: Colors.boneDark }]} />
+          )}
+          {counts.risk > 0 && (
+            <View style={[styles.evidenceBarSeg, { flex: counts.risk, backgroundColor: '#A34B4B' }]} />
+          )}
+        </View>
+        <View style={styles.evidenceBarLabels}>
+          {counts.benefit > 0 && (
+            <Text style={[styles.evidenceBarLabel, { color: '#3B6E52' }]}>
+              {counts.benefit} benefit
+            </Text>
+          )}
+          {counts.mixed > 0 && (
+            <Text style={[styles.evidenceBarLabel, { color: '#8B6914' }]}>
+              {counts.mixed} mixed
+            </Text>
+          )}
+          {counts.neutral > 0 && (
+            <Text style={[styles.evidenceBarLabel, { color: Colors.inkTertiary }]}>
+              {counts.neutral} neutral
+            </Text>
+          )}
+          {counts.risk > 0 && (
+            <Text style={[styles.evidenceBarLabel, { color: '#A34B4B' }]}>
+              {counts.risk} risk
+            </Text>
+          )}
+        </View>
+      </View>
+
+      {/* Best study — always visible */}
+      {bestStudy && <EvidenceCard ev={bestStudy} index={0} />}
+
+      {/* Remaining studies — collapsed */}
+      {restStudies.length > 0 && (
+        <>
+          {expanded && restStudies.map((ev, i) => (
+            <EvidenceCard key={ev.id} ev={ev} index={i + 1} />
+          ))}
+          <Pressable onPress={() => toggle(setExpanded)} style={styles.expandBtn}>
+            <Text style={styles.expandBtnText}>
+              {expanded
+                ? 'Show less ↑'
+                : `See all ${restStudies.length} more ${restStudies.length === 1 ? 'study' : 'studies'} ↓`}
+            </Text>
+          </Pressable>
+        </>
+      )}
+    </Animated.View>
+  );
+}
+
+// ─── Evidence Card ────────────────────────────────────────────────────────────
+
 function EvidenceCard({ ev, index }: { ev: IngredientEvidenceRecord; index: number }) {
-  const conf = confidenceStyle(ev.confidence);
   const dirColor = directionColor(ev.direction);
   const studyLabel = ev.study_type ? (STUDY_TYPE_LABEL[ev.study_type] ?? ev.study_type) : null;
+  const confColors = {
+    high:     { bg: Colors.ink,         text: Colors.bone },
+    moderate: { bg: Colors.inkSecondary, text: Colors.bone },
+    low:      { bg: Colors.boneDark,     text: Colors.inkSecondary },
+  }[ev.confidence] ?? { bg: Colors.boneDark, text: Colors.inkSecondary };
 
   return (
     <Animated.View
-      entering={FadeInUp.delay(index * 60).duration(350)}
+      entering={FadeInUp.delay(index * 50).duration(300)}
       style={styles.evidenceCard}
     >
-      {/* Top row: study type + year + confidence badge */}
       <View style={styles.evidenceTopRow}>
         <View style={styles.evidenceMeta}>
-          {studyLabel && (
-            <Text style={styles.studyType}>{studyLabel}</Text>
-          )}
-          {ev.year && (
-            <Text style={styles.studyYear}> · {ev.year}</Text>
-          )}
+          {studyLabel && <Text style={styles.studyType}>{studyLabel}</Text>}
+          {ev.year && <Text style={styles.studyYear}> · {ev.year}</Text>}
         </View>
-        <View style={[styles.confidenceBadge, { backgroundColor: conf.bg }]}>
-          <Text style={[styles.confidenceText, { color: conf.text }]}>
+        <View style={[styles.confidenceBadge, { backgroundColor: confColors.bg }]}>
+          <Text style={[styles.confidenceText, { color: confColors.text }]}>
             {ev.confidence.toUpperCase()}
           </Text>
         </View>
       </View>
-
-      {/* Finding — the core sentence */}
       <Text style={styles.findingText}>{ev.finding}</Text>
-
-      {/* Bottom row: population + direction dot */}
       <View style={styles.evidenceBottomRow}>
         {ev.population && (
           <Text style={styles.populationText} numberOfLines={1}>
-            {ev.population}
-            {ev.sample_size ? ` (n={ev.sample_size})` : ''}
+            {ev.population}{ev.sample_size ? ` (n=${ev.sample_size})` : ''}
           </Text>
         )}
         <View style={[styles.directionDot, { backgroundColor: dirColor }]} />
@@ -202,14 +494,179 @@ function EvidenceCard({ ev, index }: { ev: IngredientEvidenceRecord; index: numb
   );
 }
 
-/**
- * Chip for side effects and contraindications — small pill with subtle border.
- */
-function SafetyChip({ label, isWarning }: { label: string; isWarning?: boolean }) {
+// ─── Bio-Domain Effects ───────────────────────────────────────────────────────
+// Shows how this ingredient affects each of the 6 bio-domains.
+// Computed by the research agent; always displayed (shows "—" when no data).
+
+const DOMAIN_ORDER = [
+  { slug: 'metabolism',     label: 'Metabolism' },
+  { slug: 'cognition',      label: 'Cognition' },
+  { slug: 'sleep-recovery', label: 'Sleep & Recovery' },
+  { slug: 'gut-health',     label: 'Gut Health' },
+  { slug: 'skin',           label: 'Skin' },
+  { slug: 'exposure-load',  label: 'Exposure Load' },
+] as const;
+
+function BioDomainEffects({
+  domainEffects,
+}: {
+  domainEffects: IngredientDetail['domain_effects'];
+}) {
+  const hasAnyData = domainEffects && Object.values(domainEffects).some(
+    (d) => d.evidence_count > 0
+  );
+  if (!hasAnyData) return null;
+
   return (
-    <View style={[styles.chip, isWarning && styles.chipWarning]}>
-      <Text style={[styles.chipText, isWarning && styles.chipTextWarning]}>{label}</Text>
-    </View>
+    <Animated.View entering={FadeInUp.delay(155).duration(350)}>
+      <Text style={styles.sectionLabel}>Bio-Domain Effects</Text>
+      <View style={styles.domainTable}>
+        {DOMAIN_ORDER.map(({ slug, label }, i) => {
+          const effect = domainEffects?.[slug];
+          const hasData = effect && effect.evidence_count > 0;
+          const last = i === DOMAIN_ORDER.length - 1;
+          const dotColor = hasData ? directionColor(effect.direction) : 'transparent';
+
+          return (
+            <View
+              key={slug}
+              style={[styles.domainRow, !last && styles.domainRowBorder]}
+            >
+              {/* Domain name */}
+              <Text style={[styles.domainRowLabel, !hasData && styles.domainRowLabelDim]}>
+                {label}
+              </Text>
+
+              {/* Right side */}
+              {hasData ? (
+                <View style={styles.domainRowRight}>
+                  {/* Colored dot — only colored element */}
+                  <View style={[styles.domainDot, { backgroundColor: dotColor }]} />
+                  <View style={styles.domainRowMeta}>
+                    <Text style={styles.domainRowDirection}>
+                      {directionLabel(effect.direction)}
+                    </Text>
+                    <Text style={styles.domainRowCount}>
+                      {effect.evidence_count}{' '}
+                      {effect.evidence_count === 1 ? 'study' : 'studies'}
+                      {'  ·  '}{effect.confidence}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <Text style={styles.domainRowEmpty}>—</Text>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    </Animated.View>
+  );
+}
+
+// ─── Dose Card ────────────────────────────────────────────────────────────────
+// Horizontal 3-cell card replacing the old list table.
+
+function DoseCard({ ingredient }: { ingredient: IngredientDetail }) {
+  const cells = [
+    { label: 'Typical', value: ingredient.typical_dose_range, warn: false },
+    { label: 'Recommended', value: ingredient.recommended_daily, warn: false },
+    { label: 'Upper limit', value: ingredient.upper_limit, warn: true },
+  ].filter((c) => c.value);
+
+  if (!cells.length) return null;
+
+  return (
+    <Animated.View entering={FadeInUp.delay(160).duration(350)}>
+      <Text style={styles.sectionLabel}>Dosage</Text>
+      <View style={styles.doseCard}>
+        {cells.map((cell, i) => (
+          <View
+            key={cell.label}
+            style={[styles.doseCell, i < cells.length - 1 && styles.doseCellBorder]}
+          >
+            <Text style={styles.doseCellLabel}>{cell.label}</Text>
+            <Text style={[styles.doseCellValue, cell.warn && styles.doseCellWarn]}>
+              {cell.value}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </Animated.View>
+  );
+}
+
+// ─── Safety Section ───────────────────────────────────────────────────────────
+// Collapsed by default. Shows a single summary row; expands to chips.
+
+function SafetySection({ ingredient }: { ingredient: IngredientDetail }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const interactionCount = ingredient.drug_interactions.length;
+  const contrainCount = ingredient.contraindications.length;
+  const sideCount = ingredient.side_effects.length;
+  const totalFlags = interactionCount + contrainCount;
+
+  const hasSafety = totalFlags > 0 || sideCount > 0;
+  if (!hasSafety) return null;
+
+  const summaryText = totalFlags > 0
+    ? `${totalFlags} interaction${totalFlags !== 1 ? 's' : ''} · ${sideCount} side effect${sideCount !== 1 ? 's' : ''}`
+    : `${sideCount} possible side effect${sideCount !== 1 ? 's' : ''}`;
+
+  return (
+    <Animated.View entering={FadeInUp.delay(180).duration(350)}>
+      <Pressable style={styles.safetyRow} onPress={() => toggle(setExpanded)}>
+        <View style={styles.safetyRowLeft}>
+          {totalFlags > 0 ? <AlertIcon /> : null}
+          <Text style={[styles.safetyRowText, totalFlags > 0 && styles.safetyRowTextWarn]}>
+            Safety · {summaryText}
+          </Text>
+        </View>
+        <Text style={styles.safetyChevron}>{expanded ? '↑' : '↓'}</Text>
+      </Pressable>
+
+      {expanded && (
+        <View style={styles.safetyExpanded}>
+          {ingredient.contraindications.length > 0 && (
+            <View style={styles.safetyBlock}>
+              <Text style={styles.safetyBlockLabel}>Contraindications</Text>
+              <View style={styles.chipRow}>
+                {ingredient.contraindications.map((c) => (
+                  <View key={c} style={[styles.chip, styles.chipWarn]}>
+                    <Text style={[styles.chipText, styles.chipTextWarn]}>{c}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+          {ingredient.drug_interactions.length > 0 && (
+            <View style={styles.safetyBlock}>
+              <Text style={styles.safetyBlockLabel}>Drug interactions</Text>
+              <View style={styles.chipRow}>
+                {ingredient.drug_interactions.map((d) => (
+                  <View key={d} style={[styles.chip, styles.chipWarn]}>
+                    <Text style={[styles.chipText, styles.chipTextWarn]}>{d}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+          {ingredient.side_effects.length > 0 && (
+            <View style={styles.safetyBlock}>
+              <Text style={styles.safetyBlockLabel}>Possible side effects</Text>
+              <View style={styles.chipRow}>
+                {ingredient.side_effects.map((s) => (
+                  <View key={s} style={styles.chip}>
+                    <Text style={styles.chipText}>{s}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+    </Animated.View>
   );
 }
 
@@ -301,10 +758,13 @@ export default function IngredientDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { onboardingProfile } = useAuth();
 
   const [ingredient, setIngredient] = useState<IngredientDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const userGoals = onboardingProfile?.goals ?? [];
 
   useEffect(() => {
     if (!id) return;
@@ -316,11 +776,8 @@ export default function IngredientDetailScreen() {
     setError(null);
     try {
       const data = await api.getIngredientWithFallback(id as string);
-      if (data) {
-        setIngredient(data);
-      } else {
-        setError('Ingredient not found');
-      }
+      if (data) setIngredient(data);
+      else setError('Ingredient not found');
     } finally {
       setLoading(false);
     }
@@ -331,16 +788,9 @@ export default function IngredientDetailScreen() {
     router.back();
   };
 
-  const handleFoundInProduct = (productId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push(`/product/${productId}`);
-  };
-
-  // ── Loading state ─────────────────────────────────────────────────────────
-
   if (loading) {
     return (
-      <View style={[styles.centeredContainer, { paddingTop: insets.top }]}>
+      <View style={[styles.centered, { paddingTop: insets.top }]}>
         <ActivityIndicator size="large" color={Colors.ink} />
         <Text style={styles.loadingText}>Loading ingredient...</Text>
       </View>
@@ -349,26 +799,19 @@ export default function IngredientDetailScreen() {
 
   if (error || !ingredient) {
     return (
-      <View style={[styles.centeredContainer, { paddingTop: insets.top }]}>
+      <View style={[styles.centered, { paddingTop: insets.top }]}>
         <Text style={styles.errorText}>{error ?? 'Ingredient not found'}</Text>
-        <Pressable onPress={handleBack} style={styles.backButtonFallback}>
-          <Text style={styles.backButtonFallbackText}>Go Back</Text>
+        <Pressable onPress={handleBack} style={styles.backBtnFallback}>
+          <Text style={styles.backBtnFallbackText}>Go Back</Text>
         </Pressable>
       </View>
     );
   }
 
-  const hasBelief = ingredient.common_belief && ingredient.evidence_reality;
-  const hasSafety = (
-    ingredient.side_effects.length > 0 ||
-    ingredient.contraindications.length > 0 ||
-    ingredient.drug_interactions.length > 0
-  );
+  const hasBelief = !!(ingredient.common_belief && ingredient.evidence_reality);
   const evidenceLevelLabel = ingredient.evidence_level
     ? EVIDENCE_LEVEL_LABEL[ingredient.evidence_level]
     : null;
-
-  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -384,27 +827,46 @@ export default function IngredientDetailScreen() {
         style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + scale(40) },
+          { paddingBottom: insets.bottom + scale(48) },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Header ────────────────────────────────────────────────────── */}
-        <Animated.View entering={FadeIn.duration(300)} style={styles.titleSection}>
+        {/* ── Title ──────────────────────────────────────────────────────── */}
+        <Animated.View entering={FadeIn.duration(250)} style={styles.titleSection}>
           <Text style={styles.categoryLabel}>{categoryLabel(ingredient.category)}</Text>
           <Text style={styles.ingredientName}>{ingredient.canonical_name}</Text>
-
-          {/* Evidence level pill */}
           {evidenceLevelLabel && (
-            <View style={styles.evidenceLevelPill}>
-              <Text style={styles.evidenceLevelText}>{evidenceLevelLabel}</Text>
+            <View style={styles.evidencePill}>
+              <Text style={styles.evidencePillText}>{evidenceLevelLabel}</Text>
             </View>
           )}
         </Animated.View>
 
-        {/* ── Belief vs. Reality — hero section ─────────────────────────── */}
+        {/* ── Relevance Banner ───────────────────────────────────────────── */}
+        {userGoals.length > 0 && (
+          <RelevanceBanner evidence={ingredient.evidence} userGoals={userGoals} />
+        )}
+
+        {/* ── Verdict Strip ──────────────────────────────────────────────── */}
+        <VerdictStrip
+          evidence={ingredient.evidence}
+          evidenceLevel={ingredient.evidence_level}
+        />
+
+        <View style={styles.divider} />
+
+        {/* ── Mechanism ──────────────────────────────────────────────────── */}
+        <MechanismSection
+          mechanismSummary={ingredient.mechanism_summary}
+          imageUrl={ingredient.mechanism_image_url}
+          canonicalName={ingredient.canonical_name}
+        />
+
+        {/* ── Belief vs Reality ──────────────────────────────────────────── */}
         {hasBelief && (
           <>
-            <View style={styles.sectionDivider} />
+            <View style={styles.divider} />
+            <Text style={styles.sectionLabel}>Belief vs. Reality</Text>
             <BeliefRealityCard
               commonBelief={ingredient.common_belief!}
               evidenceReality={ingredient.evidence_reality!}
@@ -415,11 +877,8 @@ export default function IngredientDetailScreen() {
         {/* ── Biodomain impact scores ───────────────────────────────────── */}
         {ingredient.biodomain_scores && ingredient.biodomain_scores.length > 0 && (
           <>
-            <View style={styles.sectionDivider} />
+            <View style={styles.divider} />
             <Text style={styles.sectionLabel}>Health domain impact</Text>
-            <Text style={styles.evidenceNote}>
-              Based on clinical evidence. Bar width = effect magnitude.
-            </Text>
             {ingredient.biodomain_scores
               .slice()
               .sort((a, b) => {
@@ -437,147 +896,79 @@ export default function IngredientDetailScreen() {
           </>
         )}
 
-        {/* ── Mechanism ─────────────────────────────────────────────────── */}
-        {ingredient.mechanism_summary && (
-          <>
-            <View style={styles.sectionDivider} />
-            <Text style={styles.sectionLabel}>How it works</Text>
-            <Text style={styles.mechanismText}>{ingredient.mechanism_summary}</Text>
-          </>
-        )}
-
-        {/* ── Dose ──────────────────────────────────────────────────────── */}
-        {(ingredient.typical_dose_range || ingredient.recommended_daily || ingredient.upper_limit) && (
-          <>
-            <View style={styles.sectionDivider} />
-            <Text style={styles.sectionLabel}>Dosage</Text>
-            <View style={styles.doseTable}>
-              {ingredient.typical_dose_range && (
-                <View style={styles.doseRow}>
-                  <Text style={styles.doseKey}>Typical dose</Text>
-                  <Text style={styles.doseValue}>{ingredient.typical_dose_range}</Text>
-                </View>
-              )}
-              {ingredient.recommended_daily && (
-                <View style={styles.doseRow}>
-                  <Text style={styles.doseKey}>Recommended daily</Text>
-                  <Text style={styles.doseValue}>{ingredient.recommended_daily}</Text>
-                </View>
-              )}
-              {ingredient.upper_limit && (
-                <View style={[styles.doseRow, styles.doseRowLast]}>
-                  <Text style={styles.doseKey}>Upper limit</Text>
-                  <Text style={[styles.doseValue, { color: '#A34B4B' }]}>{ingredient.upper_limit}</Text>
-                </View>
-              )}
-            </View>
-          </>
-        )}
-
-        {/* ── Safety ────────────────────────────────────────────────────── */}
-        {hasSafety && (
-          <>
-            <View style={styles.sectionDivider} />
-            <Text style={styles.sectionLabel}>Safety</Text>
-
-            {ingredient.contraindications.length > 0 && (
-              <View style={styles.safetyBlock}>
-                <View style={styles.safetyHeader}>
-                  <AlertIcon />
-                  <Text style={styles.safetyTitle}>Contraindications</Text>
-                </View>
-                <View style={styles.chipRow}>
-                  {ingredient.contraindications.map((c) => (
-                    <SafetyChip key={c} label={c} isWarning />
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {ingredient.drug_interactions.length > 0 && (
-              <View style={styles.safetyBlock}>
-                <Text style={styles.safetyTitle}>Drug interactions</Text>
-                <View style={styles.chipRow}>
-                  {ingredient.drug_interactions.map((d) => (
-                    <SafetyChip key={d} label={d} isWarning />
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {ingredient.side_effects.length > 0 && (
-              <View style={styles.safetyBlock}>
-                <Text style={styles.safetyTitle}>Possible side effects</Text>
-                <View style={styles.chipRow}>
-                  {ingredient.side_effects.map((s) => (
-                    <SafetyChip key={s} label={s} />
-                  ))}
-                </View>
-              </View>
-            )}
-          </>
-        )}
-
-        {/* ── Evidence records ──────────────────────────────────────────── */}
+        {/* ── Evidence Snapshot ──────────────────────────────────────────── */}
         {ingredient.evidence.length > 0 && (
           <>
-            <View style={styles.sectionDivider} />
-            <Text style={styles.sectionLabel}>
-              Research  ·  {ingredient.evidence.length} {ingredient.evidence.length === 1 ? 'study' : 'studies'}
-            </Text>
-            <Text style={styles.evidenceNote}>
-              Sorted by evidence quality. High = RCT or meta-analysis.
-            </Text>
-            {ingredient.evidence.map((ev, i) => (
-              <EvidenceCard key={ev.id} ev={ev} index={i} />
-            ))}
+            <View style={styles.divider} />
+            <EvidenceSnapshot evidence={ingredient.evidence} />
           </>
         )}
 
-        {/* ── Insufficient evidence notice ──────────────────────────────── */}
         {ingredient.research_status === 'complete' && ingredient.evidence.length === 0 && (
           <>
-            <View style={styles.sectionDivider} />
+            <View style={styles.divider} />
             <View style={styles.noEvidenceCard}>
               <Text style={styles.noEvidenceTitle}>No published studies found</Text>
-              <Text style={styles.noEvidenceText}>
-                We searched PubMed for clinical evidence on this ingredient but found
-                nothing meeting our quality threshold. This doesn't mean it's unsafe —
-                it may simply be understudied.
+              <Text style={styles.noEvidenceBody}>
+                We searched PubMed for clinical evidence on this ingredient but found nothing
+                meeting our quality threshold. This doesn't mean it's unsafe — it may simply
+                be understudied.
               </Text>
             </View>
           </>
         )}
 
-        {/* ── Found in products ─────────────────────────────────────────── */}
+        {/* ── Bio-Domain Effects ─────────────────────────────────────────── */}
+        {ingredient.domain_effects && (
+          <>
+            <View style={styles.divider} />
+            <BioDomainEffects domainEffects={ingredient.domain_effects} />
+          </>
+        )}
+
+        {/* ── Dose ───────────────────────────────────────────────────────── */}
+        {(ingredient.typical_dose_range || ingredient.recommended_daily || ingredient.upper_limit) && (
+          <>
+            <View style={styles.divider} />
+            <DoseCard ingredient={ingredient} />
+          </>
+        )}
+
+        {/* ── Safety ─────────────────────────────────────────────────────── */}
+        {(ingredient.side_effects.length > 0 ||
+          ingredient.contraindications.length > 0 ||
+          ingredient.drug_interactions.length > 0) && (
+          <>
+            <View style={styles.divider} />
+            <SafetySection ingredient={ingredient} />
+          </>
+        )}
+
+        {/* ── Found in products ──────────────────────────────────────────── */}
         {ingredient.found_in.length > 0 && (
           <>
-            <View style={styles.sectionDivider} />
+            <View style={styles.divider} />
             <Text style={styles.sectionLabel}>
               Found in {ingredient.found_in.length} product{ingredient.found_in.length !== 1 ? 's' : ''}
             </Text>
             {ingredient.found_in.map((p, i) => (
               <Animated.View
                 key={`${p.id}-${i}`}
-                entering={FadeInUp.delay(i * 40).duration(300)}
+                entering={FadeInUp.delay(i * 40).duration(280)}
               >
                 <Pressable
                   style={styles.foundInRow}
-                  onPress={() => handleFoundInProduct(p.id)}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push(`/product/${p.id}`);
+                  }}
                 >
                   <View style={styles.foundInInfo}>
                     <Text style={styles.foundInName} numberOfLines={1}>{p.name}</Text>
-                    {p.brand && (
-                      <Text style={styles.foundInBrand}>{p.brand}</Text>
-                    )}
+                    {p.brand && <Text style={styles.foundInBrand}>{p.brand}</Text>}
                   </View>
-                  {p.amount && (
-                    <Text style={styles.foundInAmount}>{p.amount}</Text>
-                  )}
-                  <Svg
-                    width={14} height={14} viewBox="0 0 24 24"
-                    fill="none" stroke={Colors.inkTertiary} strokeWidth={2}
-                  >
+                  {p.amount && <Text style={styles.foundInAmount}>{p.amount}</Text>}
+                  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={Colors.inkTertiary} strokeWidth={2}>
                     <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
                   </Svg>
                 </Pressable>
@@ -597,8 +988,39 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.bone,
   },
+  centered: {
+    flex: 1,
+    backgroundColor: Colors.bone,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: scale(32),
+  },
+  loadingText: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.inkSecondary,
+    marginTop: scale(12),
+  },
+  errorText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.subtitle,
+    color: Colors.ink,
+    marginBottom: scale(20),
+    textAlign: 'center',
+  },
+  backBtnFallback: {
+    paddingHorizontal: scale(24),
+    paddingVertical: scale(12),
+    backgroundColor: Colors.ink,
+    borderRadius: Radius.md,
+  },
+  backBtnFallbackText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.body,
+    color: Colors.bone,
+  },
 
-  // ── Header / back ──────────────────────────────────────────────────────────
+  // ── Nav ─────────────────────────────────────────────────────────────────────
   header: {
     paddingHorizontal: scale(24),
     paddingTop: scale(8),
@@ -611,27 +1033,28 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   backLabel: {
-    fontFamily: 'Manrope_600SemiBold',
-    fontSize: scale(11),
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.xs,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     color: Colors.inkSecondary,
   },
 
-  // ── Scroll ─────────────────────────────────────────────────────────────────
+  // ── Scroll ──────────────────────────────────────────────────────────────────
   scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: scale(24),
     paddingTop: scale(16),
+    gap: 0,
   },
 
-  // ── Title section ──────────────────────────────────────────────────────────
+  // ── Title ───────────────────────────────────────────────────────────────────
   titleSection: {
-    marginBottom: scale(4),
+    marginBottom: Spacing.sm,
   },
   categoryLabel: {
-    fontFamily: 'Manrope_600SemiBold',
-    fontSize: scale(10),
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.xs,
     textTransform: 'uppercase',
     letterSpacing: 1.4,
     color: Colors.inkSecondary,
@@ -644,44 +1067,180 @@ const styles = StyleSheet.create({
     color: Colors.ink,
     marginBottom: scale(12),
   },
-  evidenceLevelPill: {
+  evidencePill: {
     alignSelf: 'flex-start',
     backgroundColor: Colors.boneCard,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.inkTertiary,
-    borderRadius: 100,
+    borderRadius: Radius.pill,
     paddingHorizontal: scale(10),
     paddingVertical: scale(3),
   },
-  evidenceLevelText: {
-    fontFamily: 'Manrope_600SemiBold',
-    fontSize: scale(10),
+  evidencePillText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.xs,
     textTransform: 'uppercase',
     letterSpacing: 1,
     color: Colors.inkSecondary,
   },
 
-  // ── Section divider ────────────────────────────────────────────────────────
-  sectionDivider: {
+  // ── Relevance Banner ────────────────────────────────────────────────────────
+  relevanceBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: scale(8),
+    backgroundColor: Colors.accentHill + '10',
+    borderWidth: 1,
+    borderColor: Colors.accentHill + '25',
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  relevanceIcon: {
+    fontSize: FontSizes.caption,
+    color: Colors.accentHill,
+    marginTop: scale(1),
+  },
+  relevanceText: {
+    flex: 1,
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    color: Colors.inkSecondary,
+    lineHeight: FontSizes.caption * 1.5,
+  },
+  relevanceGoals: {
+    fontFamily: Fonts.sansSemiBold,
+    color: Colors.accentHill,
+  },
+
+  // ── Verdict Strip ───────────────────────────────────────────────────────────
+  verdictStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  verdictIconWrap: {
+    width: scale(40),
+    height: scale(40),
+    borderRadius: scale(20),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  verdictIcon: {
+    fontSize: scale(18),
+    fontFamily: Fonts.sansSemiBold,
+  },
+  verdictBody: {
+    flex: 1,
+  },
+  verdictDirection: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.subtitle,
+    marginBottom: scale(2),
+  },
+  verdictMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: scale(4),
+  },
+  verdictMetaText: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    color: Colors.inkSecondary,
+  },
+  verdictMetaDot: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    color: Colors.inkTertiary,
+  },
+
+  // ── Divider ─────────────────────────────────────────────────────────────────
+  divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: Colors.ink,
     marginVertical: scale(28),
   },
+
+  // ── Section label ───────────────────────────────────────────────────────────
   sectionLabel: {
-    fontFamily: 'Manrope_600SemiBold',
-    fontSize: scale(10),
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.xs,
     textTransform: 'uppercase',
     letterSpacing: 1.4,
     color: Colors.inkSecondary,
     marginBottom: scale(14),
   },
 
-  // ── Belief vs. reality card ────────────────────────────────────────────────
-  // This is the hero section — the most important part of the screen.
-  // Two halves separated by a hairline: folk belief on top, evidence below.
+  // ── Expand button (shared) ──────────────────────────────────────────────────
+  expandBtn: {
+    alignSelf: 'flex-start',
+    marginTop: scale(10),
+    paddingVertical: scale(4),
+  },
+  expandBtnText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
+    color: Colors.inkSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+
+  // ── Mechanism ───────────────────────────────────────────────────────────────
+  mechanismImageWrap: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    marginBottom: Spacing.md,
+    backgroundColor: Colors.boneCard,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+  },
+  mechanismImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mechanismPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+  },
+  mechanismPlaceholderIcon: {
+    fontSize: scale(32),
+    color: Colors.boneDark,
+  },
+  mechanismPlaceholderText: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    color: Colors.inkTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  mechanismCaption: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    lineHeight: FontSizes.body * 1.6,
+    color: Colors.inkSecondary,
+    fontStyle: 'italic',
+    marginBottom: scale(4),
+  },
+  mechanismFull: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    lineHeight: FontSizes.body * 1.6,
+    color: Colors.inkSecondary,
+    marginTop: Spacing.sm,
+  },
+
+  // ── Belief vs Reality ────────────────────────────────────────────────────────
   beliefCard: {
     backgroundColor: Colors.boneCard,
-    borderRadius: scale(14),
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   beliefHalf: {
@@ -689,133 +1248,71 @@ const styles = StyleSheet.create({
   },
   beliefDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(28,28,28,0.12)',
+    backgroundColor: Colors.borderHairline,
     marginHorizontal: scale(18),
   },
   beliefLabel: {
-    fontFamily: 'Manrope_600SemiBold',
-    fontSize: scale(10),
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.xs,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     color: Colors.inkTertiary,
     marginBottom: scale(8),
   },
-  beliefRealityHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scale(6),
-    marginBottom: scale(8),
-  },
   beliefRealityLabel: {
     color: Colors.inkSecondary,
-    marginBottom: 0,
   },
   beliefText: {
-    fontFamily: 'Manrope_400Regular',
-    fontSize: scale(13),
-    lineHeight: scale(20),
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    lineHeight: FontSizes.body * 1.6,
     color: Colors.inkSecondary,
     fontStyle: 'italic',
   },
   beliefRealityText: {
-    fontFamily: 'Manrope_500Medium',
+    fontFamily: Fonts.sansMedium,
     fontStyle: 'normal',
     color: Colors.ink,
   },
-
-  // ── Mechanism ──────────────────────────────────────────────────────────────
-  mechanismText: {
-    fontFamily: 'Manrope_400Regular',
-    fontSize: scale(13),
-    lineHeight: scale(21),
-    color: Colors.inkSecondary,
+  beliefExpandBtn: {
+    paddingHorizontal: scale(18),
+    paddingBottom: scale(14),
+    paddingTop: scale(4),
   },
-
-  // ── Dose table ─────────────────────────────────────────────────────────────
-  doseTable: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(28,28,28,0.1)',
-  },
-  doseRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingVertical: scale(11),
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(28,28,28,0.08)',
-  },
-  doseRowLast: {
-    borderBottomWidth: 0,
-  },
-  doseKey: {
-    fontFamily: 'Manrope_600SemiBold',
-    fontSize: scale(12),
-    color: Colors.inkSecondary,
-    flex: 1,
-  },
-  doseValue: {
-    fontFamily: 'Manrope_400Regular',
-    fontSize: scale(12),
-    color: Colors.ink,
-    flex: 1,
-    textAlign: 'right',
-  },
-
-  // ── Safety ─────────────────────────────────────────────────────────────────
-  safetyBlock: {
-    marginBottom: scale(16),
-  },
-  safetyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scale(6),
-    marginBottom: scale(8),
-  },
-  safetyTitle: {
-    fontFamily: 'Manrope_600SemiBold',
-    fontSize: scale(12),
-    color: Colors.ink,
-    marginBottom: scale(8),
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: scale(6),
-  },
-  chip: {
-    borderWidth: 1,
-    borderColor: 'rgba(28,28,28,0.15)',
-    borderRadius: 100,
-    paddingHorizontal: scale(10),
-    paddingVertical: scale(4),
-    backgroundColor: Colors.boneCard,
-  },
-  chipWarning: {
-    borderColor: 'rgba(163,75,75,0.3)',
-    backgroundColor: 'rgba(163,75,75,0.04)',
-  },
-  chipText: {
-    fontFamily: 'Manrope_500Medium',
-    fontSize: scale(11),
-    color: Colors.inkSecondary,
-  },
-  chipTextWarning: {
-    color: '#A34B4B',
-  },
-
-  // ── Evidence cards ─────────────────────────────────────────────────────────
-  evidenceNote: {
-    fontFamily: 'Manrope_400Regular',
-    fontSize: scale(11),
+  beliefExpandText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
     color: Colors.inkTertiary,
-    marginBottom: scale(14),
-    marginTop: scale(-8),
+  },
+
+  // ── Evidence Snapshot ────────────────────────────────────────────────────────
+  evidenceBarWrap: {
+    marginBottom: Spacing.md,
+  },
+  evidenceBar: {
+    flexDirection: 'row',
+    height: scale(6),
+    borderRadius: scale(3),
+    overflow: 'hidden',
+    backgroundColor: Colors.boneDark,
+  },
+  evidenceBarSeg: {},
+  evidenceBarLabels: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginTop: scale(6),
+  },
+  evidenceBarLabel: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.xs,
   },
   evidenceCard: {
     backgroundColor: Colors.boneCard,
-    borderRadius: scale(12),
+    borderRadius: Radius.md,
     padding: scale(14),
-    marginBottom: scale(10),
+    marginBottom: scale(8),
   },
   evidenceTopRow: {
     flexDirection: 'row',
@@ -828,31 +1325,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   studyType: {
-    fontFamily: 'Manrope_600SemiBold',
-    fontSize: scale(10),
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.xs,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     color: Colors.inkSecondary,
   },
   studyYear: {
-    fontFamily: 'Manrope_400Regular',
-    fontSize: scale(10),
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.xs,
     color: Colors.inkTertiary,
   },
   confidenceBadge: {
     paddingHorizontal: scale(7),
     paddingVertical: scale(2),
-    borderRadius: 100,
+    borderRadius: Radius.pill,
   },
   confidenceText: {
     fontFamily: 'Manrope_700Bold',
-    fontSize: scale(9),
+    fontSize: FontSizes.xs,
     letterSpacing: 0.6,
   },
   findingText: {
-    fontFamily: 'Manrope_400Regular',
-    fontSize: scale(13),
-    lineHeight: scale(20),
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    lineHeight: FontSizes.body * 1.6,
     color: Colors.ink,
     marginBottom: scale(8),
   },
@@ -862,8 +1359,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   populationText: {
-    fontFamily: 'Manrope_400Regular',
-    fontSize: scale(11),
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
     color: Colors.inkTertiary,
     flex: 1,
     marginRight: scale(8),
@@ -874,51 +1371,211 @@ const styles = StyleSheet.create({
     borderRadius: scale(4),
   },
 
-  // ── No evidence notice ─────────────────────────────────────────────────────
+  // ── No evidence ──────────────────────────────────────────────────────────────
   noEvidenceCard: {
     backgroundColor: Colors.boneCard,
-    borderRadius: scale(12),
+    borderRadius: Radius.md,
     padding: scale(18),
   },
   noEvidenceTitle: {
-    fontFamily: 'Manrope_600SemiBold',
-    fontSize: scale(13),
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.body,
     color: Colors.ink,
     marginBottom: scale(8),
   },
-  noEvidenceText: {
-    fontFamily: 'Manrope_400Regular',
-    fontSize: scale(12),
-    lineHeight: scale(19),
+  noEvidenceBody: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    lineHeight: FontSizes.body * 1.6,
     color: Colors.inkSecondary,
   },
 
-  // ── Found in products ──────────────────────────────────────────────────────
+  // ── Dose Card ────────────────────────────────────────────────────────────────
+  doseCard: {
+    flexDirection: 'row',
+    backgroundColor: Colors.boneCard,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    overflow: 'hidden',
+  },
+  doseCell: {
+    flex: 1,
+    padding: scale(14),
+    alignItems: 'center',
+  },
+  doseCellBorder: {
+    borderRightWidth: 1,
+    borderRightColor: Colors.borderHairline,
+  },
+  doseCellLabel: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    color: Colors.inkTertiary,
+    marginBottom: scale(6),
+    textAlign: 'center',
+  },
+  doseCellValue: {
+    fontFamily: Fonts.sansMedium,
+    fontSize: FontSizes.caption,
+    color: Colors.ink,
+    textAlign: 'center',
+  },
+  doseCellWarn: {
+    color: '#A34B4B',
+  },
+
+  // ── Safety ───────────────────────────────────────────────────────────────────
+  safetyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.boneCard,
+  },
+  safetyRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(8),
+    flex: 1,
+  },
+  safetyRowText: {
+    fontFamily: Fonts.sansMedium,
+    fontSize: FontSizes.body,
+    color: Colors.inkSecondary,
+  },
+  safetyRowTextWarn: {
+    color: '#A34B4B',
+  },
+  safetyChevron: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    color: Colors.inkTertiary,
+  },
+  safetyExpanded: {
+    marginTop: Spacing.md,
+    gap: Spacing.md,
+  },
+  safetyBlock: {},
+  safetyBlockLabel: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    color: Colors.inkSecondary,
+    marginBottom: scale(8),
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: scale(6),
+  },
+  chip: {
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.pill,
+    paddingHorizontal: scale(10),
+    paddingVertical: scale(4),
+    backgroundColor: Colors.boneCard,
+  },
+  chipWarn: {
+    borderColor: 'rgba(163,75,75,0.3)',
+    backgroundColor: 'rgba(163,75,75,0.04)',
+  },
+  chipText: {
+    fontFamily: Fonts.sansMedium,
+    fontSize: FontSizes.caption,
+    color: Colors.inkSecondary,
+  },
+  chipTextWarn: {
+    color: '#A34B4B',
+  },
+
+  // ── Bio-Domain Effects ───────────────────────────────────────────────────────
+  domainTable: {
+    // No card background — clean separator list
+  },
+  domainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: scale(13),
+  },
+  domainRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.borderHairline,
+  },
+  domainRowLabel: {
+    fontFamily: Fonts.sansMedium,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+    flex: 1,
+  },
+  domainRowLabelDim: {
+    color: Colors.inkTertiary,
+  },
+  domainRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(8),
+  },
+  domainDot: {
+    width: scale(7),
+    height: scale(7),
+    borderRadius: scale(4),
+  },
+  domainRowMeta: {
+    alignItems: 'flex-end',
+  },
+  domainRowDirection: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
+    color: Colors.ink,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  domainRowCount: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.xs,
+    color: Colors.inkTertiary,
+    marginTop: scale(2),
+  },
+  domainRowEmpty: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.inkTertiary,
+  },
+
+  // ── Found in ─────────────────────────────────────────────────────────────────
   foundInRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: scale(12),
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(28,28,28,0.08)',
+    borderBottomColor: Colors.borderHairline,
     gap: scale(8),
   },
-  foundInInfo: {
-    flex: 1,
-  },
+  foundInInfo: { flex: 1 },
   foundInName: {
-    fontFamily: 'Manrope_500Medium',
-    fontSize: scale(13),
+    fontFamily: Fonts.sansMedium,
+    fontSize: FontSizes.body,
     color: Colors.ink,
   },
   foundInBrand: {
-    fontFamily: 'Manrope_400Regular',
-    fontSize: scale(11),
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
     color: Colors.inkTertiary,
     marginTop: scale(2),
   },
   foundInAmount: {
-    fontFamily: 'Manrope_600SemiBold',
-    fontSize: scale(11),
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
     color: Colors.inkSecondary,
     marginRight: scale(4),
   },
@@ -989,26 +1646,13 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  // ── Loading / error ────────────────────────────────────────────────────────
+  // ── Loading / error (upstream aliases) ───────────────────────────────────
   centeredContainer: {
     flex: 1,
     backgroundColor: Colors.bone,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: scale(32),
-  },
-  loadingText: {
-    fontFamily: 'Manrope_400Regular',
-    fontSize: scale(13),
-    color: Colors.inkSecondary,
-    marginTop: scale(12),
-  },
-  errorText: {
-    fontFamily: 'Manrope_600SemiBold',
-    fontSize: scale(15),
-    color: Colors.ink,
-    marginBottom: scale(20),
-    textAlign: 'center',
   },
   backButtonFallback: {
     paddingHorizontal: scale(24),

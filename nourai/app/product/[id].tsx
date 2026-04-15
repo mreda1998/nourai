@@ -26,6 +26,7 @@ import {
 import { api, getProductWithFallback } from '@/services/api';
 import type { Product, ServerPersonalAnalysis } from '@/services/api';
 import { useAppState } from '@/context/app-state';
+import { AddToStackModal, type StackEntry } from '@/components/AddToStackModal';
 import { useAuth } from '@/context/auth-context';
 import {
   analyzeIngredients,
@@ -76,6 +77,8 @@ export default function ProductDetailScreen() {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [tappingNutrient, setTappingNutrient] = useState<string | null>(null);
 
   // ── Server-side personalization ────────────────────────────────────────────
   // Fires after the product loads. Server result is preferred; the client-side
@@ -147,6 +150,8 @@ export default function ProductDetailScreen() {
     if (!product || !onboardingProfile) return;
     const { healthConcerns, goals } = onboardingProfile;
     if (healthConcerns.length === 0 && goals.length === 0) return;
+    // USDA products have a string ID ("usda-…") and no personalization endpoint.
+    if (product.id.startsWith('usda-')) return;
 
     api.personalizeProduct(product.id, healthConcerns, goals)
       .then(setServerAnalysis)
@@ -154,6 +159,27 @@ export default function ProductDetailScreen() {
         // Server unreachable — client fallback already showing, nothing to do.
       });
   }, [product?.id, onboardingProfile]);
+
+  // ── Nutrient tap → navigate to ingredient deep dive ───────────────────────
+  const handleNutrientTap = async (nutrient: { name: string; ingredient_id?: string | null }) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (nutrient.ingredient_id) {
+      router.push(`/ingredient/${nutrient.ingredient_id}`);
+      return;
+    }
+    // No FK — search canonical ingredient DB by name
+    setTappingNutrient(nutrient.name);
+    try {
+      const result = await api.searchIngredients(nutrient.name, 1);
+      if (result.ingredients.length > 0) {
+        router.push(`/ingredient/${result.ingredients[0].id}`);
+      }
+    } catch {
+      // No match found — no navigation
+    } finally {
+      setTappingNutrient(null);
+    }
+  };
 
   // ── Stack toggle ───────────────────────────────────────────────────────────
 
@@ -163,20 +189,30 @@ export default function ProductDetailScreen() {
     if (isInStack) {
       removeFromStack(product.id);
     } else {
-      const validGrades = ['A', 'B', 'C', 'D'] as const;
-      const grade = validGrades.includes(product.grade as any)
-        ? (product.grade as 'A' | 'B' | 'C' | 'D')
-        : 'C';
-      addToStack({
-        id: product.id,
-        name: product.name,
-        brand: product.brand || 'Unknown',
-        category: product.category,
-        grade,
-        ingredients: product.ingredients.map((i) => i.name),
-        scannedAt: new Date(),
-      });
+      // Open the add-to-stack modal so the user can choose time + protocol
+      setAddModalVisible(true);
     }
+  };
+
+  const handleAddConfirm = (entry: StackEntry) => {
+    if (!product) return;
+    const validGrades = ['A', 'B', 'C', 'D'] as const;
+    const grade = validGrades.includes(product.grade as any)
+      ? (product.grade as 'A' | 'B' | 'C' | 'D')
+      : 'C';
+    addToStack({
+      id: product.id,
+      name: product.name,
+      brand: product.brand || 'Unknown',
+      category: product.category,
+      grade,
+      ingredients: product.ingredients.map((i) => i.name),
+      scannedAt: new Date(),
+      timeOfDay: entry.timeOfDay,
+      protocol: entry.protocol,
+      quantity: entry.quantity,
+    });
+    setAddModalVisible(false);
   };
 
   // ── Loading / error states ─────────────────────────────────────────────────
@@ -203,14 +239,15 @@ export default function ProductDetailScreen() {
 
   const gradeStyle = getGradeStyle(product.grade);
 
-  // 6 fixed bio-domains — always shown; merged with any backend values
+  // 6 fixed bio-domains — always shown; merged with backend evidence-based values.
+  // Names must match what the backend returns in BioDomain.name.
   const BIO_DOMAIN_LABELS = [
     'Gut Health',
     'Dermal',
     'Metabolic',
     'Exposure Load',
-    'Hormonal Balance',
     'Sleep Recovery',
+    'Cognition',
   ];
   const bioDomains = BIO_DOMAIN_LABELS.map((label) => {
     const found = product.bio_domains.find((d) => d.name === label);
@@ -219,6 +256,10 @@ export default function ProductDetailScreen() {
 
   const hasPersonalData =
     personalAnalysis && (personalAnalysis.hasConcernFlags || personalAnalysis.hasGoalSupports);
+
+  // Split ingredients into nutrition facts vs. ingredient deep-dive rows
+  const nutrients = product.ingredients.filter((i) => i.is_nutrient);
+  const regularIngredients = product.ingredients.filter((i) => !i.is_nutrient);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -374,13 +415,45 @@ export default function ProductDetailScreen() {
           </Animated.View>
         )}
 
+        {/* Nutrition Facts — tappable rows; navigate to ingredient deep dive when matched */}
+        {nutrients.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionDivider} />
+            <Text style={styles.sectionLabel}>Nutrition Facts</Text>
+            <View style={styles.nutrientCard}>
+              {nutrients.map((n, i) => {
+                const isLoading = tappingNutrient === n.name;
+                return (
+                  <Pressable
+                    key={n.name}
+                    style={[styles.nutrientRow, i < nutrients.length - 1 && styles.nutrientRowBorder]}
+                    onPress={() => handleNutrientTap(n)}
+                  >
+                    <Text style={styles.nutrientName}>{n.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+                      <Text style={styles.nutrientValue}>{n.concentration}</Text>
+                      {isLoading ? (
+                        <Text style={styles.nutrientChevron}>…</Text>
+                      ) : (
+                        <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={Colors.inkTertiary} strokeWidth={2.5}>
+                          <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+                        </Svg>
+                      )}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
         {/* Ingredient Deep-Dive */}
-        {product.ingredients.length > 0 && (
+        {regularIngredients.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionDivider} />
             <Text style={styles.sectionLabel}>Ingredient Deep-Dive</Text>
 
-            {product.ingredients.map((ingredient, index) => {
+            {regularIngredients.map((ingredient, index) => {
               const personal = ingredientPersonalization?.get(ingredient.name);
               const canDive = !!ingredient.ingredient_id;
               const cardContent = (
@@ -487,6 +560,16 @@ export default function ProductDetailScreen() {
 
         <View style={{ height: verticalScale(40) }} />
       </ScrollView>
+
+      {product && (
+        <AddToStackModal
+          visible={addModalVisible}
+          productName={product.name}
+          productCategory={product.category}
+          onConfirm={handleAddConfirm}
+          onCancel={() => setAddModalVisible(false)}
+        />
+      )}
     </View>
   );
 }
@@ -846,6 +929,44 @@ const styles = StyleSheet.create({
     color: Colors.accentMoss,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+
+  // ── Nutrition Facts ──────────────────────────────────────────────────────────
+  nutrientCard: {
+    backgroundColor: Colors.boneCard,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+  },
+  nutrientRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: scale(10),
+  },
+  nutrientRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderHairline,
+  },
+  nutrientName: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+  },
+  nutrientValue: {
+    fontFamily: Fonts.mono,
+    fontSize: FontSizes.body,
+    color: Colors.inkSecondary,
+    flexShrink: 1,
+    textAlign: 'right',
+    marginLeft: Spacing.sm,
+  },
+  nutrientChevron: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    color: Colors.inkTertiary,
   },
 
   // ── Bio-domain bars ─────────────────────────────────────────────────────────

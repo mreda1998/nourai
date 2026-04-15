@@ -596,7 +596,7 @@ async def seed() -> None:
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
     async with session_factory() as session:
-        print("\nNourAI Golden Set Seeder")
+        print("\nElory Golden Set Seeder")
         print("=" * 50)
 
         # 1. Seed ingredients

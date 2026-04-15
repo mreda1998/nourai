@@ -34,14 +34,17 @@ class Settings(BaseSettings):
     revenuecat_webhook_secret: str = ""
 
     # External APIs
-    openfoodfacts_user_agent: str = "NourAI/1.0"
+    openfoodfacts_user_agent: str = "Elory/1.0"
+    usda_api_key: str = ""  # https://fdc.nal.usda.gov/api-guide.html (free)
+    rapidapi_key: str = ""  # https://rapidapi.com — used for Sephora product API
 
     # Research agent
     anthropic_api_key: str = ""
     ncbi_api_key: str = ""  # Optional — raises PubMed rate limit from 3 to 10 req/s
+    openai_api_key: str = ""  # For mechanism illustration generation (gpt-image-1.5)
 
     # CORS — in production set to your actual app origins, e.g.
-    # ALLOWED_ORIGINS=["https://app.nourai.com","https://nourai.com"]
+    # ALLOWED_ORIGINS=["https://app.elory.com","https://elory.com"]
     allowed_origins: list[str] = ["*"]
 
     # App

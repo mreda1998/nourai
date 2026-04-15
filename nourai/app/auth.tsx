@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import * as AppleAuthentication from 'expo-apple-authentication';
 
 import {
   Colors,
@@ -30,7 +31,7 @@ type AuthMode = 'signin' | 'signup';
 export default function AuthScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, signInWithApple } = useAuth();
 
   const [mode, setMode] = useState<AuthMode>('signin');
   const [name, setName] = useState('');
@@ -76,7 +77,7 @@ export default function AuthScreen() {
     return (
       <View style={[styles.screen, styles.confirmScreen]}>
         <Animated.View entering={FadeIn.duration(400)} style={styles.confirmContent}>
-          <Text style={styles.logo}>nourai</Text>
+          <Text style={styles.logo}>elory</Text>
           <Text style={styles.confirmTitle}>Check your email</Text>
           <Text style={styles.confirmBody}>
             We sent a confirmation link to{'\n'}
@@ -120,7 +121,7 @@ export default function AuthScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.logo}>nourai</Text>
+          <Text style={styles.logo}>elory</Text>
           <Text style={styles.tagline}>Clinical intelligence for your wellness</Text>
         </View>
 
@@ -212,6 +213,30 @@ export default function AuthScreen() {
             <Text style={styles.dividerText}>or</Text>
             <View style={styles.dividerLine} />
           </View>
+
+          {/* Apple Sign-In — iOS only */}
+          {Platform.OS === 'ios' && (
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+              cornerRadius={100}
+              style={styles.appleButton}
+              onPress={async () => {
+                setError('');
+                setIsLoading(true);
+                try {
+                  await signInWithApple();
+                  router.replace('/(tabs)');
+                } catch (err: any) {
+                  if (err?.code !== 'ERR_REQUEST_CANCELED') {
+                    setError(err?.message ?? 'Apple Sign-In failed. Please try again.');
+                  }
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+            />
+          )}
 
           {/* Skip Button */}
           <Pressable style={styles.skipButton} onPress={handleSkip}>
@@ -339,6 +364,11 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.body,
     color: Colors.inkTertiary,
     paddingHorizontal: Spacing.md,
+  },
+  appleButton: {
+    width: '100%',
+    height: verticalScale(52),
+    marginBottom: Spacing.md,
   },
   skipButton: {
     borderWidth: 1,

@@ -1,7 +1,7 @@
 """Personalization response schemas.
 
 Shape mirrors the TypeScript PersonalAnalysis and IngredientPersonalization
-types in nourai/utils/personalization.ts so the mobile client can swap
+types in elory/utils/personalization.ts so the mobile client can swap
 server results in without any data transformation.
 """
 from pydantic import BaseModel, ConfigDict, Field

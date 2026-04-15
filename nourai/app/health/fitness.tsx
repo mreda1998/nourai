@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,6 +9,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useAuth } from '@/context/auth-context';
 
 import {
   Colors,
@@ -44,12 +47,78 @@ const SUPPLEMENT_FOCUS = [
   { id: 'hydration', name: 'Electrolytes' },
 ];
 
+// ─── InsightCard ──────────────────────────────────────────────────────────────
+
+function InsightCard({ title, fact }: { title: string; fact: string }) {
+  return (
+    <View style={insightStyles.card}>
+      <View style={insightStyles.header}>
+        <Text style={insightStyles.icon}>🔬</Text>
+        <Text style={insightStyles.label}>HIDDEN INSIGHT</Text>
+      </View>
+      <Text style={insightStyles.title}>{title}</Text>
+      <Text style={insightStyles.fact}>{fact}</Text>
+    </View>
+  );
+}
+
+const insightStyles = StyleSheet.create({
+  card: {
+    backgroundColor: 'rgba(194, 147, 85, 0.12)',
+    borderLeftWidth: 2,
+    borderLeftColor: '#C29355',
+    borderRadius: Radius.md,
+    padding: scale(14),
+    marginBottom: Spacing.xl,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(6),
+    marginBottom: scale(6),
+  },
+  icon: {
+    fontSize: scale(13),
+  },
+  label: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 1.3,
+    color: '#C29355',
+  },
+  title: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
+    color: Colors.ink,
+    marginBottom: scale(4),
+  },
+  fact: {
+    fontFamily: Fonts.serifItalic,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+    lineHeight: FontSizes.body * 1.5,
+  },
+});
+
 export default function FitnessScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [activityLevel, setActivityLevel] = useState('moderate');
+  const { onboardingProfile, updateOnboardingProfile } = useAuth();
+
+  const [activityLevel, setActivityLevel] = useState(
+    onboardingProfile?.activityLevel || 'moderate'
+  );
   const [selectedGoals, setSelectedGoals] = useState<string[]>(['recovery', 'strength']);
   const [supplementFocus, setSupplementFocus] = useState<string[]>(['protein']);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Load saved activityLevel from profile on mount
+  useEffect(() => {
+    if (onboardingProfile?.activityLevel) {
+      setActivityLevel(onboardingProfile.activityLevel);
+    }
+  }, []);
 
   const toggleGoal = (id: string) => {
     setSelectedGoals((prev) =>
@@ -79,6 +148,11 @@ export default function FitnessScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
+        <InsightCard
+          title="What's in your pre-workout"
+          fact="Sodium benzoate reacts with ascorbic acid (vitamin C) — common co-ingredients in pre-workouts and sports drinks — to form benzene, a Group 1 IARC carcinogen. The reaction rate is accelerated by heat and light, making stored bottles a higher risk than freshly opened ones."
+        />
+
         {/* Activity Level */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Activity Level</Text>
@@ -180,8 +254,21 @@ export default function FitnessScreen() {
 
       {/* Save Button */}
       <View style={[styles.saveBar, { paddingBottom: insets.bottom + Spacing.lg }]}>
-        <Pressable style={styles.saveButton} onPress={() => router.back()}>
-          <Text style={styles.saveButtonText}>Save Changes</Text>
+        <Pressable
+          style={[styles.saveButton, isSaving && { opacity: 0.6 }]}
+          onPress={async () => {
+            if (!onboardingProfile) { router.back(); return; }
+            setIsSaving(true);
+            await updateOnboardingProfile({ ...onboardingProfile, activityLevel: activityLevel as any });
+            setIsSaving(false);
+            router.back();
+          }}
+          disabled={isSaving}
+        >
+          {isSaving
+            ? <ActivityIndicator color={Colors.bone} />
+            : <Text style={styles.saveButtonText}>Save Changes</Text>
+          }
         </Pressable>
       </View>
     </View>

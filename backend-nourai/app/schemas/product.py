@@ -6,6 +6,11 @@ from pydantic import BaseModel, ConfigDict, computed_field
 from app.models.product import IngredientStatus, ProductCategory
 from app.schemas.claim import ClaimResponse  # kept for __init__ re-export
 
+# ─── Bio-domain scoring ───────────────────────────────────────────────────────
+# Delegated to app/services/biodomain_scorer.py.
+# That module implements dose-aware, LLM-scored per-ingredient per-domain
+# impact aggregation — see biodomain_scorer.py for the full algorithm.
+
 
 # ─── Kept for backwards-compat (used in repositories / __init__) ──────────────
 
@@ -32,6 +37,131 @@ class MobileIngredient(BaseModel):
     tag_type: str | None = None       # "warning" when tag is avoid/watch
     description: str | None = None
     ingredient_id: str | None = None  # FK → ingredients.id; present when matched to canonical
+    is_nutrient: bool = False         # True for rows sourced from OFF nutriments panel
+
+
+# ─── Nutrition facts parsing ──────────────────────────────────────────────────
+# Maps Open Food Facts nutriment key → (display_name, unit, g_to_unit_factor, daily_value)
+# g_to_unit_factor: multiply the raw grams value from OFF by this to reach the display unit.
+# Special case: "energy-kcal" is already in kcal (not grams), so factor = 1.
+_NUTRIENT_CONFIG: dict[str, tuple[str, str, float, float | None]] = {
+    "energy-kcal":      ("Calories",            "kcal", 1.0,         None),
+    "proteins":         ("Protein",             "g",    1.0,         50.0),
+    "fat":              ("Total Fat",           "g",    1.0,         78.0),
+    "saturated-fat":    ("Saturated Fat",       "g",    1.0,         20.0),
+    "carbohydrates":    ("Total Carbohydrates", "g",    1.0,         275.0),
+    "fiber":            ("Dietary Fiber",       "g",    1.0,         28.0),
+    "sugars":           ("Sugars",              "g",    1.0,         50.0),
+    "cholesterol":      ("Cholesterol",         "mg",   1_000.0,     300.0),
+    "sodium":           ("Sodium",              "mg",   1_000.0,     2_300.0),
+    "potassium":        ("Potassium",           "mg",   1_000.0,     4_700.0),
+    "calcium":          ("Calcium",             "mg",   1_000.0,     1_300.0),
+    "iron":             ("Iron",                "mg",   1_000.0,     18.0),
+    "magnesium":        ("Magnesium",           "mg",   1_000.0,     420.0),
+    "phosphorus":       ("Phosphorus",          "mg",   1_000.0,     1_250.0),
+    "zinc":             ("Zinc",                "mg",   1_000.0,     11.0),
+    "selenium":         ("Selenium",            "µg",   1_000_000.0, 55.0),
+    "vitamin-a":        ("Vitamin A",           "µg",   1_000_000.0, 900.0),
+    "vitamin-c":        ("Vitamin C",           "mg",   1_000.0,     90.0),
+    "vitamin-d":        ("Vitamin D",           "µg",   1_000_000.0, 20.0),
+    "vitamin-e":        ("Vitamin E",           "mg",   1_000.0,     15.0),
+    "vitamin-k":        ("Vitamin K",           "µg",   1_000_000.0, 120.0),
+    "vitamin-b12":      ("Vitamin B12",         "µg",   1_000_000.0, 2.4),
+    "vitamin-b6":       ("Vitamin B6",          "mg",   1_000.0,     1.7),
+    "niacin":           ("Niacin",              "mg",   1_000.0,     16.0),
+    "pantothenic-acid": ("Pantothenic Acid",    "mg",   1_000.0,     5.0),
+    "thiamin":          ("Thiamine",            "mg",   1_000.0,     1.2),
+    "riboflavin":       ("Riboflavin",          "mg",   1_000.0,     1.3),
+    "folates":          ("Folate",              "µg",   1_000_000.0, 400.0),
+    "omega-3-fat":      ("Omega-3",             "g",    1.0,         None),
+}
+
+# Display order — macros first, then micros
+_NUTRIENT_ORDER = [
+    "energy-kcal", "proteins", "fat", "saturated-fat", "carbohydrates",
+    "fiber", "sugars", "cholesterol", "sodium",
+    "vitamin-a", "vitamin-c", "vitamin-d", "vitamin-e", "vitamin-k",
+    "vitamin-b12", "vitamin-b6", "niacin", "riboflavin", "thiamin",
+    "folates", "pantothenic-acid",
+    "calcium", "iron", "magnesium", "phosphorus", "potassium",
+    "zinc", "selenium", "omega-3-fat",
+]
+
+
+def _parse_nutriments(
+    extra_data: dict,
+    ingredient_lookup: dict[str, str] | None = None,
+) -> list[MobileIngredient]:
+    """
+    Convert Open Food Facts `nutriments` dict → MobileIngredient list (is_nutrient=True).
+
+    Prefers per-serving values when available (key ending in _serving),
+    falls back to per-100g. Includes % Daily Value for nutrients with a known DV.
+    Skips zero or missing values.
+
+    ingredient_lookup: optional {lowercased_name: str(uuid)} — when provided,
+    nutrient display names are matched against it so ingredient_id FKs are populated
+    and the mobile client can navigate from the nutrition panel to ingredient deep dives.
+    """
+    nutriments: dict = extra_data.get("nutriments") or {}
+    if not nutriments:
+        return []
+
+    results: list[MobileIngredient] = []
+
+    for key in _NUTRIENT_ORDER:
+        config = _NUTRIENT_CONFIG.get(key)
+        if not config:
+            continue
+        display_name, unit, factor, dv = config
+
+        # Prefer per-serving, fall back to per-100g
+        raw = nutriments.get(f"{key}_serving") if f"{key}_serving" in nutriments else nutriments.get(f"{key}_100g")
+        if raw is None:
+            continue
+        try:
+            raw_val = float(raw)
+        except (ValueError, TypeError):
+            continue
+        if raw_val <= 0:
+            continue
+
+        # Convert to display unit
+        display_val = raw_val if key == "energy-kcal" else raw_val * factor
+
+        # Format the number
+        if unit in ("g", "kcal"):
+            formatted_num = f"{display_val:.0f}" if display_val >= 10 else f"{display_val:.1f}"
+        elif unit == "mg":
+            if display_val >= 10:
+                formatted_num = f"{display_val:.0f}"
+            elif display_val >= 1:
+                formatted_num = f"{display_val:.1f}"
+            else:
+                formatted_num = f"{display_val:.2f}"
+        else:  # µg
+            formatted_num = f"{display_val:.1f}"
+
+        concentration = f"{formatted_num} {unit}"
+
+        # Append % DV when known and > 0%
+        if dv and display_val > 0:
+            pct_dv = round((display_val / dv) * 100)
+            if pct_dv > 0:
+                concentration += f" ({pct_dv}% DV)"
+
+        ingredient_id: str | None = None
+        if ingredient_lookup:
+            ingredient_id = ingredient_lookup.get(display_name.lower().strip())
+
+        results.append(MobileIngredient(
+            name=display_name,
+            concentration=concentration,
+            is_nutrient=True,
+            ingredient_id=ingredient_id,
+        ))
+
+    return results
 
 
 class BioDomain(BaseModel):
@@ -120,7 +250,11 @@ class ProductWithDetails(BaseModel):
         return "D"
 
     @classmethod
-    def from_orm_with_details(cls, product) -> "ProductWithDetails":
+    def from_orm_with_details(
+        cls,
+        product,
+        ingredient_lookup: dict[str, str] | None = None,
+    ) -> "ProductWithDetails":
         """Convert SQLAlchemy Product model → mobile-compatible response."""
 
         # ── Ingredients ──────────────────────────────────────────────────────
@@ -175,6 +309,11 @@ class ProductWithDetails(BaseModel):
         # Prefer computed score; fall back to manually seeded score if no domains found
         effective_score = computed_health_score if domain_scores else product.health_score
 
+        # Nutrition facts — parsed from Open Food Facts nutriments stored in extra_data.
+        # ingredient_lookup (when provided) maps nutrient display names → ingredient UUIDs
+        # so the mobile client can tap a nutrient row to reach the ingredient deep dive.
+        if product.category == ProductCategory.FOOD and product.extra_data:
+            ingredients.extend(_parse_nutriments(product.extra_data, ingredient_lookup))
         return cls(
             id=product.id,
             barcode=product.barcode,

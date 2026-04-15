@@ -3,15 +3,19 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
     CurrentUser,
+    DBSession,
     OptionalUser,
     PaginationParams,
     get_pagination,
     get_personalization_service,
     get_product_service,
 )
+from app.models.ingredient import Ingredient
 from app.models.product import ProductCategory
 from app.schemas.personalization import PersonalAnalysisResponse
 from app.schemas.product import ProductResponse, ProductSearchResponse, ProductWithDetails
@@ -19,6 +23,17 @@ from app.services.personalization import PersonalizationService
 from app.services.product import ProductService
 
 router = APIRouter()
+
+
+async def _build_ingredient_lookup(db: AsyncSession) -> dict[str, str]:
+    """Return {lowercased name/synonym: str(uuid)} for all canonical ingredients."""
+    result = await db.execute(select(Ingredient))
+    lookup: dict[str, str] = {}
+    for ing in result.scalars().all():
+        lookup[ing.canonical_name.lower().strip()] = str(ing.id)
+        for syn in (ing.synonyms or []):
+            lookup[syn.lower().strip()] = str(ing.id)
+    return lookup
 
 
 @router.get("", response_model=ProductSearchResponse)
@@ -82,6 +97,7 @@ async def search_products(
 @router.get("/{product_id}", response_model=ProductWithDetails)
 async def get_product(
     product_id: UUID,
+    db: DBSession,
     service: Annotated[ProductService, Depends(get_product_service)] = None,
     current_user: OptionalUser = None,
 ):
@@ -91,7 +107,8 @@ async def get_product(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    return ProductWithDetails.from_orm_with_details(product)
+    lookup = await _build_ingredient_lookup(db)
+    return ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)
 
 
 @router.get("/{product_id}/personalize", response_model=PersonalAnalysisResponse)
@@ -101,32 +118,32 @@ async def personalize_product(
     goals: str = Query(default="", description="Comma-separated goal IDs, e.g. clear_skin,more_energy"),
     service: Annotated[ProductService, Depends(get_product_service)] = None,
     personalization_service: Annotated[PersonalizationService, Depends(get_personalization_service)] = None,
+    current_user: OptionalUser = None,
 ):
     """
     Return a personalization overlay for a product given the user's
     concern and goal tag IDs.
 
-    The response mirrors the TypeScript PersonalAnalysis shape so the
-    mobile client can drop it in without transformation.
+    Priority:
+      1. Explicit query params (?concerns=…&goals=…) — always honoured if provided.
+      2. Authenticated user's saved profile (health_concerns + health_goals from DB).
+      3. Empty lists → service returns source="none".
 
-    Query params:
-      concerns — comma-separated list of concern IDs
-                 (fertility | thyroid | hormonal_condition | medications | infant_proximity)
-      goals    — comma-separated list of goal IDs
-                 (clear_skin | anti_aging | brighter_skin | hair_growth |
-                  prevent_hair_loss | build_muscle | fat_loss | more_energy |
-                  gut_health | less_inflammation | mental_focus)
-
-    The endpoint is unauthenticated so it works before full Supabase auth
-    is wired up on the client. When real auth lands, swap to fetching
-    concern/goal IDs from the user's server-side profile.
+    The endpoint supports both authenticated and unauthenticated access so the
+    mobile client can call it at product-open time without any extra handshake.
     """
     product = await service.get_product(product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
+    # 1. Parse explicit query params
     concern_list = [c.strip() for c in concerns.split(",") if c.strip()]
     goal_list = [g.strip() for g in goals.split(",") if g.strip()]
+
+    # 2. If no explicit params but user is authenticated, fall back to their saved profile
+    if not concern_list and not goal_list and current_user is not None:
+        concern_list = list(current_user.health_concerns or [])
+        goal_list = list(current_user.health_goals or [])
 
     ingredient_names = [pi.name for pi in (product.product_ingredients or [])]
 
@@ -141,6 +158,7 @@ async def personalize_product(
 @router.get("/barcode/{barcode}", response_model=ProductWithDetails)
 async def get_product_by_barcode(
     barcode: str,
+    db: DBSession,
     service: Annotated[ProductService, Depends(get_product_service)] = None,
     current_user: CurrentUser = None,
 ):
@@ -153,4 +171,5 @@ async def get_product_by_barcode(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    return ProductWithDetails.from_orm_with_details(product)
+    lookup = await _build_ingredient_lookup(db)
+    return ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)

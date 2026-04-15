@@ -157,7 +157,7 @@ function groupHistoryByDate(items: ScanHistoryItem[]): HistoryGroup[] {
       productId: item.product_id,
       name: item.product_name,
       brand: item.product_brand ?? '',
-      category: 'supplement',
+      category: item.product_category ?? 'supplement',
       grade: item.product_grade,
     });
   });
@@ -201,6 +201,7 @@ export default function HistoryScreen() {
           product_name: p.name,
           product_brand: p.brand,
           product_grade: p.grade,
+          product_category: p.category,
           scanned_at: p.scannedAt.toISOString(),
         }));
         setAllItems(fakeItems);

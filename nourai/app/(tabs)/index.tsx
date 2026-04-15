@@ -130,53 +130,31 @@ function DailyCompositeCard({ score, domainBars }: { score: number; domainBars: 
   );
 }
 
-/** Newsletter card — dark ink background */
-function NewsletterCard() {
-  const router = useRouter();
-  return (
-    <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.newsletterCard}>
-      {/* Ambient glow orb */}
-      <View style={styles.newsletterOrb} />
-
-      {/* Label row */}
-      <View style={styles.newsletterLabelRow}>
-        <View style={styles.newsletterDot} />
-        <Text style={styles.newsletterIssue}>Science Brief · No. 1</Text>
-      </View>
-
-      {/* Headline */}
-      <Text style={styles.newsletterHeadline}>
-        "Creatine monohydrate: the most evidence-backed supplement you're probably under-dosing."
-      </Text>
-
-      {/* Footer */}
-      <View style={styles.newsletterFooter}>
-        <View style={styles.newsletterAuthor}>
-          <View style={styles.newsletterAvatar}>
-            <Text style={styles.newsletterAvatarText}>MW</Text>
-          </View>
-          <Text style={styles.newsletterAuthorName}>Dr. Marcus Webb</Text>
-        </View>
-
-        <PressableScale
-          style={styles.newsletterArrow}
-          onPress={() => router.push('/newsletter/creatine')}
-        >
-          <Text style={styles.newsletterArrowText}>→</Text>
-        </PressableScale>
-      </View>
-    </Animated.View>
-  );
-}
 
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { hasScannedBefore, stack } = useAppState();
+  const { hasScannedBefore, stack, meals } = useAppState();
 
-  const compositeScore = stack.length === 0
+  // Weight each item by its onset ramp so newly-added supplements don't
+  // inflate the score before they've had time to accumulate in the body.
+  const ONSET_DAYS: Record<string, number> = { food: 1, supplement: 14, cosmetic: 28, otc: 7 };
+  const allItems = [...stack, ...meals];
+  const compositeScore = allItems.length === 0
     ? 0
-    : Math.round(stack.reduce((sum, p) => sum + gradeToScore(p.grade), 0) / stack.length);
+    : Math.round(
+        allItems.reduce((sum, p) => {
+          const onset = ONSET_DAYS[p.category] ?? 7;
+          const days = (Date.now() - new Date(p.scannedAt).getTime()) / 86_400_000;
+          const w = Math.min(days / onset, 1);
+          return sum + gradeToScore(p.grade) * w;
+        }, 0) /
+        allItems.reduce((sum, p) => {
+          const onset = ONSET_DAYS[p.category] ?? 7;
+          const days = (Date.now() - new Date(p.scannedAt).getTime()) / 86_400_000;
+          return sum + Math.min(days / onset, 1);
+        }, 0)
+      );
 
   const domainBars = [
     { label: 'Gut Health', score: Math.min(100, Math.round(compositeScore * 1.05)) },
@@ -229,10 +207,8 @@ export default function HomeScreen() {
             </View>
           </Animated.View>
 
-          {/* Composite + Newsletter teaser for first-time users too */}
           <View style={styles.pageContent}>
             <DailyCompositeCard score={compositeScore} domainBars={domainBars} />
-            <NewsletterCard />
           </View>
         </ScrollView>
       </View>
@@ -269,9 +245,6 @@ export default function HomeScreen() {
         <View style={styles.pageContent}>
           {/* Daily Composite Score */}
           <DailyCompositeCard score={compositeScore} domainBars={domainBars} />
-
-          {/* Newsletter link */}
-          <NewsletterCard />
 
           {/* Daily Stack */}
           <Animated.View entering={FadeInDown.duration(400).delay(300)}>
@@ -433,96 +406,6 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: Colors.ink,
     borderRadius: 3,
-  },
-
-  // ── Newsletter Card ─────────────────────────────────────────────
-  newsletterCard: {
-    backgroundColor: Colors.ink,
-    borderRadius: 16,
-    padding: Spacing.md,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  newsletterOrb: {
-    position: 'absolute',
-    top: -scale(20),
-    right: -scale(20),
-    width: scale(80),
-    height: scale(80),
-    borderRadius: scale(40),
-    backgroundColor: Colors.bone,
-    opacity: 0.04,
-  },
-  newsletterLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: Spacing.md,
-    opacity: 0.6,
-  },
-  newsletterDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.bone,
-  },
-  newsletterIssue: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 1.4,
-    color: Colors.bone,
-  },
-  newsletterHeadline: {
-    fontFamily: Fonts.serifItalic,
-    fontSize: scale(20),
-    lineHeight: scale(20) * 1.35,
-    color: Colors.bone,
-    marginBottom: Spacing.md,
-  },
-  newsletterFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  newsletterAuthor: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  newsletterAvatar: {
-    width: scale(24),
-    height: scale(24),
-    borderRadius: scale(12),
-    backgroundColor: 'rgba(233, 230, 223, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  newsletterAvatarText: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.xs,
-    color: Colors.bone,
-  },
-  newsletterAuthorName: {
-    fontFamily: Fonts.sansMedium,
-    fontSize: FontSizes.caption,
-    color: Colors.bone,
-    opacity: 0.8,
-  },
-  newsletterArrow: {
-    width: scale(32),
-    height: scale(32),
-    borderRadius: scale(16),
-    borderWidth: 1,
-    borderColor: 'rgba(233, 230, 223, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  newsletterArrowText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.title,
-    color: Colors.bone,
-    lineHeight: FontSizes.title,
   },
 
   // ── Section header ──────────────────────────────────────────────

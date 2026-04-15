@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Nourai",
-    "slug": "nourai",
+    "name": "Elory",
+    "slug": "elory",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "nourai",
+    "scheme": "elory",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
@@ -17,9 +17,9 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.nourai.app",
+      "bundleIdentifier": "com.elory.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "Nourai uses your camera to scan product labels and ingredients."
+        "NSCameraUsageDescription": "Elory uses your camera to scan product labels and ingredients."
       }
     },
     "android": {
@@ -27,7 +27,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#E9E6DF"
       },
-      "package": "com.nourai.app",
+      "package": "com.elory.app",
       "permissions": [
         "android.permission.CAMERA"
       ]
@@ -42,11 +42,12 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Nourai to access your camera to scan product labels."
+          "cameraPermission": "Allow Elory to access your camera to scan product labels."
         }
       ],
       "expo-font",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true

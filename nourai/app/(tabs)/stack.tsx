@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
   Dimensions,
@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
-import { RadarChart } from 'react-native-gifted-charts';
+import Svg, { Circle, G, Line, Polygon, Text as SvgText } from 'react-native-svg';
+import { Swipeable } from 'react-native-gesture-handler';
 
 import {
   Colors,
@@ -22,66 +23,25 @@ import {
   Spacing,
   verticalScale,
 } from '@/constants/theme';
+import {
+  DOMAINS,
+  DOMAIN_SHORT_LABELS,
+  DOMAIN_RELEVANCE,
+  DOMAIN_SLUGS,
+  GOAL_LABELS,
+  computeRadarScores,
+  domainScoreLabel,
+  type Domain,
+} from '@/constants/domains';
 import { useAppState, type Product } from '@/context/app-state';
 import { useAuth } from '@/context/auth-context';
 import ProductListItem from '@/components/ProductListItem';
+import { StackAssistant } from '@/components/StackAssistant';
+import { MealInputSheet } from '@/components/MealInputSheet';
+import type { RecognizedFood } from '@/services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const RADAR_SIZE = SCREEN_WIDTH - Layout.screenPaddingHorizontal * 2 - Spacing.md * 2;
-
-// ─── Domain configuration ────────────────────────────────────────────────────
-
-const DOMAINS = [
-  'Gut Health',
-  'Skin',
-  'Metabolism',
-  'Sleep & Recovery',
-  'Cognition',
-  'Exposure Load',
-] as const;
-
-type Domain = typeof DOMAINS[number];
-
-const DOMAIN_SHORT_LABELS = ['Gut', 'Skin', 'Metab.', 'Sleep', 'Mind', 'Exposure'];
-
-// How relevant each product category is to each domain (0–1)
-const DOMAIN_RELEVANCE: Record<Domain, Record<string, number>> = {
-  'Gut Health':       { food: 1.0, supplement: 0.6, cosmetic: 0.0, otc: 0.3 },
-  'Skin':             { food: 0.3, supplement: 0.5, cosmetic: 1.0, otc: 0.2 },
-  'Metabolism':       { food: 0.9, supplement: 0.6, cosmetic: 0.0, otc: 0.3 },
-  'Sleep & Recovery': { food: 0.2, supplement: 0.8, cosmetic: 0.0, otc: 0.7 },
-  'Cognition':        { food: 0.3, supplement: 0.7, cosmetic: 0.0, otc: 0.2 },
-  'Exposure Load':    { food: 0.8, supplement: 0.5, cosmetic: 0.9, otc: 0.7 },
-};
-
-// Returns 0-100 score per domain.
-// For Exposure Load: high score = clean (low exposure).
-function computeRadarScores(stack: Product[]): number[] {
-  return DOMAINS.map((domain) => {
-    const isExposure = domain === 'Exposure Load';
-    let beneficial = 0, moderate = 0, mixed = 0, caution = 0;
-
-    stack.forEach((product) => {
-      const relevance = DOMAIN_RELEVANCE[domain]?.[product.category] ?? 0;
-      if (relevance === 0) return;
-
-      if (isExposure) {
-        if (product.grade === 'D' && relevance >= 0.5) caution++;
-        else if (product.grade === 'C' && relevance >= 0.5) mixed++;
-      } else {
-        if (product.grade === 'A') relevance >= 0.8 ? beneficial++ : moderate++;
-        else if (product.grade === 'B') relevance >= 0.8 ? moderate++ : mixed++;
-        else if (product.grade === 'C') mixed++;
-        else if (product.grade === 'D') caution++;
-      }
-    });
-
-    if (isExposure) {
-      return Math.max(10, 90 - caution * 35 - mixed * 15);
-    }
-    return Math.max(5, Math.min(95, 50 + beneficial * 20 + moderate * 10 - mixed * 8 - caution * 20));
-  });
-}
 
 function scoreColor(score: number) {
   if (score >= 70) return Colors.accentHill;
@@ -103,20 +63,9 @@ const GOAL_TO_DOMAIN: Record<string, Domain> = {
   gut_health:        'Gut Health',
   less_inflammation: 'Gut Health',
   mental_focus:      'Cognition',
-};
-
-const GOAL_LABELS: Record<string, string> = {
-  clear_skin:        'Clear Skin',
-  anti_aging:        'Anti-Aging',
-  brighter_skin:     'Brighter Skin',
-  hair_growth:       'Hair Growth',
-  prevent_hair_loss: 'Hair Loss',
-  build_muscle:      'Build Muscle',
-  fat_loss:          'Fat Loss',
-  more_energy:       'More Energy',
-  gut_health:        'Gut Health',
-  less_inflammation: 'Inflammation',
-  mental_focus:      'Mental Focus',
+  reduce_stress:     'Cognition',
+  better_sleep:      'Sleep & Recovery',
+  recovery:          'Sleep & Recovery',
 };
 
 // ─── Protocol slots ──────────────────────────────────────────────────────────
@@ -160,15 +109,196 @@ function GoalAlignmentRow({
   );
 }
 
+// ─── Custom radar chart ───────────────────────────────────────────────────────
+
+function CustomRadarChart({
+  scores,
+  onDomainPress,
+}: {
+  scores: number[];
+  onDomainPress: (slug: string) => void;
+}) {
+  const size = RADAR_SIZE;
+  const cx = size / 2;
+  const cy = size / 2;
+  const gridR = size * 0.28;   // outer grid ring radius
+  const labelR = size * 0.44;  // label center radius
+  const n = DOMAINS.length;
+
+  const ang = (i: number) => (i * 2 * Math.PI) / n - Math.PI / 2;
+
+  const ringPoints = (ratio: number) =>
+    Array.from({ length: n }, (_, i) => {
+      const a = ang(i);
+      return `${cx + gridR * ratio * Math.cos(a)},${cy + gridR * ratio * Math.sin(a)}`;
+    }).join(' ');
+
+  const dataPolyPoints = scores
+    .map((s, i) => {
+      const a = ang(i);
+      const ratio = Math.min(s / 100, 1);
+      return `${cx + gridR * ratio * Math.cos(a)},${cy + gridR * ratio * Math.sin(a)}`;
+    })
+    .join(' ');
+
+  return (
+    <Svg width={size} height={size}>
+      {/* Grid rings at 25 / 50 / 75 / 100% */}
+      {([0.25, 0.5, 0.75, 1] as const).map((level) => (
+        <Polygon
+          key={level}
+          points={ringPoints(level)}
+          fill="transparent"
+          stroke={level === 1 ? Colors.borderStrong : Colors.borderHairline}
+          strokeWidth={1}
+        />
+      ))}
+
+      {/* Axis spokes */}
+      {Array.from({ length: n }, (_, i) => {
+        const a = ang(i);
+        return (
+          <Line
+            key={i}
+            x1={cx}
+            y1={cy}
+            x2={cx + gridR * Math.cos(a)}
+            y2={cy + gridR * Math.sin(a)}
+            stroke={Colors.borderHairline}
+            strokeWidth={1}
+          />
+        );
+      })}
+
+      {/* Data polygon */}
+      <Polygon
+        points={dataPolyPoints}
+        fill={Colors.ink}
+        fillOpacity={0.1}
+        stroke={Colors.ink}
+        strokeWidth={1.5}
+        strokeOpacity={0.5}
+      />
+
+      {/* Score dots */}
+      {scores.map((s, i) => {
+        const a = ang(i);
+        const ratio = Math.min(s / 100, 1);
+        const vx = cx + gridR * ratio * Math.cos(a);
+        const vy = cy + gridR * ratio * Math.sin(a);
+        return (
+          <G key={i}>
+            <Circle cx={vx} cy={vy} r={5} fill={scoreColor(s)} opacity={0.9} />
+            <Circle cx={vx} cy={vy} r={2.5} fill={Colors.bone} />
+          </G>
+        );
+      })}
+
+      {/* Tappable labels */}
+      {DOMAINS.map((domain, i) => {
+        const a = ang(i);
+        const lx = cx + labelR * Math.cos(a);
+        const ly = cy + labelR * Math.sin(a);
+        const slug = DOMAIN_SLUGS[domain];
+        return (
+          <G key={i} onPress={() => onDomainPress(slug)}>
+            <SvgText
+              x={lx}
+              y={ly - 4}
+              textAnchor="middle"
+              fontSize={9}
+              fontFamily={Fonts.sansSemiBold}
+              fill={Colors.inkSecondary}
+            >
+              {DOMAIN_SHORT_LABELS[i].toUpperCase()}
+            </SvgText>
+            <SvgText
+              x={lx}
+              y={ly + 10}
+              textAnchor="middle"
+              fontSize={13}
+              fontFamily={Fonts.mono}
+              fill={scoreColor(scores[i])}
+            >
+              {Math.round(scores[i])}
+            </SvgText>
+          </G>
+        );
+      })}
+    </Svg>
+  );
+}
+
+// ─── Swipeable product row ────────────────────────────────────────────────────
+
+function SwipeableProductRow({
+  product,
+  onPress,
+  onRemove,
+}: {
+  product: Product;
+  onPress: () => void;
+  onRemove: () => void;
+}) {
+  const swipeRef = useRef<Swipeable>(null);
+
+  const renderRightAction = () => (
+    <Pressable
+      style={styles.deleteAction}
+      onPress={() => {
+        swipeRef.current?.close();
+        onRemove();
+      }}
+    >
+      <Text style={styles.deleteActionText}>Remove</Text>
+    </Pressable>
+  );
+
+  return (
+    <Swipeable
+      ref={swipeRef}
+      renderRightActions={renderRightAction}
+      rightThreshold={60}
+      overshootRight={false}
+    >
+      <ProductListItem
+        id={product.id}
+        name={product.name}
+        brand={product.brand}
+        category={product.category}
+        grade={product.grade}
+        onPress={onPress}
+      />
+    </Swipeable>
+  );
+}
+
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function StackScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { stack, removeFromStack } = useAppState();
+  const { stack, meals, removeFromStack, addMeal } = useAppState();
   const { onboardingProfile } = useAuth();
 
-  const radarScores = useMemo(() => computeRadarScores(stack), [stack]);
+  const [chatVisible, setChatVisible] = useState(false);
+  const [mealSheetVisible, setMealSheetVisible] = useState(false);
+  const radarScores = useMemo(() => computeRadarScores([...stack, ...meals]), [stack, meals]);
+
+  const handleMealsConfirm = (foods: RecognizedFood[]) => {
+    foods.forEach((food) => {
+      addMeal({
+        id: `meal-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        name: food.name,
+        brand: food.estimated_amount ?? '',
+        category: 'food',
+        grade: food.confidence >= 0.7 ? 'B' : 'C',
+        ingredients: [],
+        scannedAt: new Date(),
+      });
+    });
+    setMealSheetVisible(false);
+  };
   const goals = onboardingProfile?.goals ?? [];
   const hasGoals = goals.length > 0;
 
@@ -231,8 +361,14 @@ export default function StackScreen() {
             <Text style={styles.overline}>Composition View</Text>
             <Text style={styles.title}>Stack</Text>
           </View>
-          <View style={styles.countPill}>
-            <Text style={styles.countText}>{stack.length}</Text>
+          <View style={{ flexDirection: 'row', gap: scale(8) }}>
+            <Pressable style={styles.logBtn} onPress={() => setMealSheetVisible(true)}>
+              <Text style={styles.logBtnText}>+ Log</Text>
+            </Pressable>
+            <Pressable style={styles.aiBtn} onPress={() => setChatVisible(true)}>
+              <Text style={styles.aiBtnIcon}>✦</Text>
+              <Text style={styles.aiBtnText}>Ask AI</Text>
+            </Pressable>
           </View>
         </View>
 
@@ -244,46 +380,20 @@ export default function StackScreen() {
           </View>
           <View style={styles.card}>
             <View style={styles.radarContainer}>
-              <RadarChart
-                data={radarScores}
-                labels={DOMAIN_SHORT_LABELS}
-                maxValue={100}
-                noOfSections={4}
-                chartSize={RADAR_SIZE - Spacing.md * 2}
-                isAnimated
-                polygonConfig={{
-                  fill: Colors.ink,
-                  opacity: 0.08,
-                  stroke: Colors.ink,
-                  strokeWidth: 1.5,
-                }}
-                gridConfig={{
-                  stroke: Colors.borderHairline,
-                  strokeWidth: 1,
-                  fill: 'transparent',
-                }}
-                asterLinesConfig={{
-                  stroke: Colors.borderHairline,
-                  strokeWidth: 1,
-                }}
-                labelConfig={{
-                  fontSize: 11,
-                  stroke: Colors.inkSecondary,
-                  fontFamily: Fonts.sans,
-                }}
+              <CustomRadarChart
+                scores={radarScores}
+                onDomainPress={(slug) => router.push(`/domain/${slug}`)}
               />
             </View>
-            {/* Domain score rows */}
+            {/* Domain score rows — tappable → domain detail */}
             {DOMAINS.map((domain, i) => {
               const score = radarScores[i];
-              const isExposure = domain === 'Exposure Load';
-              const label = isExposure
-                ? score >= 75 ? 'Clean' : score >= 45 ? 'Some flags' : 'Caution'
-                : score >= 70 ? 'Supporting' : score >= 40 ? 'Neutral' : 'Watch';
+              const label = domainScoreLabel(domain, score);
               return (
-                <View
+                <Pressable
                   key={domain}
                   style={[styles.scoreRow, i < DOMAINS.length - 1 && styles.scoreRowBorder]}
+                  onPress={() => router.push(`/domain/${DOMAIN_SLUGS[domain]}`)}
                 >
                   <Text style={styles.scoreRowDomain}>{domain}</Text>
                   <View style={styles.scoreBarTrack}>
@@ -300,7 +410,8 @@ export default function StackScreen() {
                   <Text style={[styles.scoreRowLabel, { color: scoreColor(score) }]}>
                     {label}
                   </Text>
-                </View>
+                  <Text style={styles.scoreRowChevron}>›</Text>
+                </Pressable>
               );
             })}
           </View>
@@ -364,25 +475,12 @@ export default function StackScreen() {
                 <View style={styles.slotLine} />
               </View>
               {products.map((product) => (
-                <View key={product.id} style={styles.protocolRow}>
-                  <View style={styles.protocolRowItem}>
-                    <ProductListItem
-                      id={product.id}
-                      name={product.name}
-                      brand={product.brand}
-                      category={product.category}
-                      grade={product.grade}
-                      onPress={() => router.push(`/product/${product.id}`)}
-                    />
-                  </View>
-                  <Pressable
-                    onPress={() => removeFromStack(product.id)}
-                    style={styles.removeBtn}
-                    hitSlop={8}
-                  >
-                    <Text style={styles.removeBtnText}>✕</Text>
-                  </Pressable>
-                </View>
+                <SwipeableProductRow
+                  key={product.id}
+                  product={product}
+                  onPress={() => router.push(`/product/${product.id}`)}
+                  onRemove={() => removeFromStack(product.id)}
+                />
               ))}
             </View>
           ))}
@@ -390,6 +488,20 @@ export default function StackScreen() {
 
         <View style={{ height: verticalScale(100) }} />
       </ScrollView>
+
+      <StackAssistant
+        visible={chatVisible}
+        onClose={() => setChatVisible(false)}
+        stack={stack}
+        radarScores={radarScores}
+        goals={goals}
+      />
+
+      <MealInputSheet
+        visible={mealSheetVisible}
+        onClose={() => setMealSheetVisible(false)}
+        onConfirm={handleMealsConfirm}
+      />
     </View>
   );
 }
@@ -461,16 +573,40 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.display,
     color: Colors.ink,
   },
-  countPill: {
-    paddingHorizontal: scale(12),
-    paddingVertical: scale(5),
-    backgroundColor: Colors.boneDark,
+  logBtn: {
+    paddingHorizontal: scale(14),
+    paddingVertical: scale(8),
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.borderStrong,
+  },
+  logBtnText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    color: Colors.ink,
+  },
+  aiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(5),
+    paddingHorizontal: scale(14),
+    paddingVertical: scale(8),
+    backgroundColor: Colors.ink,
     borderRadius: Radius.pill,
   },
-  countText: {
-    fontFamily: Fonts.mono,
-    fontSize: FontSizes.subtitle,
-    color: Colors.ink,
+  aiBtnIcon: {
+    fontSize: FontSizes.caption,
+    color: Colors.bone,
+    lineHeight: FontSizes.caption * 1.2,
+  },
+  aiBtnText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    color: Colors.bone,
   },
 
   // ── Section
@@ -550,8 +686,14 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.xs,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
-    width: scale(72),
+    width: scale(64),
     textAlign: 'right',
+  },
+  scoreRowChevron: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.bodyLarge,
+    color: Colors.inkTertiary,
+    marginLeft: scale(2),
   },
 
   // ── Goal alignment
@@ -650,23 +792,20 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: Colors.borderHairline,
   },
-  protocolRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  protocolRowItem: {
-    flex: 1,
-  },
-  removeBtn: {
-    width: scale(32),
-    height: scale(32),
+  deleteAction: {
+    backgroundColor: Colors.accentAlert,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: Spacing.xs,
+    paddingHorizontal: scale(20),
+    borderRadius: Radius.md,
+    marginVertical: scale(2),
+    marginRight: scale(2),
   },
-  removeBtnText: {
-    fontFamily: Fonts.sans,
+  deleteActionText: {
+    fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.caption,
-    color: Colors.inkTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    color: '#FFFFFF',
   },
 });

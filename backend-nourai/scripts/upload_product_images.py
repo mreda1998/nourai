@@ -1,5 +1,5 @@
 """
-NourAI Image Uploader
+Elory Image Uploader
 =====================
 Downloads each product's placeholder image URL and re-hosts it in
 Supabase Storage so the app is never dependent on third-party CDNs
@@ -255,7 +255,7 @@ async def main(args: argparse.Namespace) -> None:
     else:
         to_process = products
 
-    print(f"\nNourAI Image Uploader")
+    print(f"\nElory Image Uploader")
     print(f"{'='*60}")
     print(f"  Mode:         {'DRY RUN' if args.dry_run else 'LIVE'}")
     print(f"  Total prods:  {len(products)}")
@@ -274,7 +274,7 @@ async def main(args: argparse.Namespace) -> None:
     updated = 0
 
     async with httpx.AsyncClient(
-        headers={"User-Agent": "NourAI-ImageUploader/1.0"},
+        headers={"User-Agent": "Elory-ImageUploader/1.0"},
         follow_redirects=True,
     ) as client:
         tasks = [
@@ -296,7 +296,7 @@ async def main(args: argparse.Namespace) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="NourAI Image Uploader — re-host product images in Supabase Storage",
+        description="Elory Image Uploader — re-host product images in Supabase Storage",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )

@@ -84,6 +84,10 @@ class IngredientEvidence(Base, UUIDMixin, TimestampMixin):
         JSONB, nullable=False, default=list,
         comment="Onboarding goal IDs this study supports or contradicts"
     )
+    domain_tags: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list,
+        comment="Bio-domain slugs this study is relevant to: gut-health, skin, metabolism, sleep-recovery, cognition, exposure-load"
+    )
 
     # ── Relationship ──────────────────────────────────────────────────────────
     ingredient: Mapped["Ingredient"] = relationship(
@@ -97,6 +101,7 @@ class IngredientEvidence(Base, UUIDMixin, TimestampMixin):
         Index("ix_ingredient_evidence_direction", "direction"),
         Index("ix_ingredient_evidence_concern_tags", "concern_tags", postgresql_using="gin"),
         Index("ix_ingredient_evidence_goal_tags", "goal_tags", postgresql_using="gin"),
+        Index("ix_ingredient_evidence_domain_tags", "domain_tags", postgresql_using="gin"),
     )
 
     def __repr__(self) -> str:
