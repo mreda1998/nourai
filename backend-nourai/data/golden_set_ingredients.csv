@@ -1,0 +1,101 @@
+canonical_name,category,synonyms,source_layer
+Retinol,vitamin,"Vitamin A|Vitamin A1|all-trans-Retinol|Retinyl acetate",cosmetic_inci
+Niacinamide,vitamin,"Nicotinamide|Vitamin B3|Nicotinic acid amide",cosmetic_inci
+Hyaluronic Acid,other,"Sodium hyaluronate|HA|Hyaluronan",cosmetic_inci
+Ascorbic Acid,vitamin,"Vitamin C|L-Ascorbic acid|Ascorbate",cosmetic_inci
+Tocopherol,vitamin,"Vitamin E|Alpha-tocopherol|d-alpha-tocopherol",cosmetic_inci
+Salicylic Acid,other,"BHA|Beta-hydroxy acid|2-Hydroxybenzoic acid",cosmetic_inci
+Glycolic Acid,other,"AHA|Alpha-hydroxy acid|Hydroxyacetic acid",cosmetic_inci
+Lactic Acid,other,"Alpha-hydroxy acid|L-Lactic acid",cosmetic_inci
+Retinaldehyde,vitamin,"Retinal|Vitamin A aldehyde",cosmetic_inci
+Azelaic Acid,other,"Nonanedioic acid|Lepargylic acid",cosmetic_inci
+Kojic Acid,other,"5-Hydroxy-2-(hydroxymethyl)-4H-pyran-4-one",cosmetic_inci
+Tranexamic Acid,other,"TXA|trans-4-(Aminomethyl)cyclohexane-1-carboxylic acid",cosmetic_inci
+Bakuchiol,herb,"Psoralea corylifolia extract|Babchi oil",cosmetic_inci
+Ceramide,other,"Ceramide NP|Ceramide AP|Ceramide EOP|Phytosphingosine",cosmetic_inci
+Collagen,other,"Hydrolyzed collagen|Marine collagen|Bovine collagen",cosmetic_inci
+Coenzyme Q10,antioxidant,"CoQ10|Ubiquinone|Ubidecarenone",cosmetic_inci
+Alpha Lipoic Acid,antioxidant,"ALA|Thioctic acid|Lipoic acid",supplement_active
+Resveratrol,antioxidant,"trans-Resveratrol|3,5,4-Trihydroxystilbene",supplement_active
+Creatine,amino_acid,"Creatine monohydrate|Methyl guanidine-acetic acid",supplement_active
+L-Glutamine,amino_acid,"Glutamine|Gln|L-Gln",supplement_active
+L-Arginine,amino_acid,"Arginine|Arg|L-Arg",supplement_active
+L-Citrulline,amino_acid,"Citrulline|L-Citrulline malate",supplement_active
+L-Carnitine,amino_acid,"Carnitine|Acetyl-L-carnitine|ALCAR",supplement_active
+Beta-Alanine,amino_acid,"Carnosine precursor|3-Aminopropionic acid",supplement_active
+Branched-Chain Amino Acids,amino_acid,"BCAA|Leucine|Isoleucine|Valine",supplement_active
+Taurine,amino_acid,"2-Aminoethanesulfonic acid|L-Taurine",supplement_active
+Omega-3 Fatty Acids,fatty_acid,"Fish oil|EPA|DHA|ALA|Eicosapentaenoic acid|Docosahexaenoic acid",supplement_active
+EPA,fatty_acid,"Eicosapentaenoic acid|20:5n-3",supplement_active
+DHA,fatty_acid,"Docosahexaenoic acid|22:6n-3",supplement_active
+Magnesium,mineral,"Magnesium glycinate|Magnesium citrate|Magnesium oxide|Mg",supplement_active
+Zinc,mineral,"Zinc picolinate|Zinc gluconate|Zinc citrate|Zn",supplement_active
+Iron,mineral,"Ferrous sulfate|Ferrous gluconate|Ferric iron|Fe",supplement_active
+Calcium,mineral,"Calcium carbonate|Calcium citrate|Ca",supplement_active
+Vitamin D3,vitamin,"Cholecalciferol|Vitamin D|25-hydroxyvitamin D",supplement_active
+Vitamin K2,vitamin,"Menaquinone|MK-7|MK-4|Menaquinone-7",supplement_active
+Vitamin B12,vitamin,"Cobalamin|Methylcobalamin|Cyanocobalamin",supplement_active
+Folate,vitamin,"Folic acid|Vitamin B9|5-MTHF|Methylfolate",supplement_active
+Vitamin B6,vitamin,"Pyridoxine|Pyridoxal-5-phosphate|P5P",supplement_active
+Selenium,mineral,"Selenomethionine|Sodium selenate|Se",supplement_active
+Iodine,mineral,"Potassium iodide|Sodium iodide|I",supplement_active
+Curcumin,herb,"Turmeric extract|Curcuma longa|Diferuloylmethane",supplement_active
+Berberine,herb,"Berberine hydrochloride|Berberis vulgaris extract",supplement_active
+Ashwagandha,herb,"Withania somnifera|KSM-66|Sensoril|Indian ginseng",supplement_active
+Rhodiola Rosea,herb,"Golden root|Arctic root|Rhodiola extract",supplement_active
+Panax Ginseng,herb,"Asian ginseng|Korean ginseng|Ginsenoside",supplement_active
+Melatonin,other,"N-acetyl-5-methoxytryptamine|Pineal hormone",supplement_active
+L-Theanine,amino_acid,"Theanine|5-N-Ethylglutamine",supplement_active
+Caffeine,other,"1,3,7-Trimethylxanthine|Trimethylxanthine",supplement_active
+Quercetin,antioxidant,"Quercetin dihydrate|Sophoretin|Bioflavonoid",supplement_active
+Lycopene,antioxidant,"All-trans-Lycopene|Tomato extract",supplement_active
+Lutein,antioxidant,"Xanthophyll|Marigold extract",supplement_active
+Astaxanthin,antioxidant,"Haematococcus pluvialis extract",supplement_active
+Green Tea Extract,herb,"EGCG|Epigallocatechin gallate|Camellia sinensis",supplement_active
+Milk Thistle,herb,"Silymarin|Silybum marianum|Silibinin",supplement_active
+Bacopa Monnieri,herb,"Brahmi|Water hyssop|Bacoside",supplement_active
+Lion's Mane Mushroom,herb,"Hericium erinaceus|Yamabushitake",supplement_active
+Reishi Mushroom,herb,"Ganoderma lucidum|Lingzhi",supplement_active
+Probiotics,probiotic,"Lactobacillus|Bifidobacterium|Live cultures",supplement_active
+Lactobacillus Acidophilus,probiotic,"L. acidophilus|NCFM strain",supplement_active
+Bifidobacterium Longum,probiotic,"B. longum|BB536",supplement_active
+Inulin,other,"Chicory inulin|Prebiotic fiber|FOS",supplement_active
+Psyllium Husk,other,"Plantago ovata|Ispaghula|Psyllium fiber",supplement_active
+Glucosamine,other,"Glucosamine sulfate|Glucosamine HCl|Chondroitin",supplement_active
+Collagen Peptides,other,"Hydrolyzed collagen|Type I collagen|Type II collagen",supplement_active
+MSM,other,"Methylsulfonylmethane|Dimethyl sulfone|DMSO2",supplement_active
+Boswellia,herb,"Indian frankincense|Boswellic acid|AKBA",supplement_active
+Turmeric,herb,"Curcuma longa|Turmeric root|Curcuminoids",supplement_active
+Ginger,herb,"Zingiber officinale|Ginger root|Gingerol",supplement_active
+Black Pepper Extract,herb,"Piperine|BioPerine|Piper nigrum",supplement_active
+Sodium Lauryl Sulfate,preservative,"SLS|Sodium laurilsulfate|Dodecyl sulfate",cosmetic_inci
+Parabens,preservative,"Methylparaben|Propylparaben|Butylparaben|Ethylparaben",cosmetic_inci
+Benzophenone,other,"BP-3|Oxybenzone|Sunscreen UV filter",cosmetic_inci
+Titanium Dioxide,other,"CI 77891|TiO2|Uncoated titanium dioxide",cosmetic_inci
+Zinc Oxide,mineral,"ZnO|CI 77947|Non-nano zinc oxide",cosmetic_inci
+Petroleum Jelly,other,"Petrolatum|White petrolatum|Vaseline",cosmetic_inci
+Dimethicone,other,"Polydimethylsiloxane|PDMS|Cyclomethicone",cosmetic_inci
+Phenoxyethanol,preservative,"Ethylene glycol monophenyl ether|Rose ether",cosmetic_inci
+Benzoyl Peroxide,other,"BPO|Dibenzoyl peroxide|Acne treatment",otc_active
+Salicylate,other,"Acetylsalicylic acid|Aspirin|ASA",otc_active
+Ibuprofen,other,"Advil|Motrin|2-(4-isobutylphenyl)propanoic acid",otc_active
+Acetaminophen,other,"Paracetamol|Tylenol|APAP|N-Acetyl-para-aminophenol",otc_active
+Diphenhydramine,other,"Benadryl|DPH|Antihistamine",otc_active
+Cetirizine,other,"Zyrtec|Reactine|Second-generation antihistamine",otc_active
+Loratadine,other,"Claritin|Non-drowsy antihistamine",otc_active
+Omeprazole,other,"Prilosec|PPI|Proton pump inhibitor",otc_active
+Sodium Bicarbonate,other,"Baking soda|NaHCO3|Bicarbonate of soda",food_additive
+Citric Acid,other,"E330|Lemon acid|2-Hydroxypropane-1,2,3-tricarboxylic acid",food_additive
+Sodium Benzoate,preservative,"E211|Benzoate of soda",food_additive
+Potassium Sorbate,preservative,"E202|Sorbic acid potassium salt",food_additive
+Ascorbyl Palmitate,antioxidant,"E304|Vitamin C palmitate",food_additive
+Carrageenan,other,"E407|Irish moss extract|Red seaweed extract",food_additive
+Xanthan Gum,other,"E415|Xanthomonas campestris gum",food_additive
+Lecithin,other,"E322|Soy lecithin|Sunflower lecithin|Phosphatidylcholine",food_additive
+Maltodextrin,other,"Glucose polymer|Starch hydrolysate",food_additive
+Sucralose,sweetener,"Splenda|Trichlorogalactosucrose|E955",food_additive
+Aspartame,sweetener,"Equal|NutraSweet|E951|APM",food_additive
+Stevia,sweetener,"Steviol glycoside|Rebaudioside A|E960",food_additive
+High Fructose Corn Syrup,sweetener,"HFCS|Glucose-fructose syrup|Corn syrup",food_additive
+Monosodium Glutamate,other,"MSG|E621|Sodium glutamate|Umami",food_additive
+Carmine,other,"E120|Cochineal|Natural Red 4|CI 75470",food_additive
