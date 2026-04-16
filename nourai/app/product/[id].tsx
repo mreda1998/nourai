@@ -239,15 +239,19 @@ export default function ProductDetailScreen() {
 
   const gradeStyle = getGradeStyle(product.grade);
 
-  // 6 fixed bio-domains — always shown; merged with backend evidence-based values.
-  // Names must match what the backend returns in BioDomain.name.
+  // Names must match backend BioDomain.name exactly.
+  // Backend returns up to 10 domains; missing ones default to value: 0.
   const BIO_DOMAIN_LABELS = [
-    'Gut Health',
-    'Dermal',
-    'Metabolic',
-    'Exposure Load',
-    'Sleep Recovery',
-    'Cognition',
+    'Body Composition',
+    'Energy & Metabolism',
+    'Cardiovascular',
+    'Gut & Digestive',
+    'Inflammation & Immune',
+    'Cognitive & Mental',
+    'Sleep & Recovery',
+    'Bone & Joint',
+    'Hormonal & Endocrine',
+    'Skin & Appearance',
   ];
   const bioDomains = BIO_DOMAIN_LABELS.map((label) => {
     const found = product.bio_domains.find((d) => d.name === label);
