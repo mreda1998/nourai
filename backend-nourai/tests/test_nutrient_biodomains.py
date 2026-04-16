@@ -37,3 +37,32 @@ def test_magnitudes_in_range():
             assert 0.0 <= impact.magnitude <= 1.0, (
                 f"{nutrient}.{impact.biodomain} magnitude {impact.magnitude} out of range"
             )
+
+
+def test_direction_values_are_valid():
+    valid_directions = {"benefit", "harm"}
+    for nutrient, impacts in NUTRIENT_BIODOMAIN_WEIGHTS.items():
+        for impact in impacts:
+            assert impact.direction in valid_directions, (
+                f"{nutrient}.{impact.biodomain} has invalid direction '{impact.direction}'"
+            )
+
+
+def test_confidence_values_are_valid():
+    valid_confidence = {"high", "moderate", "low"}
+    for nutrient, impacts in NUTRIENT_BIODOMAIN_WEIGHTS.items():
+        for impact in impacts:
+            assert impact.confidence in valid_confidence, (
+                f"{nutrient}.{impact.biodomain} has invalid confidence '{impact.confidence}'"
+            )
+
+
+def test_no_duplicate_biodomain_per_nutrient():
+    for nutrient, impacts in NUTRIENT_BIODOMAIN_WEIGHTS.items():
+        seen = set()
+        for impact in impacts:
+            key = impact.biodomain
+            assert key not in seen, (
+                f"{nutrient} has duplicate biodomain entry '{key}'"
+            )
+            seen.add(key)

@@ -1,7 +1,7 @@
 """
 Nutrient-to-Biodomain weight matrix (Tier 2 scoring).
 
-Maps the 30 USDA standard nutrient display names to biodomain impacts.
+Maps the 29 USDA standard nutrient display names to biodomain impacts.
 These weights represent consensus-level nutritional science — they are NOT
 derived from individual PubMed studies (that's what the research agent does
 for Tier-1 golden set ingredients).
@@ -26,7 +26,7 @@ class NutrientDomainImpact:
 
 NUTRIENT_BIODOMAIN_WEIGHTS: dict[str, list[NutrientDomainImpact]] = {
     # ── Macronutrients ──────────────────────────────────────────────────────────
-    "Calories": [],
+    "Calories": [],  # Energy intake has no direct single-domain mapping
     "Protein": [
         NutrientDomainImpact("body_composition",  "benefit", 0.90, "high"),
         NutrientDomainImpact("energy_metabolism", "benefit", 0.55, "high"),
@@ -50,7 +50,7 @@ NUTRIENT_BIODOMAIN_WEIGHTS: dict[str, list[NutrientDomainImpact]] = {
         NutrientDomainImpact("energy_metabolism",   "harm",  0.55, "moderate"),
         NutrientDomainImpact("inflammation_immune", "harm",  0.50, "moderate"),
     ],
-    "Cholesterol": [],
+    "Cholesterol": [],  # Dietary cholesterol: weak CV signal in current evidence
     "Omega-3": [
         NutrientDomainImpact("cardiovascular",       "benefit", 0.85, "high"),
         NutrientDomainImpact("inflammation_immune",  "benefit", 0.80, "high"),
@@ -106,7 +106,7 @@ NUTRIENT_BIODOMAIN_WEIGHTS: dict[str, list[NutrientDomainImpact]] = {
     "Vitamin E": [
         NutrientDomainImpact("skin_appearance",      "benefit", 0.60, "moderate"),
         NutrientDomainImpact("inflammation_immune",  "benefit", 0.55, "moderate"),
-        NutrientDomainImpact("cardiovascular",       "benefit", 0.45, "moderate"),
+        NutrientDomainImpact("cardiovascular",       "benefit", 0.45, "low"),
     ],
     "Vitamin K": [
         NutrientDomainImpact("bone_joint",           "benefit", 0.75, "high"),
@@ -128,7 +128,7 @@ NUTRIENT_BIODOMAIN_WEIGHTS: dict[str, list[NutrientDomainImpact]] = {
     ],
     "Niacin": [
         NutrientDomainImpact("energy_metabolism",    "benefit", 0.65, "high"),
-        NutrientDomainImpact("cardiovascular",       "benefit", 0.50, "moderate"),
+        NutrientDomainImpact("cardiovascular",       "benefit", 0.50, "low"),
     ],
     "Folate": [
         NutrientDomainImpact("cognitive_mental",     "benefit", 0.55, "moderate"),
