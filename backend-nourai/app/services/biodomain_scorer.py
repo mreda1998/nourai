@@ -36,10 +36,12 @@ from app.core.biodomains import (
     BIODOMAIN_KEYS,
     CONFIDENCE_WEIGHTS,
 )
+from app.core.nutrient_biodomains import get_nutrient_impacts
 
 if TYPE_CHECKING:
     from app.models.ingredient_biodomain_score import IngredientBioDomainScore
     from app.models.product import ProductIngredient
+    from app.schemas.mobile import MobileIngredient
 
 
 # ─── Domain contribution type ─────────────────────────────────────────────────
@@ -250,38 +252,32 @@ def score_product_biodomains(
 # ─── Tier-2 scoring: nutrient weight matrix ───────────────────────────────────
 
 def score_nutrient_rows(
-    nutrient_rows: list,
+    nutrient_rows: list["MobileIngredient"],
 ) -> list[ProductDomainScore]:
     """
     Compute biodomain scores from a USDA nutrition panel using the static
     weight matrix in app/core/nutrient_biodomains.py.
 
-    Input: list of MobileIngredient (or any object/dict with .name and .is_nutrient).
+    Input: list of MobileIngredient objects with .name and .is_nutrient attributes.
     Output: one ProductDomainScore per domain that has ≥1 nutrient mapping.
 
     When multiple nutrients affect the same domain, the highest-magnitude
     nutrient wins (no double-counting across nutrients sharing a domain).
-    """
-    from app.core.nutrient_biodomains import get_nutrient_impacts
 
+    Note: confidence weights are intentionally not applied here. The weight matrix
+    magnitudes already embed consensus-level certainty (they are not raw study
+    outputs). Applying CONFIDENCE_WEIGHTS would double-penalise "low" confidence
+    entries that were already assigned conservative magnitudes.
+    """
     # domain_key → {benefit: max_magnitude, harm: max_magnitude}
     domain_best: dict[str, dict[str, float]] = {}
 
     for row in nutrient_rows:
-        # Support both object attribute and dict access
-        is_nutrient = getattr(row, "is_nutrient", None)
-        if is_nutrient is None:
-            is_nutrient = row.get("is_nutrient", False) if isinstance(row, dict) else False
-        if not is_nutrient:
+        if not row.is_nutrient:
             continue
-
-        name = getattr(row, "name", None)
-        if name is None and isinstance(row, dict):
-            name = row.get("name", "")
-        if not name:
+        if not row.name:
             continue
-
-        for impact in get_nutrient_impacts(name):
+        for impact in get_nutrient_impacts(row.name):
             bucket = domain_best.setdefault(impact.biodomain, {"benefit": 0.0, "harm": 0.0})
             bucket[impact.direction] = max(bucket[impact.direction], impact.magnitude)
 
@@ -301,11 +297,10 @@ def score_nutrient_rows(
             raw = benefit - harm * 0.3
             is_negative = False
         else:
-            raw = harm - benefit * 0.3
+            raw = -(harm - benefit * 0.3)  # negative → matches Tier-1 harm convention
             is_negative = True
 
-        raw = max(0.0, raw)
-        display = min(100.0, raw * 80)
+        display = max(0.0, min(100.0, raw * 80))  # harm shows as 0 bar, same as Tier-1
 
         results.append(ProductDomainScore(
             biodomain=domain_key,
