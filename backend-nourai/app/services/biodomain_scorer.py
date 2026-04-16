@@ -245,3 +245,89 @@ def score_product_biodomains(
     health_score = max(0, min(100, round(base - penalty)))
 
     return domain_scores, health_score
+
+
+# ─── Tier-2 scoring: nutrient weight matrix ───────────────────────────────────
+
+def score_nutrient_rows(
+    nutrient_rows: list,
+) -> list[ProductDomainScore]:
+    """
+    Compute biodomain scores from a USDA nutrition panel using the static
+    weight matrix in app/core/nutrient_biodomains.py.
+
+    Input: list of MobileIngredient (or any object/dict with .name and .is_nutrient).
+    Output: one ProductDomainScore per domain that has ≥1 nutrient mapping.
+
+    When multiple nutrients affect the same domain, the highest-magnitude
+    nutrient wins (no double-counting across nutrients sharing a domain).
+    """
+    from app.core.nutrient_biodomains import get_nutrient_impacts
+
+    # domain_key → {benefit: max_magnitude, harm: max_magnitude}
+    domain_best: dict[str, dict[str, float]] = {}
+
+    for row in nutrient_rows:
+        # Support both object attribute and dict access
+        is_nutrient = getattr(row, "is_nutrient", None)
+        if is_nutrient is None:
+            is_nutrient = row.get("is_nutrient", False) if isinstance(row, dict) else False
+        if not is_nutrient:
+            continue
+
+        name = getattr(row, "name", None)
+        if name is None and isinstance(row, dict):
+            name = row.get("name", "")
+        if not name:
+            continue
+
+        for impact in get_nutrient_impacts(name):
+            bucket = domain_best.setdefault(impact.biodomain, {"benefit": 0.0, "harm": 0.0})
+            bucket[impact.direction] = max(bucket[impact.direction], impact.magnitude)
+
+    if not domain_best:
+        return []
+
+    results: list[ProductDomainScore] = []
+    for domain_key, magnitudes in domain_best.items():
+        domain_def = BIODOMAIN_BY_KEY.get(domain_key)
+        if domain_def is None:
+            continue
+
+        benefit = magnitudes["benefit"]
+        harm = magnitudes["harm"]
+
+        if benefit >= harm:
+            raw = benefit - harm * 0.3
+            is_negative = False
+        else:
+            raw = harm - benefit * 0.3
+            is_negative = True
+
+        raw = max(0.0, raw)
+        display = min(100.0, raw * 80)
+
+        results.append(ProductDomainScore(
+            biodomain=domain_key,
+            name=domain_def.name,
+            raw_score=raw,
+            display_value=round(display, 1),
+            is_negative=is_negative,
+        ))
+
+    return results
+
+
+def merge_domain_scores(
+    tier1: list[ProductDomainScore],
+    tier2: list[ProductDomainScore],
+) -> list[ProductDomainScore]:
+    """
+    Merge Tier-1 (PubMed-backed) and Tier-2 (weight matrix) domain scores.
+
+    Tier-1 takes precedence for any domain it already covers.
+    Tier-2 supplements only the domains Tier-1 does not cover.
+    """
+    tier1_keys = {s.biodomain for s in tier1}
+    tier2_supplement = [s for s in tier2 if s.biodomain not in tier1_keys]
+    return tier1 + tier2_supplement
