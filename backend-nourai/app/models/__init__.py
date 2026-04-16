@@ -7,6 +7,7 @@ from app.models.ingredient_biodomain_score import IngredientBioDomainScore
 from app.models.claim import Claim, ClaimSource, EvidenceStrength
 from app.models.user import UserProfile, UserStackEntry, BiologicalSex, TimeOfDay
 from app.models.subscription import Subscription, SubscriptionTier, SubscriptionStatus
+from app.models.unmatched_ingredient_log import UnmatchedIngredientLog  # noqa: F401
 
 __all__ = [
     # Product
@@ -37,4 +38,6 @@ __all__ = [
     "Subscription",
     "SubscriptionTier",
     "SubscriptionStatus",
+    # Unmatched ingredient log
+    "UnmatchedIngredientLog",
 ]
