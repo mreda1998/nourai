@@ -160,7 +160,7 @@ async def get_product_by_barcode(
     barcode: str,
     db: DBSession,
     service: Annotated[ProductService, Depends(get_product_service)] = None,
-    current_user: CurrentUser = None,
+    current_user: OptionalUser = None,
 ):
     """
     Look up a product by barcode.
