@@ -71,6 +71,43 @@ _UNIT_SYMBOL: dict[str, str] = {
     "G": "g", "MG": "mg", "UG": "µg", "KCAL": "kcal",
 }
 
+# Mapping from USDA legacy nutrient number (string, as returned by the abridged
+# endpoint) → FDC nutrient ID (int, as used in _NUTRIENT_META).
+# The USDA abridged /food/{id} endpoint returns {"number": "203", "name": ...}
+# instead of {"nutrientId": 1003, ...} that the search endpoint returns.
+_LEGACY_NUMBER_TO_FDC: dict[str, int] = {
+    "208": 1008,  # Energy (kcal)
+    "203": 1003,  # Protein
+    "204": 1004,  # Total Fat
+    "606": 1258,  # Saturated Fat
+    "205": 1005,  # Total Carbohydrates
+    "291": 1079,  # Dietary Fiber
+    "269": 2000,  # Sugars
+    "601": 1253,  # Cholesterol
+    "307": 1093,  # Sodium
+    "306": 1092,  # Potassium
+    "320": 1106,  # Vitamin A
+    "401": 1162,  # Vitamin C
+    "324": 1114,  # Vitamin D
+    "328": 1114,  # Vitamin D (alternate)
+    "323": 1109,  # Vitamin E
+    "430": 1185,  # Vitamin K
+    "418": 1178,  # Vitamin B12
+    "415": 1170,  # Vitamin B6
+    "406": 1167,  # Niacin
+    "404": 1165,  # Thiamine
+    "405": 1166,  # Riboflavin
+    "417": 1175,  # Folate
+    "410": 1168,  # Pantothenic Acid
+    "301": 1087,  # Calcium
+    "303": 1089,  # Iron
+    "304": 1090,  # Magnesium
+    "305": 1091,  # Phosphorus
+    "309": 1095,  # Zinc
+    "317": 1103,  # Selenium
+    "621": 1404,  # Omega-3 DHA (approximate)
+}
+
 # ─── OFF nutriments fallback ──────────────────────────────────────────────────
 # Maps USDA nutrientId → (OFF _100g key, factor_to_grams).
 #
@@ -206,8 +243,23 @@ def _build_nutrient_rows(food_nutrients: list[dict]) -> list[MobileIngredient]:
     """
     lookup: dict[int, tuple[float, str]] = {}
     for fn in food_nutrients:
-        # Support both response shapes
-        nid = fn.get("nutrientId") or (fn.get("nutrient") or {}).get("id")
+        # Support three response shapes:
+        #   search endpoint:  {"nutrientId": N, "value": V, "unitName": U}
+        #   full detail:      {"nutrient": {"id": N, "unitName": U}, "amount": V}
+        #   abridged detail:  {"number": "N", "name": "...", "amount": V, "unitName": U}
+        nid: int | None = None
+        raw_nid = fn.get("nutrientId") or (fn.get("nutrient") or {}).get("id")
+        if raw_nid is not None:
+            try:
+                nid = int(raw_nid)
+            except (ValueError, TypeError):
+                pass
+        if nid is None:
+            # Abridged detail endpoint uses legacy "number" field (string)
+            legacy = fn.get("number")
+            if legacy:
+                nid = _LEGACY_NUMBER_TO_FDC.get(str(legacy))
+
         value = fn.get("value") if fn.get("value") is not None else fn.get("amount")
         unit = fn.get("unitName") or (fn.get("nutrient") or {}).get("unitName", "G")
         if nid is None or value is None:
