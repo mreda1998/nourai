@@ -12,6 +12,12 @@ from app.repositories.product import ProductRepository
 from app.schemas.product import ProductWithDetails
 from app.services.usda import USDAService, _is_nutriments_sparse
 
+# Tier-2 nutrient display names — these are expected "misses" at the ingredient
+# level (they're nutrients, not INCI/supplement ingredient names).
+# We skip logging these to unmatched_ingredient_log to avoid noise.
+from app.core.nutrient_biodomains import NUTRIENT_BIODOMAIN_WEIGHTS as _NUTRIENT_WEIGHTS
+_KNOWN_NUTRIENT_NAMES: frozenset[str] = frozenset(k.lower() for k in _NUTRIENT_WEIGHTS.keys())
+
 
 class ProductService:
     """Service for product-related business logic."""
@@ -78,6 +84,9 @@ class ProductService:
                         status=status,
                         order_position=position,
                     ))
+                    # Log Tier-3 unmatched (not a canonical ingredient, not a known nutrient)
+                    if canonical is None and ing_name.lower() not in _KNOWN_NUTRIENT_NAMES:
+                        await self._log_unmatched_ingredient(ing_name)
 
         return await self._repo.get_with_details(product.id)
 
@@ -91,6 +100,28 @@ class ProductService:
             for syn in (ing.synonyms or []):
                 lookup[syn.lower().strip()] = ing
         return lookup
+
+    async def _log_unmatched_ingredient(self, raw_name: str) -> None:
+        """
+        Upsert a Tier-3 unmatched ingredient name into the frequency log.
+        Fire-and-forget — failure here must never break a product fetch.
+        """
+        from sqlalchemy import text
+        try:
+            await self._repo.db.execute(
+                text(
+                    """
+                    INSERT INTO unmatched_ingredient_log (name_raw, count, last_seen_at)
+                    VALUES (:name, 1, NOW())
+                    ON CONFLICT (name_raw) DO UPDATE
+                    SET count        = unmatched_ingredient_log.count + 1,
+                        last_seen_at = NOW()
+                    """
+                ),
+                {"name": raw_name[:500]},
+            )
+        except Exception:
+            pass  # Never block product fetch on logging failure
 
     async def search_products(
         self,
