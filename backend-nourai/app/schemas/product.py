@@ -290,12 +290,31 @@ class ProductWithDetails(BaseModel):
                         journal=source.label if source.label != claim.title else None,
                     ))
 
+        # ── Nutrition facts ───────────────────────────────────────────────────
+        # Parse first so nutrient rows are available for Tier-2 biodomain scoring.
+        nutrient_items: list[MobileIngredient] = []
+        if product.category == ProductCategory.FOOD and product.extra_data:
+            nutrient_items = _parse_nutriments(product.extra_data, ingredient_lookup)
+            ingredients.extend(nutrient_items)
+
         # ── Biodomain scoring ─────────────────────────────────────────────────
-        # Lazy import avoids circular dependency: schemas.product ↔ services.product
-        from app.services.biodomain_scorer import score_product_biodomains  # noqa: PLC0415
-        domain_scores, computed_health_score = score_product_biodomains(
+        # Lazy imports avoid circular dependency: schemas.product ↔ services.*
+        from app.services.biodomain_scorer import (  # noqa: PLC0415
+            score_product_biodomains,
+            score_nutrient_rows,
+            merge_domain_scores,
+        )
+
+        # Tier-1: PubMed-backed scores from canonical ingredient_biodomain_scores
+        tier1_scores, computed_health_score = score_product_biodomains(
             product.product_ingredients or []
         )
+
+        # Tier-2: weight matrix scores from the nutrition panel (food products only)
+        tier2_scores = score_nutrient_rows(nutrient_items) if nutrient_items else []
+
+        # Merge: Tier-1 wins per domain, Tier-2 fills the gaps
+        domain_scores = merge_domain_scores(tier1_scores, tier2_scores)
 
         bio_domains = [
             BioDomain(
@@ -308,12 +327,6 @@ class ProductWithDetails(BaseModel):
 
         # Prefer computed score; fall back to manually seeded score if no domains found
         effective_score = computed_health_score if domain_scores else product.health_score
-
-        # Nutrition facts — parsed from Open Food Facts nutriments stored in extra_data.
-        # ingredient_lookup (when provided) maps nutrient display names → ingredient UUIDs
-        # so the mobile client can tap a nutrient row to reach the ingredient deep dive.
-        if product.category == ProductCategory.FOOD and product.extra_data:
-            ingredients.extend(_parse_nutriments(product.extra_data, ingredient_lookup))
         return cls(
             id=product.id,
             barcode=product.barcode,
