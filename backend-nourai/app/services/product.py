@@ -3,7 +3,7 @@ import re
 from uuid import UUID
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.core.config import settings
 from app.models.ingredient import Ingredient, IngredientCategory
@@ -72,6 +72,7 @@ class ProductService:
         # Create ProductIngredient rows (with canonical FK when matched)
         if ing_names:
             ingredient_lookup = await self._build_ingredient_lookup()
+            unmatched_to_log: list[str] = []
             async with self._repo.db.begin():
                 for position, ing_name in enumerate(ing_names[:60], start=1):
                     canonical = _match_ingredient(ing_name, ingredient_lookup)
@@ -84,9 +85,14 @@ class ProductService:
                         status=status,
                         order_position=position,
                     ))
-                    # Log Tier-3 unmatched (not a canonical ingredient, not a known nutrient)
+                    # Collect Tier-3 unmatched names to log after the transaction commits
                     if canonical is None and ing_name.lower() not in _KNOWN_NUTRIENT_NAMES:
-                        await self._log_unmatched_ingredient(ing_name)
+                        unmatched_to_log.append(ing_name)
+
+            # Log Tier-3 outside the transaction — intentionally decoupled so log
+            # failures cannot affect ProductIngredient creation.
+            for ing_name in unmatched_to_log:
+                await self._log_unmatched_ingredient(ing_name)
 
         return await self._repo.get_with_details(product.id)
 
@@ -106,7 +112,6 @@ class ProductService:
         Upsert a Tier-3 unmatched ingredient name into the frequency log.
         Fire-and-forget — failure here must never break a product fetch.
         """
-        from sqlalchemy import text
         try:
             await self._repo.db.execute(
                 text(

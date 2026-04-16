@@ -1,6 +1,6 @@
 """
 Lightweight frequency table for ingredient names that appeared in scanned
-products but did not match any Tier-1 canonical ingredient.
+products but did not match any Tier-1 canonical ingredient or Tier-2 known nutrient.
 
 Used by `make suggest-new-ingredients` to surface candidates for the next
 golden set batch. name_raw is the primary key — no separate UUID needed.

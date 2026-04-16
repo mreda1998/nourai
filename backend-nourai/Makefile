@@ -4,12 +4,13 @@
 VENV = . venv/bin/activate &&
 PYTHON = $(VENV) python3
 
-.PHONY: help up down logs migrate seed images research dev reset test backfill-links backfill-usda seed-whole-foods seed-fragrance seed-luxury-perfumes fetch-sephora enrich-pubchem fetch-cosing
+.PHONY: help up down logs migrate seed images research dev reset test backfill-links backfill-usda seed-whole-foods seed-fragrance seed-luxury-perfumes fetch-sephora enrich-pubchem fetch-cosing start seed-golden-set seed-golden-set-dry suggest-new-ingredients suggest-new-ingredients-more
 
 help:
 	@echo ""
-	@echo "  Elory Backend"
+	@echo "  NourAI Backend"
 	@echo "  ─────────────────────────────────────────"
+	@echo "  make start             ★ Full dev setup in one command (Docker + venv + migrate + research + server)"
 	@echo "  make up                Start local PostgreSQL"
 	@echo "  make down              Stop containers"
 	@echo "  make migrate           Run all pending migrations"
@@ -20,6 +21,8 @@ help:
 	@echo "  make fetch-sephora         Fetch thousands of luxury fragrances from Sephora (RAPIDAPI_KEY)"
 	@echo "  make enrich-pubchem        Enrich ingredients with NIH PubChem GHS safety data (free)"
 	@echo "  make fetch-cosing          Apply EU CosIng ban/restriction data to ingredients (free)"
+	@echo "  make seed-golden-set       Seed 2,500-ingredient golden set from CSV (PENDING)"
+	@echo "  make suggest-new-ingredients  Show top unmatched ingredients for next batch"
 	@echo "  make images            Upload product images → Supabase Storage"
 	@echo "  make research          Run research agent on pending ingredients (limit 5)"
 	@echo "  make research-all      Run research agent on ALL pending ingredients"
@@ -28,12 +31,79 @@ help:
 	@echo "  make logs              Tail PostgreSQL logs"
 	@echo ""
 
+# ─── One-command dev start ────────────────────────────────────────────────────
+# Runs everything needed to get from zero to a running server:
+#   1. Start Docker Desktop if not running
+#   2. Kill any existing process on port 8001
+#   3. Create/update venv and install dependencies
+#   4. Start PostgreSQL
+#   5. Apply all pending migrations
+#   6. Run research agent on 5 ingredients (no images, fast)
+#   7. Start the dev server with hot reload
+
+start:
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "  NourAI — full dev start"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo ""
+	@# ── Step 1: ensure Docker Desktop is running ──────────────────────────
+	@echo "[1/6] Checking Docker..."
+	@if ! docker info > /dev/null 2>&1; then \
+		echo "      Docker not running — launching Docker Desktop..."; \
+		open -a Docker; \
+		echo "      Waiting for Docker to start (up to 60s)..."; \
+		for i in $$(seq 1 30); do \
+			sleep 2; \
+			docker info > /dev/null 2>&1 && break; \
+			echo "      Still waiting... ($$(expr $$i \* 2)s)"; \
+		done; \
+		docker info > /dev/null 2>&1 || (echo "ERROR: Docker did not start in time. Open Docker Desktop manually and retry." && exit 1); \
+	fi
+	@echo "      Docker is running."
+	@echo ""
+	@# ── Step 2: kill anything already on port 8001 ────────────────────────
+	@echo "[2/6] Freeing port 8001..."
+	@lsof -ti:8001 | xargs kill -9 2>/dev/null && echo "      Killed existing process on :8001" || echo "      Port 8001 is free."
+	@echo ""
+	@# ── Step 3: venv + dependencies ──────────────────────────────────────
+	@echo "[3/6] Setting up Python environment..."
+	@test -d venv || python3 -m venv venv
+	@. venv/bin/activate && pip install -r requirements.txt -q
+	@echo "      Dependencies up to date."
+	@echo ""
+	@# ── Step 4: start postgres ────────────────────────────────────────────
+	@echo "[4/6] Starting PostgreSQL..."
+	@$(MAKE) up --no-print-directory
+	@echo ""
+	@# ── Step 5: migrate ──────────────────────────────────────────────────
+	@echo "[5/6] Running migrations..."
+	@$(MAKE) migrate --no-print-directory
+	@echo ""
+	@# ── Step 6: quick research run (5 ingredients, no images) ────────────
+	@echo "[6/6] Running research agent (5 ingredients, no images)..."
+	@$(PYTHON) scripts/research_agent.py --limit 5 --skip-images
+	@echo ""
+	@# ── Start server ─────────────────────────────────────────────────────
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "  Starting dev server on http://localhost:8001"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo ""
+	@$(MAKE) dev --no-print-directory
+
 # ─── Database ─────────────────────────────────────────────────────────────────
 
 up:
+	@# Start Docker Desktop if docker daemon is not yet reachable
+	@if ! docker info > /dev/null 2>&1; then \
+		echo "Docker daemon not running — launching Docker Desktop..."; \
+		open -a Docker; \
+		echo "Waiting for Docker to start..."; \
+		for i in $$(seq 1 30); do sleep 2; docker info > /dev/null 2>&1 && break; done; \
+	fi
 	docker-compose up -d postgres
 	@echo "Waiting for PostgreSQL to be ready..."
-	@sleep 2
+	@sleep 3
 	@echo "PostgreSQL is up on port 5432"
 
 down:
@@ -180,6 +250,22 @@ fetch-cosing-dry:
 
 fetch-cosing-report:
 	$(PYTHON) scripts/fetch_cosing_data.py --dry-run --report-banned
+
+# ─── Golden set v2 ────────────────────────────────────────────────────────────
+
+seed-golden-set:
+	$(PYTHON) scripts/seed_golden_set_v2.py
+	@echo ""
+	@echo "Golden set seeded. Run 'make research-all' to enrich PENDING ingredients."
+
+seed-golden-set-dry:
+	$(PYTHON) scripts/seed_golden_set_v2.py --dry-run
+
+suggest-new-ingredients:
+	$(PYTHON) scripts/suggest_new_ingredients.py
+
+suggest-new-ingredients-more:
+	$(PYTHON) scripts/suggest_new_ingredients.py --limit 100
 
 research-dry:
 	$(PYTHON) scripts/research_agent.py --dry-run

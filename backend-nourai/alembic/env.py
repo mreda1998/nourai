@@ -21,6 +21,7 @@ from app.models import (
     UserProfile,
     UserStackEntry,
     Subscription,
+    UnmatchedIngredientLog,  # noqa: F401 — needed for Alembic autogenerate
 )
 
 config = context.config
