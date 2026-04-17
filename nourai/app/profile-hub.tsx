@@ -64,8 +64,8 @@ const FOCUS_LABELS: Record<string, string> = {
   wellness:    'Wellness',
 };
 
-// Subscription tier type
-type SubscriptionTier = 'free' | 'premium_monthly' | 'premium_annual';
+// Subscription tier type — mirrors backend SubscriptionTier enum (free | premium only)
+type SubscriptionTier = 'free' | 'premium';
 
 interface SubscriptionInfo {
   tier: SubscriptionTier;
@@ -269,19 +269,11 @@ const SETTINGS_ITEMS: {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getSubscriptionLabel(tier: SubscriptionTier): string {
-  switch (tier) {
-    case 'premium_monthly': return 'Premium';
-    case 'premium_annual': return 'Premium Annual';
-    default: return 'Free';
-  }
+  return tier === 'premium' ? 'Premium' : 'Free';
 }
 
 function getSubscriptionPrice(tier: SubscriptionTier): string {
-  switch (tier) {
-    case 'premium_monthly': return '$9.99/month';
-    case 'premium_annual': return '$63.99/year';
-    default: return 'Free';
-  }
+  return tier === 'premium' ? 'Premium plan' : 'Free';
 }
 
 function isPremium(tier: SubscriptionTier): boolean {

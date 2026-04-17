@@ -3,64 +3,76 @@
  */
 
 export const DOMAINS = [
-  'Gut Health',
-  'Skin',
-  'Metabolism',
+  'Gut & Digestive',
+  'Skin & Appearance',
+  'Energy & Metabolism',
   'Sleep & Recovery',
-  'Cognition',
-  'Exposure Load',
+  'Cognitive & Mental',
+  'Inflammation & Immune',
 ] as const;
 
 export type Domain = (typeof DOMAINS)[number];
 
-export const DOMAIN_SHORT_LABELS = ['Gut', 'Skin', 'Metab.', 'Sleep', 'Mind', 'Exposure'];
-
-export const DOMAIN_SLUGS: Record<Domain, string> = {
-  'Gut Health':       'gut-health',
-  'Skin':             'skin',
-  'Metabolism':       'metabolism',
-  'Sleep & Recovery': 'sleep-recovery',
-  'Cognition':        'cognition',
-  'Exposure Load':    'exposure-load',
+export const DOMAIN_SHORT_LABELS: Record<Domain, string> = {
+  'Gut & Digestive':       'Gut',
+  'Skin & Appearance':     'Skin',
+  'Energy & Metabolism':   'Energy',
+  'Sleep & Recovery':      'Sleep',
+  'Cognitive & Mental':    'Mind',
+  'Inflammation & Immune': 'Immune',
 };
 
-export const SLUG_TO_DOMAIN: Record<string, Domain> = Object.fromEntries(
-  Object.entries(DOMAIN_SLUGS).map(([d, s]) => [s, d as Domain])
-);
+export const DOMAIN_SLUGS: Record<Domain, string> = {
+  'Gut & Digestive':       'gut-digestive',
+  'Skin & Appearance':     'skin-appearance',
+  'Energy & Metabolism':   'energy-metabolism',
+  'Sleep & Recovery':      'sleep-recovery',
+  'Cognitive & Mental':    'cognitive-mental',
+  'Inflammation & Immune': 'inflammation-immune',
+};
+
+export const SLUG_TO_DOMAIN: Record<string, Domain> = {
+  'gut-digestive':       'Gut & Digestive',
+  'skin-appearance':     'Skin & Appearance',
+  'energy-metabolism':   'Energy & Metabolism',
+  'sleep-recovery':      'Sleep & Recovery',
+  'cognitive-mental':    'Cognitive & Mental',
+  'inflammation-immune': 'Inflammation & Immune',
+};
 
 /** 0–1 weight: how much each product category affects each domain */
 export const DOMAIN_RELEVANCE: Record<Domain, Record<string, number>> = {
-  'Gut Health':       { food: 1.0, supplement: 0.6, cosmetic: 0.0, otc: 0.3 },
-  'Skin':             { food: 0.3, supplement: 0.5, cosmetic: 1.0, otc: 0.2 },
-  'Metabolism':       { food: 0.9, supplement: 0.6, cosmetic: 0.0, otc: 0.3 },
+  'Gut & Digestive':       { food: 1.0, supplement: 0.6, cosmetic: 0.0, otc: 0.3 },
+  'Skin & Appearance':             { food: 0.3, supplement: 0.5, cosmetic: 1.0, otc: 0.2 },
+  'Energy & Metabolism':       { food: 0.9, supplement: 0.6, cosmetic: 0.0, otc: 0.3 },
   'Sleep & Recovery': { food: 0.2, supplement: 0.8, cosmetic: 0.0, otc: 0.7 },
-  'Cognition':        { food: 0.3, supplement: 0.7, cosmetic: 0.0, otc: 0.2 },
-  'Exposure Load':    { food: 0.8, supplement: 0.5, cosmetic: 0.9, otc: 0.7 },
+  'Cognitive & Mental':        { food: 0.3, supplement: 0.7, cosmetic: 0.0, otc: 0.2 },
+  'Inflammation & Immune':    { food: 0.8, supplement: 0.5, cosmetic: 0.9, otc: 0.7 },
 };
 
 export const DOMAIN_DESCRIPTIONS: Record<Domain, string> = {
-  'Gut Health':
+  'Gut & Digestive':
     'Tracks how your food and supplement choices support digestive health, microbiome diversity, and gut-brain signalling.',
-  'Skin':
+  'Skin & Appearance':
     'Covers topical products and nutrients that influence skin barrier integrity, hydration, and cellular turnover.',
-  'Metabolism':
+  'Energy & Metabolism':
     'Reflects dietary patterns and compounds that modulate energy production, insulin sensitivity, and body composition.',
   'Sleep & Recovery':
     'Evaluates supplements and OTC products that affect sleep latency, circadian rhythm, and overnight repair.',
-  'Cognition':
+  'Cognitive & Mental':
     'Assesses nootropics and nutrients with evidence for focus, memory consolidation, and neuroprotection.',
-  'Exposure Load':
+  'Inflammation & Immune':
     'Measures cumulative burden of synthetic additives, endocrine disruptors, and harmful compounds across your stack.',
 };
 
 /** Goals that belong to each domain */
 export const DOMAIN_GOALS: Record<Domain, string[]> = {
-  'Gut Health':       ['gut_health', 'less_inflammation'],
-  'Skin':             ['clear_skin', 'anti_aging', 'brighter_skin', 'hair_growth', 'prevent_hair_loss'],
-  'Metabolism':       ['build_muscle', 'fat_loss', 'more_energy'],
+  'Gut & Digestive':       ['gut_health', 'less_inflammation'],
+  'Skin & Appearance':             ['clear_skin', 'anti_aging', 'brighter_skin', 'hair_growth', 'prevent_hair_loss'],
+  'Energy & Metabolism':       ['build_muscle', 'fat_loss', 'more_energy'],
   'Sleep & Recovery': ['better_sleep', 'recovery'],
-  'Cognition':        ['mental_focus', 'reduce_stress'],
-  'Exposure Load':    [],
+  'Cognitive & Mental':        ['mental_focus', 'reduce_stress'],
+  'Inflammation & Immune':    [],
 };
 
 export const GOAL_LABELS: Record<string, string> = {
@@ -72,7 +84,7 @@ export const GOAL_LABELS: Record<string, string> = {
   build_muscle:      'Build Muscle',
   fat_loss:          'Fat Loss',
   more_energy:       'More Energy',
-  gut_health:        'Gut Health',
+  gut_health:        'Gut & Digestive',
   less_inflammation: 'Less Inflammation',
   mental_focus:      'Mental Focus',
   reduce_stress:     'Reduce Stress',
@@ -91,7 +103,7 @@ export interface KeyIngredient {
 }
 
 export const DOMAIN_KEY_INGREDIENTS: Record<Domain, KeyIngredient[]> = {
-  'Gut Health': [
+  'Gut & Digestive': [
     { name: 'Lactobacillus acidophilus', evidence: 'High',     description: 'Restores microbiome balance and reduces IBS severity.' },
     { name: 'Inulin / FOS',             evidence: 'High',     description: 'Prebiotic fibre that feeds beneficial bacteria.' },
     { name: 'Saccharomyces boulardii',  evidence: 'High',     description: 'Yeast probiotic; strong evidence for antibiotic-associated diarrhea.' },
@@ -99,7 +111,7 @@ export const DOMAIN_KEY_INGREDIENTS: Record<Domain, KeyIngredient[]> = {
     { name: 'Berberine',                evidence: 'Moderate', description: 'Modulates gut microbiota composition and reduces intestinal permeability.' },
     { name: 'L-Glutamine',              evidence: 'Moderate', description: 'Primary fuel for intestinal epithelial cells; supports barrier integrity.' },
   ],
-  'Skin': [
+  'Skin & Appearance': [
     { name: 'Retinol',               evidence: 'High',     description: 'Gold standard for cellular turnover, fine lines, and collagen synthesis.' },
     { name: 'Niacinamide',           evidence: 'High',     description: 'Reduces sebum, fades pigmentation, and strengthens the skin barrier.' },
     { name: 'Hyaluronic Acid',       evidence: 'High',     description: 'Holds 1,000× its weight in water; essential for dermal hydration.' },
@@ -107,7 +119,7 @@ export const DOMAIN_KEY_INGREDIENTS: Record<Domain, KeyIngredient[]> = {
     { name: 'Collagen Peptides',     evidence: 'Moderate', description: 'Oral supplementation shows modest but consistent improvements in skin elasticity.' },
     { name: 'Ceramides',             evidence: 'Moderate', description: 'Lipid molecules that repair and reinforce the epidermal barrier.' },
   ],
-  'Metabolism': [
+  'Energy & Metabolism': [
     { name: 'Creatine Monohydrate', evidence: 'High',     description: 'Most evidence-backed compound for lean mass, strength, and ATP regeneration.' },
     { name: 'CoQ10',                evidence: 'Moderate', description: 'Mitochondrial cofactor; supports cellular energy production especially post-40.' },
     { name: 'Berberine',            evidence: 'Moderate', description: 'Activates AMPK; comparable to metformin for insulin sensitivity in trials.' },
@@ -123,7 +135,7 @@ export const DOMAIN_KEY_INGREDIENTS: Record<Domain, KeyIngredient[]> = {
     { name: 'Glycine',             evidence: 'Moderate', description: 'Lowers core body temperature; shown to improve sleep quality and daytime alertness.' },
     { name: 'Valerian Root',       evidence: 'Moderate', description: 'GABA-modulating herb with evidence for reduced sleep latency.' },
   ],
-  'Cognition': [
+  'Cognitive & Mental': [
     { name: 'Omega-3 DHA',             evidence: 'High',     description: 'Structural component of neuronal membranes; strongest long-term cognition evidence.' },
     { name: 'Lion\'s Mane',            evidence: 'Moderate', description: 'Stimulates NGF synthesis; RCT evidence for mild cognitive impairment.' },
     { name: 'Bacopa Monnieri',         evidence: 'Moderate', description: 'Adaptogen with evidence for memory consolidation and reduced anxiety.' },
@@ -131,7 +143,7 @@ export const DOMAIN_KEY_INGREDIENTS: Record<Domain, KeyIngredient[]> = {
     { name: 'L-Tyrosine',             evidence: 'Moderate', description: 'Dopamine precursor; improves cognitive performance under stress and sleep deprivation.' },
     { name: 'Rhodiola Rosea',          evidence: 'Emerging', description: 'Adaptogen shown to reduce mental fatigue and improve reaction time.' },
   ],
-  'Exposure Load': [
+  'Inflammation & Immune': [
     { name: 'N-Acetyl Cysteine (NAC)', evidence: 'High',     description: 'Glutathione precursor; supports liver detoxification of environmental toxins.' },
     { name: 'Glutathione',             evidence: 'Moderate', description: 'Master antioxidant; neutralises free radicals from pollutant exposure.' },
     { name: 'Milk Thistle (Silymarin)', evidence: 'Moderate', description: 'Hepatoprotective flavonoid; reduces oxidative stress from chemical exposure.' },
@@ -153,17 +165,17 @@ export const CATEGORY_TIMING: Record<string, TimeSlot[]> = {
 };
 
 export const DOMAIN_TIMING_NOTES: Record<Domain, string> = {
-  'Gut Health':
+  'Gut & Digestive':
     'Probiotics are most effective taken 30 min before meals. Prebiotic fibres can be taken any time with water.',
-  'Skin':
+  'Skin & Appearance':
     'Apply vitamin C and SPF in the morning. Reserve retinoids and peptides for the evening routine.',
-  'Metabolism':
+  'Energy & Metabolism':
     'Creatine timing is flexible — consistency matters more. Pre-workout supplements perform best 30–60 min before training.',
   'Sleep & Recovery':
     'Take magnesium and adaptogens 1–2 hours before sleep. Avoid stimulants after 2pm.',
-  'Cognition':
+  'Cognitive & Mental':
     'DHA and phosphatidylserine are best with a fatty meal. L-Tyrosine works well in the morning before demanding tasks.',
-  'Exposure Load':
+  'Inflammation & Immune':
     'NAC and glutathione have better absorption on an empty stomach. Activated charcoal should be taken away from other supplements.',
 };
 
@@ -181,21 +193,21 @@ export interface EvidenceHighlight {
 }
 
 export const DOMAIN_EVIDENCE: Record<Domain, EvidenceHighlight> = {
-  'Gut Health': {
+  'Gut & Digestive': {
     quote: 'Probiotic intervention reduced IBS symptom severity scores by 34% versus placebo.',
     finding: 'Lactobacillus and Bifidobacterium strains showed consistent benefit across 82 independent trials.',
     source: 'BMJ Open',
     year: 2021,
     studyType: 'Systematic Review, 82 RCTs',
   },
-  'Skin': {
+  'Skin & Appearance': {
     quote: 'Retinol produced a 44% reduction in fine lines and 53% increase in dermal collagen density.',
     finding: '24-week double-blind trial comparing 0.1% retinol to vehicle control in adult subjects.',
     source: 'Journal of Investigative Dermatology',
     year: 2019,
     studyType: 'Double-Blind RCT, n=86',
   },
-  'Metabolism': {
+  'Energy & Metabolism': {
     quote: 'Creatine increased lean mass by 1.37 kg and strength output by 8% over 4–12 weeks.',
     finding: 'Effect consistent across training status, age, and sex in a 22-trial meta-analysis.',
     source: 'Journal of Strength and Conditioning Research',
@@ -209,14 +221,14 @@ export const DOMAIN_EVIDENCE: Record<Domain, EvidenceHighlight> = {
     year: 2022,
     studyType: 'RCT, n=446',
   },
-  'Cognition': {
+  'Cognitive & Mental': {
     quote: 'DHA supplementation improved episodic memory performance by 3.5 standard deviations versus placebo.',
     finding: '26-week trial (900mg/day DHA) in adults with age-related cognitive decline.',
     source: 'JAMA',
     year: 2010,
     studyType: 'Double-Blind RCT, n=485',
   },
-  'Exposure Load': {
+  'Inflammation & Immune': {
     quote: 'The average person applies 168 unique chemicals daily; 12.2% are known or suspected endocrine disruptors.',
     finding: 'Analysis of 25,000 personal care products across FDA and EWG databases.',
     source: 'Environmental Working Group',
@@ -228,15 +240,15 @@ export const DOMAIN_EVIDENCE: Record<Domain, EvidenceHighlight> = {
 // ─── Recommendations ─────────────────────────────────────────────────────────
 
 export const DOMAIN_RECOMMENDATIONS: Record<Domain, { category: string; suggestion: string }[]> = {
-  'Gut Health': [
+  'Gut & Digestive': [
     { category: 'food',       suggestion: 'Prioritise fermented foods — yoghurt, kimchi, kefir — for natural probiotic diversity.' },
     { category: 'supplement', suggestion: 'A multi-strain probiotic (≥10 billion CFU) combined with prebiotic FOS has the strongest synergistic evidence.' },
   ],
-  'Skin': [
+  'Skin & Appearance': [
     { category: 'cosmetic',   suggestion: 'A ceramide-based moisturiser and broad-spectrum SPF 50 are the two highest-ROI products.' },
     { category: 'supplement', suggestion: 'Collagen peptides (5–10g/day) and Vitamin C show the strongest combined evidence for skin elasticity.' },
   ],
-  'Metabolism': [
+  'Energy & Metabolism': [
     { category: 'food',       suggestion: 'Target 1.6–2.2g protein per kg bodyweight daily to support muscle protein synthesis.' },
     { category: 'supplement', suggestion: 'Creatine monohydrate (3–5g/day) has the most consistent evidence of any performance supplement.' },
   ],
@@ -244,11 +256,11 @@ export const DOMAIN_RECOMMENDATIONS: Record<Domain, { category: string; suggesti
     { category: 'supplement', suggestion: 'Magnesium glycinate (200–400mg elemental) taken 1 hour before bed — strongest evidence for sleep quality.' },
     { category: 'otc',        suggestion: 'Audit your stack for stimulants. Caffeine has a 5–6 hour half-life; avoid after 2pm.' },
   ],
-  'Cognition': [
+  'Cognitive & Mental': [
     { category: 'supplement', suggestion: 'Omega-3 DHA (at least 900mg/day) is the single highest-evidence intervention for long-term cognitive health.' },
     { category: 'food',       suggestion: 'Limit ultra-processed foods — neuroinflammation from poor diet quality is a key driver of brain fog.' },
   ],
-  'Exposure Load': [
+  'Inflammation & Immune': [
     { category: 'cosmetic',   suggestion: 'Switch to fragrance-free formulas. "Fragrance" can mask up to 3,000 undisclosed chemicals.' },
     { category: 'food',       suggestion: 'Replace ultra-processed snacks with whole foods to cut your synthetic additive load significantly.' },
   ],
@@ -283,7 +295,7 @@ export function computeRadarScores(
   stack: { category: string; grade: string; scannedAt?: Date }[]
 ): number[] {
   return DOMAINS.map((domain) => {
-    const isExposure = domain === 'Exposure Load';
+    const isExposure = domain === 'Inflammation & Immune';
     let beneficial = 0, moderate = 0, mixed = 0, caution = 0;
 
     stack.forEach((product) => {
@@ -309,7 +321,7 @@ export function computeRadarScores(
 }
 
 export function domainScoreLabel(domain: Domain, score: number): string {
-  if (domain === 'Exposure Load') {
+  if (domain === 'Inflammation & Immune') {
     if (score >= 75) return 'Clean';
     if (score >= 45) return 'Some flags';
     return 'Caution';

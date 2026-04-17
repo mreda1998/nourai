@@ -52,20 +52,20 @@ function scoreColor(score: number) {
 // ─── Goal → Domain mapping ───────────────────────────────────────────────────
 
 const GOAL_TO_DOMAIN: Record<string, Domain> = {
-  clear_skin:        'Skin',
-  anti_aging:        'Skin',
-  brighter_skin:     'Skin',
-  hair_growth:       'Skin',
-  prevent_hair_loss: 'Skin',
-  build_muscle:      'Metabolism',
-  fat_loss:          'Metabolism',
-  more_energy:       'Metabolism',
-  gut_health:        'Gut Health',
-  less_inflammation: 'Gut Health',
-  mental_focus:      'Cognition',
-  reduce_stress:     'Cognition',
-  better_sleep:      'Sleep & Recovery',
-  recovery:          'Sleep & Recovery',
+  clear_skin:          'Skin & Appearance',
+  anti_aging:          'Skin & Appearance',
+  brighter_skin:       'Skin & Appearance',
+  hair_growth:         'Skin & Appearance',
+  prevent_hair_loss:   'Skin & Appearance',
+  build_muscle:        'Energy & Metabolism',
+  fat_loss:            'Energy & Metabolism',
+  more_energy:         'Energy & Metabolism',
+  gut_health:          'Gut & Digestive',
+  less_inflammation:   'Inflammation & Immune',
+  mental_focus:        'Cognitive & Mental',
+  reduce_stress:       'Cognitive & Mental',
+  better_sleep:        'Sleep & Recovery',
+  recovery:            'Energy & Metabolism',
 };
 
 // ─── Protocol slots ──────────────────────────────────────────────────────────
@@ -210,7 +210,7 @@ function CustomRadarChart({
               fontFamily={Fonts.sansSemiBold}
               fill={Colors.inkSecondary}
             >
-              {DOMAIN_SHORT_LABELS[i].toUpperCase()}
+              {DOMAIN_SHORT_LABELS[DOMAINS[i]].toUpperCase()}
             </SvgText>
             <SvgText
               x={lx}

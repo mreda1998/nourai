@@ -74,7 +74,7 @@ function ingredientDirection(
   product: Product,
   domain: Domain
 ): 'benefit' | 'mixed' | 'risk' {
-  const isExposure = domain === 'Exposure Load';
+  const isExposure = domain === 'Inflammation & Immune';
   const grade = product.grade;
   const rel = DOMAIN_RELEVANCE[domain]?.[product.category] ?? 0;
   if (rel === 0) return 'mixed';
