@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
-  ActivityIndicator,
-  Alert,
   Linking,
   Platform,
   Pressable,
@@ -26,8 +24,8 @@ import {
 } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 
-// Subscription types
-type SubscriptionTier = 'free' | 'premium_monthly' | 'premium_annual';
+// Subscription types — mirrors backend SubscriptionTier enum
+type SubscriptionTier = 'free' | 'premium';
 
 interface SubscriptionPlan {
   id: string;
@@ -47,7 +45,7 @@ const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'premium_monthly',
     productId: 'elory_premium_monthly',
-    tier: 'premium_monthly',
+    tier: 'premium',
     name: 'Premium',
     price: '$9.99',
     pricePerMonth: '$9.99',
@@ -67,7 +65,7 @@ const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'premium_annual',
     productId: 'elory_premium_annual',
-    tier: 'premium_annual',
+    tier: 'premium',
     name: 'Premium Annual',
     price: '$63.99',
     pricePerMonth: '$5.33',
@@ -111,81 +109,17 @@ export default function SubscriptionScreen() {
   const { isSignedIn } = useAuth();
 
   const [selectedPlan, setSelectedPlan] = useState<string>('premium_monthly');
-  const [purchasing, setPurchasing] = useState(false);
-  const [restoring, setRestoring] = useState(false);
 
-  // Mock current subscription — replace with RevenueCat
+  // Mock current subscription tier — replace with RevenueCat when available
   const currentTier: SubscriptionTier = 'free';
   const isPremium = currentTier !== 'free';
 
-  const handlePurchase = async (planId: string) => {
-    if (!isSignedIn) {
-      Alert.alert(
-        'Sign In Required',
-        'Please sign in to subscribe to Elory Premium.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Sign In', onPress: () => router.push('/auth') },
-        ]
-      );
-      return;
-    }
-
-    setPurchasing(true);
-
-    try {
-      // TODO: Integrate with RevenueCat
-      // const purchaseResult = await Purchases.purchaseProduct(plan.productId);
-      // if (purchaseResult.customerInfo.entitlements.active['premium']) {
-      //   // Success
-      // }
-
-      // Mock purchase flow
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      Alert.alert(
-        'Purchase Successful',
-        'Welcome to Elory Premium! Enjoy unlimited access.',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
-    } catch (error) {
-      Alert.alert(
-        'Purchase Failed',
-        'There was an error processing your purchase. Please try again.',
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setPurchasing(false);
-    }
-  };
-
-  const handleRestore = async () => {
-    setRestoring(true);
-
-    try {
-      // TODO: Integrate with RevenueCat
-      // const customerInfo = await Purchases.restorePurchases();
-      // if (customerInfo.entitlements.active['premium']) {
-      //   Alert.alert('Restored!', 'Your subscription has been restored.');
-      // }
-
-      // Mock restore flow
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      Alert.alert(
-        'Restore Complete',
-        'No previous purchases found.',
-        [{ text: 'OK' }]
-      );
-    } catch (error) {
-      Alert.alert(
-        'Restore Failed',
-        'There was an error restoring your purchases. Please try again.',
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setRestoring(false);
-    }
+  const handleManageSubscription = () => {
+    const url =
+      Platform.OS === 'ios'
+        ? 'https://apps.apple.com/account/subscriptions'
+        : 'https://play.google.com/store/account/subscriptions';
+    Linking.openURL(url);
   };
 
   return (
@@ -274,34 +208,18 @@ export default function SubscriptionScreen() {
           ))}
         </View>
 
-        {/* Subscribe Button */}
-        <Pressable
-          style={[styles.subscribeBtn, purchasing && styles.subscribeBtnDisabled]}
-          onPress={() => handlePurchase(selectedPlan)}
-          disabled={purchasing}
-        >
-          {purchasing ? (
-            <ActivityIndicator color={Colors.bone} />
-          ) : (
-            <>
-              <CrownIcon size={18} color={Colors.bone} />
-              <Text style={styles.subscribeBtnText}>
-                Subscribe Now
-              </Text>
-            </>
-          )}
-        </Pressable>
-
-        {/* Restore Purchases */}
-        <Pressable
-          style={styles.restoreBtn}
-          onPress={handleRestore}
-          disabled={restoring}
-        >
-          <Text style={styles.restoreBtnText}>
-            {restoring ? 'Restoring...' : 'Restore Purchases'}
+        {/* Store subscription management */}
+        <View style={styles.storeSection}>
+          <Text style={styles.storeSectionText}>
+            Manage your NourAI subscription directly in the{' '}
+            {Platform.OS === 'ios' ? 'App Store' : 'Google Play Store'}.
           </Text>
-        </Pressable>
+          <Pressable style={styles.storeBtn} onPress={handleManageSubscription}>
+            <Text style={styles.storeBtnText}>
+              Open {Platform.OS === 'ios' ? 'App Store' : 'Play Store'}
+            </Text>
+          </Pressable>
+        </View>
 
         {/* Current Subscription (if premium) */}
         {isPremium && (
@@ -562,37 +480,31 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.body,
     color: Colors.inkSecondary,
   },
-  subscribeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-    backgroundColor: Colors.ink,
-    paddingVertical: Spacing.lg,
-    borderRadius: Radius.pill,
-    marginBottom: Spacing.md,
-  },
-  subscribeBtnDisabled: {
-    opacity: 0.7,
-  },
-  subscribeBtnText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.bodyLarge,
-    fontWeight: '600',
-    color: Colors.bone,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  restoreBtn: {
-    paddingVertical: Spacing.md,
-    alignItems: 'center',
+  storeSection: {
+    marginTop: Spacing.lg,
     marginBottom: Spacing.xl,
+    padding: Spacing.lg,
+    backgroundColor: Colors.boneDark,
+    borderRadius: Radius.md,
+    gap: Spacing.md,
   },
-  restoreBtnText: {
+  storeSectionText: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
     color: Colors.inkSecondary,
-    textDecorationLine: 'underline',
+    lineHeight: FontSizes.body * 1.5,
+    textAlign: 'center',
+  },
+  storeBtn: {
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.ink,
+    alignItems: 'center',
+  },
+  storeBtnText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.bodyLarge,
+    color: Colors.bone,
   },
   currentPlanSection: {
     marginBottom: Spacing.xl,
