@@ -4,7 +4,7 @@
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ??
-  (__DEV__ ? 'http://192.168.0.163:8081/api/v1' : '');
+  (__DEV__ ? 'http://localhost:8000/api/v1' : '');
 
 export interface Ingredient {
   name: string;
@@ -356,15 +356,26 @@ export interface UserHealthProfileUpdate {
 }
 
 // Subscription Types
+// Mirrors backend SubscriptionTier / SubscriptionStatus enums in app/models/subscription.py
 export interface Subscription {
+  tier: 'free' | 'premium';
+  status: 'active' | 'expired' | 'canceled' | 'grace_period';
+  is_premium: boolean;
+  expires_at?: string | null;
+}
+
+// Stack Types
+// Mirrors backend StackEntryResponse in app/schemas/user.py
+export interface StackEntry {
+  /** Entry UUID — used as path param for DELETE /users/me/stack/{id} */
   id: string;
-  user_id: string;
-  tier: 'free' | 'premium_monthly' | 'premium_annual' | 'family';
-  status: 'active' | 'cancelled' | 'expired' | 'billing_issue';
-  expires_at?: string;
-  store: 'app_store' | 'play_store';
+  product_id: string;
+  logged_at: string;
+  time_of_day?: 'morning' | 'afternoon' | 'evening' | 'night' | null;
+  quantity: number;
+  unit?: string | null;
+  notes?: string | null;
   created_at: string;
-  updated_at: string;
 }
 
 // Scan History Types
@@ -578,23 +589,25 @@ class APIService {
   // ============================================
 
   /**
-   * Get user's product stack
+   * Get user's product stack.
+   * Returns StackEntry[] — each entry has its own UUID (id) used for deletion.
    */
-  async getStack(authToken: string): Promise<ProductListItem[]> {
-    return this.fetch<ProductListItem[]>('/users/me/stack', {
+  async getStack(authToken: string): Promise<StackEntry[]> {
+    return this.fetch<StackEntry[]>('/users/me/stack', {
       headers: { Authorization: `Bearer ${authToken}` },
     });
   }
 
   /**
-   * Add product to stack
+   * Add product to stack.
+   * Returns the created StackEntry (includes the entry UUID needed for later deletion).
    */
   async addToStack(
     authToken: string,
     productId: string,
     timeOfDay?: 'morning' | 'afternoon' | 'evening' | 'night'
-  ): Promise<void> {
-    return this.fetch('/users/me/stack', {
+  ): Promise<StackEntry> {
+    return this.fetch<StackEntry>('/users/me/stack', {
       method: 'POST',
       headers: { Authorization: `Bearer ${authToken}` },
       body: JSON.stringify({ product_id: productId, time_of_day: timeOfDay }),
@@ -602,10 +615,11 @@ class APIService {
   }
 
   /**
-   * Remove product from stack
+   * Remove a stack entry by its entry UUID (not the product UUID).
+   * Use the `id` field from the StackEntry returned by getStack() / addToStack().
    */
-  async removeFromStack(authToken: string, productId: string): Promise<void> {
-    return this.fetch(`/users/me/stack/${productId}`, {
+  async removeFromStack(authToken: string, entryId: string): Promise<void> {
+    return this.fetch(`/users/me/stack/${entryId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${authToken}` },
     });

@@ -171,6 +171,9 @@ const GOALS = [
   { id: 'gut_health', label: 'Gut Health' },
   { id: 'less_inflammation', label: 'Less Inflammation' },
   { id: 'mental_focus', label: 'Mental Focus' },
+  { id: 'reduce_stress', label: 'Reduce Stress' },
+  { id: 'better_sleep', label: 'Better Sleep' },
+  { id: 'recovery', label: 'Recovery' },
 ];
 
 const STEP_META = [

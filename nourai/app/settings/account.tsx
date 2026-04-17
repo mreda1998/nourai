@@ -33,26 +33,9 @@ export default function AccountScreen() {
   // Form state
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
-  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = async () => {
-    if (!name.trim()) {
-      Alert.alert('Error', 'Name is required');
-      return;
-    }
-
-    setIsSaving(true);
-
-    try {
-      // TODO: Call API to update user profile
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      Alert.alert('Success', 'Your profile has been updated.');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update profile. Please try again.');
-    } finally {
-      setIsSaving(false);
-    }
+  const handleSave = () => {
+    Alert.alert('Coming Soon', 'Profile editing will be available in a future update.');
   };
 
   const handleSignOut = async () => {
@@ -85,16 +68,18 @@ export default function AccountScreen() {
           onPress: () => {
             Alert.alert(
               'Confirm Deletion',
-              'Type "DELETE" to confirm account deletion.',
+              'Are you sure? This cannot be undone.',
               [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                  text: 'Delete',
+                  text: 'Delete Account',
                   style: 'destructive',
-                  onPress: async () => {
-                    // TODO: Call API to delete account
-                    await signOut();
-                    router.replace('/auth');
+                  onPress: () => {
+                    Alert.alert(
+                      'Contact Support',
+                      'To delete your account and all associated data, please email support@nourai.app',
+                      [{ text: 'OK' }]
+                    );
                   },
                 },
               ]
@@ -194,13 +179,10 @@ export default function AccountScreen() {
             </View>
 
             <Pressable
-              style={[styles.saveBtn, isSaving && styles.saveBtnDisabled]}
+              style={[styles.saveBtn, styles.saveBtnDisabled]}
               onPress={handleSave}
-              disabled={isSaving}
             >
-              <Text style={styles.saveBtnText}>
-                {isSaving ? 'Saving...' : 'Save Changes'}
-              </Text>
+              <Text style={styles.saveBtnText}>Profile Editing Coming Soon</Text>
             </Pressable>
           </View>
 

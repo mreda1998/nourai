@@ -1,6 +1,6 @@
 import '../global.css';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
@@ -19,15 +19,39 @@ import {
 } from '@expo-google-fonts/manrope';
 import * as SplashScreen from 'expo-splash-screen';
 
-import { AppStateProvider } from '@/context/app-state';
+import { AppStateProvider, useAppState } from '@/context/app-state';
 import { AuthProvider, useAuth } from '@/context/auth-context';
+import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
 
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
   const { isLoading, isOnboarded, isSignedIn } = useAuth();
+  const { stack } = useAppState();
   const segments = useSegments();
   const router = useRouter();
+
+  // Migrate guest stack to server on sign-in (fire-and-forget, best-effort).
+  const prevIsSignedInRef = useRef(false);
+  useEffect(() => {
+    const wasSignedIn = prevIsSignedInRef.current;
+    prevIsSignedInRef.current = isSignedIn;
+
+    if (!isSignedIn || wasSignedIn || stack.length === 0) return;
+
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      for (const product of stack) {
+        try {
+          await api.addToStack(session.access_token, product.id);
+        } catch {
+          // Non-fatal — the stack tab will reload from server anyway
+        }
+      }
+    })();
+  }, [isSignedIn]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -201,6 +225,27 @@ function RootLayoutNav() {
       />
       <Stack.Screen
         name="settings/notifications"
+        options={{
+          presentation: 'card',
+          animation: 'slide_from_right',
+        }}
+      />
+      <Stack.Screen
+        name="settings/privacy"
+        options={{
+          presentation: 'card',
+          animation: 'slide_from_right',
+        }}
+      />
+      <Stack.Screen
+        name="settings/about"
+        options={{
+          presentation: 'card',
+          animation: 'slide_from_right',
+        }}
+      />
+      <Stack.Screen
+        name="health/edit-profile"
         options={{
           presentation: 'card',
           animation: 'slide_from_right',
