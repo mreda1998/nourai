@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
   Dimensions,
@@ -38,7 +38,9 @@ import { useAuth } from '@/context/auth-context';
 import ProductListItem from '@/components/ProductListItem';
 import { StackAssistant } from '@/components/StackAssistant';
 import { MealInputSheet } from '@/components/MealInputSheet';
-import type { RecognizedFood } from '@/services/api';
+import { supabase } from '@/lib/supabase';
+import { api } from '@/services/api';
+import type { RecognizedFood, StackEntry } from '@/services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const RADAR_SIZE = SCREEN_WIDTH - Layout.screenPaddingHorizontal * 2 - Spacing.md * 2;
@@ -279,11 +281,62 @@ export default function StackScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { stack, meals, removeFromStack, addMeal } = useAppState();
-  const { onboardingProfile } = useAuth();
+  const { isSignedIn, onboardingProfile } = useAuth();
 
   const [chatVisible, setChatVisible] = useState(false);
   const [mealSheetVisible, setMealSheetVisible] = useState(false);
+
+  // Server-synced stack entries (signed-in only).
+  // entryIdMap: productId → stack entry UUID (needed for DELETE).
+  const [serverEntries, setServerEntries] = useState<StackEntry[]>([]);
+  const [entryIdMap, setEntryIdMap] = useState<Record<string, string>>({});
+
+  // Hydrate entryIdMap from server when user is signed in.
+  useEffect(() => {
+    if (!isSignedIn) return;
+    let cancelled = false;
+    const loadServerStack = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token || cancelled) return;
+      api.getStack(session.access_token)
+        .then((entries) => {
+          if (cancelled) return;
+          setServerEntries(entries);
+          setEntryIdMap(Object.fromEntries(entries.map((e) => [e.product_id, e.id])));
+        })
+        .catch(() => {
+          // Non-fatal — local stack still visible
+        });
+    };
+    loadServerStack();
+    return () => { cancelled = true; };
+  }, [isSignedIn]);
+
   const radarScores = useMemo(() => computeRadarScores([...stack, ...meals]), [stack, meals]);
+
+  // Wrap removeFromStack: call server when signed in, then update local state.
+  const handleRemoveFromStack = async (productId: string) => {
+    removeFromStack(productId); // optimistic local update first
+    if (isSignedIn) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const entryId = entryIdMap[productId];
+      if (entryId) {
+        try {
+          await api.removeFromStack(session.access_token, entryId);
+        } catch {
+          // Non-fatal — local state already updated optimistically
+        }
+      }
+      // Refresh entryIdMap so future removals use fresh entry IDs.
+      api.getStack(session.access_token)
+        .then((entries) => {
+          setServerEntries(entries);
+          setEntryIdMap(Object.fromEntries(entries.map((e) => [e.product_id, e.id])));
+        })
+        .catch(() => {});
+    }
+  };
 
   const handleMealsConfirm = (foods: RecognizedFood[]) => {
     foods.forEach((food) => {
@@ -479,7 +532,7 @@ export default function StackScreen() {
                   key={product.id}
                   product={product}
                   onPress={() => router.push(`/product/${product.id}`)}
-                  onRemove={() => removeFromStack(product.id)}
+                  onRemove={() => handleRemoveFromStack(product.id)}
                 />
               ))}
             </View>
