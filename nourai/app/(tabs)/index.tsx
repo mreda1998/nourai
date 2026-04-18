@@ -1,36 +1,25 @@
+import React from 'react';
 import { useRouter } from 'expo-router';
 import {
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
+  SafeAreaView,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, {
-  FadeInDown,
-  FadeInRight,
-  FadeInUp,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated';
-import Svg, { Path } from 'react-native-svg';
 
-import {
-  Colors,
-  Fonts,
-  Spacing,
-  Radius,
-  FontSizes,
-  Layout,
-  scale,
-  verticalScale,
-} from '@/constants/theme';
+import { Colors, Fonts, Radius, FontSizes, scale } from '@/constants/theme';
 import { useAppState } from '@/context/app-state';
-import ProductListItem from '@/components/ProductListItem';
+import {
+  Eyebrow,
+  SerifH,
+  EvidenceSpectrum,
+  Tag,
+  ProductThumb,
+  SectionHead,
+} from '@/components/elory';
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function gradeToScore(grade: string): number {
   switch (grade) {
@@ -42,490 +31,307 @@ function gradeToScore(grade: string): number {
   }
 }
 
-function PressableScale({ children, style, onPress, ...props }: React.ComponentProps<typeof Pressable>) {
-  const pressScale = useSharedValue(1);
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pressScale.value }],
-  }));
+const STACK_THUMB_COLORS: Array<'sand' | 'sage' | 'dark' | 'default'> = [
+  'sand', 'sage', 'dark', 'default', 'sand',
+];
 
-  return (
-    <AnimatedPressable
-      {...props}
-      style={[animatedStyle, style]}
-      onPress={onPress}
-      onPressIn={() => { pressScale.value = withSpring(0.97, { damping: 15, stiffness: 200 }); }}
-      onPressOut={() => { pressScale.value = withSpring(1, { damping: 15, stiffness: 200 }); }}
-    >
-      {children}
-    </AnimatedPressable>
-  );
-}
+// ─── Placeholder ingredient cloud data ───────────────────────────────────────
 
-/** Circular SVG progress ring */
-function CircleProgress({ score }: { score: number }) {
-  const CIRCLE_PATH = 'M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831';
-  return (
-    <View style={styles.circleWrapper}>
-      {/* SVG ring rotated -90° so progress starts at top */}
-      <View style={styles.circleSvgContainer}>
-        <Svg width={96} height={96} viewBox="0 0 36 36" style={{ transform: [{ rotate: '-90deg' }] }}>
-          {/* Track */}
-          <Path
-            d={CIRCLE_PATH}
-            fill="none"
-            stroke={Colors.boneDark}
-            strokeWidth="2"
-          />
-          {/* Progress */}
-          <Path
-            d={CIRCLE_PATH}
-            fill="none"
-            stroke={Colors.ink}
-            strokeWidth="2"
-            strokeDasharray={`${score}, 100`}
-            strokeLinecap="round"
-          />
-        </Svg>
-      </View>
-      {/* Score text centred over SVG */}
-      <View style={styles.circleScoreOverlay} pointerEvents="none">
-        <Text style={styles.circleScore}>{score}</Text>
-      </View>
-    </View>
-  );
-}
+const KNOWN_INGREDIENTS = [
+  { key: 'magnesium', label: 'Magnesium glycinate', flagged: false },
+  { key: 'omega3',   label: 'Omega-3 EPA/DHA',     flagged: false },
+  { key: 'vitD',     label: 'Vitamin D₃',           flagged: false },
+  { key: 'ashwag',   label: 'Ashwagandha',           flagged: false },
+  { key: 'sodium-b', label: 'Sodium benzoate',       flagged: true  },
+  { key: 'creatine', label: 'Creatine monohydrate',  flagged: false },
+  { key: 'parabenm', label: 'Methylparaben',         flagged: true  },
+];
 
-/** Daily Composite Score card */
-function DailyCompositeCard({ score, domainBars }: { score: number; domainBars: { label: string; score: number }[] }) {
-  return (
-    <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.compositeCard}>
-      {/* Card header */}
-      <View style={styles.compositeHeader}>
-        <Text style={styles.compositeLabel}>Daily Composite</Text>
-        <Pressable>
-          <Text style={styles.compositeViewReport}>View Report</Text>
-        </Pressable>
-      </View>
-
-      {/* Score + bars */}
-      <View style={styles.compositeBody}>
-        <CircleProgress score={score} />
-
-        {/* Bar chart breakdown */}
-        <View style={styles.barsContainer}>
-          {domainBars.map((d) => (
-            <View key={d.label} style={styles.barRow}>
-              <View style={styles.barLabelRow}>
-                <Text style={styles.barLabel}>{d.label}</Text>
-                <Text style={styles.barScore}>{d.score}</Text>
-              </View>
-              <View style={styles.barTrack}>
-                <View style={[styles.barFill, { width: `${d.score}%` }]} />
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
-    </Animated.View>
-  );
-}
-
+// ─── Home Screen ──────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { hasScannedBefore, stack, meals } = useAppState();
 
   // Weight each item by its onset ramp so newly-added supplements don't
   // inflate the score before they've had time to accumulate in the body.
   const ONSET_DAYS: Record<string, number> = { food: 1, supplement: 14, cosmetic: 28, otc: 7 };
   const allItems = [...stack, ...meals];
-  const compositeScore = allItems.length === 0
-    ? 0
-    : Math.round(
-        allItems.reduce((sum, p) => {
-          const onset = ONSET_DAYS[p.category] ?? 7;
-          const days = (Date.now() - new Date(p.scannedAt).getTime()) / 86_400_000;
-          const w = Math.min(days / onset, 1);
-          return sum + gradeToScore(p.grade) * w;
-        }, 0) /
-        allItems.reduce((sum, p) => {
-          const onset = ONSET_DAYS[p.category] ?? 7;
-          const days = (Date.now() - new Date(p.scannedAt).getTime()) / 86_400_000;
-          return sum + Math.min(days / onset, 1);
-        }, 0)
-      );
+  const compositeScore =
+    allItems.length === 0
+      ? 0
+      : Math.round(
+          allItems.reduce((sum, p) => {
+            const onset = ONSET_DAYS[p.category] ?? 7;
+            const days = (Date.now() - new Date(p.scannedAt).getTime()) / 86_400_000;
+            const w = Math.min(days / onset, 1);
+            return sum + gradeToScore(p.grade) * w;
+          }, 0) /
+            allItems.reduce((sum, p) => {
+              const onset = ONSET_DAYS[p.category] ?? 7;
+              const days = (Date.now() - new Date(p.scannedAt).getTime()) / 86_400_000;
+              return sum + Math.min(days / onset, 1);
+            }, 0)
+        );
 
-  const domainBars = [
-    { label: 'Gut Health', score: Math.min(100, Math.round(compositeScore * 1.05)) },
-    { label: 'Dermal', score: Math.round(compositeScore * 0.9) },
-    { label: 'Metabolic', score: Math.min(100, Math.round(compositeScore * 0.97)) },
-  ];
+  // Derive a user name initial from the stack (placeholder)
+  const userName = hasScannedBefore ? 'you' : 'you';
+  const userInitial = 'E';
 
-  // First-time user experience
-  if (!hasScannedBefore) {
-    return (
-      <View className="flex-1 bg-bone">
-        <ScrollView
-          contentContainerStyle={[
-            styles.container,
-            { paddingTop: insets.top + Spacing.lg },
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Header */}
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
-            <Text className="font-serif-italic text-ink" style={{ fontSize: FontSizes.display, letterSpacing: 1 }}>Elory.</Text>
-            <Pressable onPress={() => router.push('/profile-hub')}>
-              <Text className="font-sans-semibold uppercase" style={{ fontSize: FontSizes.sm, letterSpacing: 1, color: Colors.inkSecondary }}>Profile</Text>
-            </Pressable>
-          </Animated.View>
-
-          {/* Hero Arch Card */}
-          <Animated.View entering={FadeInUp.duration(600).delay(100)} style={styles.heroSection}>
-            <View style={styles.archCard}>
-              <View style={styles.archCardTexture} />
-              <Text style={styles.heroTitle}>
-                Truth in{'\n'}Composition
-              </Text>
-              <Text style={styles.heroPhilosophy}>
-                Demystifying labels through the lens of rigorous clinical data and biological impact.
-              </Text>
-              <PressableScale
-                style={styles.scanCta}
-                onPress={() => router.push('/(tabs)/scan')}
-              >
-                <View style={styles.scanCtaIcon}>
-                  <View style={[styles.scanCorner, styles.scanCornerTL]} />
-                  <View style={[styles.scanCorner, styles.scanCornerTR]} />
-                  <View style={[styles.scanCorner, styles.scanCornerBL]} />
-                  <View style={[styles.scanCorner, styles.scanCornerBR]} />
-                  <View style={styles.scanCtaIconLine} />
-                </View>
-                <Text style={styles.scanCtaText}>Start Scanning</Text>
-              </PressableScale>
-            </View>
-          </Animated.View>
-
-          <View style={styles.pageContent}>
-            <DailyCompositeCard score={compositeScore} domainBars={domainBars} />
-          </View>
-        </ScrollView>
-      </View>
-    );
-  }
-
-  // Returning user
   return (
-    <View className="flex-1 bg-bone">
+    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.surface }}>
       <ScrollView
-        contentContainerStyle={[
-          styles.container,
-          { paddingTop: insets.top + Spacing.lg },
-        ]}
+        contentContainerStyle={{ paddingBottom: 140 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <Animated.View entering={FadeInDown.duration(400)} style={styles.header}>
+        {/* ── Header row ───────────────────────────────────────────────────── */}
+        <View
+          style={{
+            paddingHorizontal: 24,
+            paddingTop: 16,
+            paddingBottom: 28,
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'flex-end',
+          }}
+        >
           <View>
-            <Text className="font-sans-semibold uppercase" style={{ fontSize: FontSizes.sm, letterSpacing: 1.5, color: Colors.inkSecondary, marginBottom: 2 }}>
-              {new Date().toLocaleDateString('en-US', {
-                weekday: 'long',
-                month: 'short',
-                day: 'numeric',
-              })}
-            </Text>
-            <Text className="font-serif text-ink" style={{ fontSize: FontSizes.display }}>Elory.</Text>
+            <Eyebrow style={{ marginBottom: 4 }}>Good morning, {userName}</Eyebrow>
+            <SerifH size={32} italic>Elory.</SerifH>
           </View>
-          <Pressable onPress={() => router.push('/profile-hub')}>
-            <Text className="font-sans-semibold uppercase" style={{ fontSize: FontSizes.sm, letterSpacing: 1, color: Colors.inkSecondary }}>Profile</Text>
+
+          {/* Avatar button */}
+          <Pressable
+            onPress={() => router.push('/profile-hub')}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 999,
+              backgroundColor: Colors.sand,
+              borderWidth: 1,
+              borderColor: Colors.borderHairline,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: Fonts.serifItalic,
+                fontSize: 15,
+                color: Colors.ink,
+              }}
+            >
+              {userInitial}
+            </Text>
           </Pressable>
-        </Animated.View>
+        </View>
 
-        <View style={styles.pageContent}>
-          {/* Daily Composite Score */}
-          <DailyCompositeCard score={compositeScore} domainBars={domainBars} />
-
-          {/* Daily Stack */}
-          <Animated.View entering={FadeInDown.duration(400).delay(300)}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionLabel}>Today's Log</Text>
-              <Text style={styles.sectionAction}>Edit</Text>
+        {/* ── Teal hero card ────────────────────────────────────────────────── */}
+        <View style={{ marginHorizontal: 20, marginBottom: 28 }}>
+          <View
+            style={{
+              backgroundColor: Colors.accent,
+              borderTopLeftRadius: 120,
+              borderTopRightRadius: 120,
+              borderBottomLeftRadius: Radius.lg,
+              borderBottomRightRadius: Radius.lg,
+              padding: 28,
+              paddingTop: 40,
+              overflow: 'hidden',
+            }}
+          >
+            {/* Radial glow overlay */}
+            <View
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                opacity: 0.08,
+                backgroundColor: Colors.sand,
+                borderRadius: 999,
+              }}
+            />
+            <Eyebrow style={{ color: 'rgba(241,237,228,0.7)', marginBottom: 16 }}>
+              This evening
+            </Eyebrow>
+            <Text
+              style={{
+                fontFamily: Fonts.serifItalic,
+                fontSize: 24,
+                lineHeight: 30,
+                color: Colors.accentInk,
+                marginBottom: 20,
+              }}
+            >
+              Your magnesium glycinate lands best about 90 minutes before you dim the lights.
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View
+                style={{
+                  width: 4,
+                  height: 4,
+                  borderRadius: 2,
+                  backgroundColor: Colors.sand,
+                }}
+              />
+              <Text
+                style={{
+                  fontFamily: Fonts.sansSemiBold,
+                  fontSize: 11,
+                  letterSpacing: 1.0,
+                  textTransform: 'uppercase',
+                  color: 'rgba(241,237,228,0.65)',
+                }}
+              >
+                Based on 4 studies · Read brief
+              </Text>
             </View>
+          </View>
+        </View>
 
-            {stack.length === 0 ? (
-              <Animated.View entering={FadeInUp.duration(400).delay(400)} style={styles.emptyStack}>
-                <Text style={styles.emptyStackText}>No products in your stack</Text>
-                <PressableScale
-                  className="bg-ink px-lg py-sm rounded-pill"
-                  onPress={() => router.push('/(tabs)/scan')}
+        {/* ── Active Stack section ──────────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: 24, marginBottom: 32 }}>
+          <SectionHead label="Active Stack" right="5 items" />
+
+          {/* 5-column thumbnail grid */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+            {STACK_THUMB_COLORS.map((color, i) => (
+              <Pressable
+                key={i}
+                onPress={() => router.push('/(tabs)/stack' as any)}
+              >
+                <ProductThumb
+                  color={color}
+                  letter={String.fromCharCode(65 + i)}
+                  size={48}
+                />
+              </Pressable>
+            ))}
+          </View>
+
+          {/* Stack meta row */}
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              borderTopWidth: 1,
+              borderTopColor: Colors.borderHairline,
+              paddingTop: 10,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: Fonts.sans,
+                fontSize: 11,
+                color: Colors.inkSecondary,
+              }}
+            >
+              4 supplements · 1 topical
+            </Text>
+            <Text
+              style={{
+                fontFamily: Fonts.sansSemiBold,
+                fontSize: 11,
+                color: Colors.accent,
+              }}
+            >
+              2 synergies active
+            </Text>
+          </View>
+        </View>
+
+        {/* ── Recent Scans section ──────────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: 24, marginBottom: 32 }}>
+          <SectionHead label="Recent scans" right="View all" />
+
+          {stack.length === 0 ? (
+            <Text
+              style={{
+                fontFamily: Fonts.serifItalic,
+                fontSize: FontSizes.bodyLarge,
+                color: Colors.inkSecondary,
+                lineHeight: FontSizes.bodyLarge * 1.6,
+                paddingVertical: 12,
+              }}
+            >
+              Scan your first product to see it here.
+            </Text>
+          ) : (
+            <View style={{ gap: 16 }}>
+              {stack.slice(0, 4).map((product, i) => (
+                <Pressable
+                  key={product.id}
+                  onPress={() => router.push(`/product/${product.id}` as any)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}
                 >
-                  <Text className="font-sans-semibold text-bone uppercase" style={{ fontSize: FontSizes.body, letterSpacing: 0.5 }}>Scan a Product</Text>
-                </PressableScale>
-              </Animated.View>
-            ) : (
-              <View>
-                {stack.map((product, index) => (
-                  <Animated.View
-                    key={product.id}
-                    entering={FadeInRight.duration(400).delay(400 + index * 80)}
-                  >
-                    <ProductListItem
-                      id={product.id}
-                      name={product.name}
-                      brand={product.brand}
-                      category={product.category}
-                      grade={product.grade}
-                      onPress={() => router.push(`/product/${product.id}`)}
-                    />
-                  </Animated.View>
-                ))}
-              </View>
-            )}
-          </Animated.View>
+                  <ProductThumb
+                    color={STACK_THUMB_COLORS[i % STACK_THUMB_COLORS.length]}
+                    letter={product.name.charAt(0).toUpperCase()}
+                    size={44}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Eyebrow style={{ marginBottom: 2 }}>{product.brand}</Eyebrow>
+                    <Text
+                      style={{
+                        fontFamily: Fonts.serif,
+                        fontSize: 18,
+                        color: Colors.ink,
+                        lineHeight: 22,
+                        marginBottom: 6,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {product.name}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <EvidenceSpectrum
+                        strength={product.grade === 'A' ? 4 : product.grade === 'B' ? 3 : product.grade === 'C' ? 2 : 1}
+                      />
+                      <Tag tone={product.grade === 'A' ? 'sage' : product.grade === 'D' ? 'alert' : 'default'}>
+                        Grade {product.grade}
+                      </Tag>
+                    </View>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* ── Known Today ingredient cloud ──────────────────────────────────── */}
+        <View style={{ paddingHorizontal: 24 }}>
+          <SectionHead label="Known to you today" />
+
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {KNOWN_INGREDIENTS.map((ing) => (
+              <Pressable
+                key={ing.key}
+                style={{
+                  paddingVertical: 7,
+                  paddingHorizontal: 12,
+                  borderRadius: Radius.pill,
+                  borderLeftWidth: ing.flagged ? 2 : 1,
+                  borderWidth: 1,
+                  borderColor: ing.flagged ? Colors.alert : Colors.borderHairline,
+                  backgroundColor: Colors.surfaceCard,
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: Fonts.sans,
+                    fontSize: FontSizes.caption,
+                    color: ing.flagged ? Colors.alert : Colors.ink,
+                  }}
+                >
+                  {ing.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    paddingBottom: Layout.bottomPadding,
-  },
-
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: Layout.screenPaddingHorizontal,
-    marginBottom: Spacing.lg,
-  },
-
-  pageContent: {
-    paddingHorizontal: Layout.screenPaddingHorizontal,
-    gap: Spacing.lg,
-  },
-
-  // ── Composite Score Card ────────────────────────────────────────
-  compositeCard: {
-    backgroundColor: Colors.boneCard,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderRadius: 16,
-    padding: Spacing.md,
-  },
-  compositeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  compositeLabel: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    color: Colors.inkTertiary,
-  },
-  compositeViewReport: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: Colors.ink,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.ink,
-    paddingBottom: 1,
-  },
-  compositeBody: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.lg,
-  },
-
-  // Circle progress
-  circleWrapper: {
-    width: scale(96),
-    height: scale(96),
-    position: 'relative',
-    flexShrink: 0,
-  },
-  circleSvgContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-  },
-  circleScoreOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: scale(96),
-    height: scale(96),
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  circleScore: {
-    fontFamily: Fonts.serif,
-    fontSize: scale(32),
-    color: Colors.ink,
-    lineHeight: scale(32) * 1.1,
-  },
-
-  // Bar chart
-  barsContainer: {
-    flex: 1,
-    gap: Spacing.sm,
-  },
-  barRow: {
-    gap: 4,
-  },
-  barLabelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  barLabel: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    color: Colors.inkSecondary,
-  },
-  barScore: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    color: Colors.ink,
-  },
-  barTrack: {
-    height: 6,
-    backgroundColor: Colors.boneDark,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: '100%',
-    backgroundColor: Colors.ink,
-    borderRadius: 3,
-  },
-
-  // ── Section header ──────────────────────────────────────────────
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    paddingBottom: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderStrong,
-    marginBottom: 0,
-  },
-  sectionLabel: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    color: Colors.ink,
-  },
-  sectionAction: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: Colors.inkSecondary,
-    opacity: 0.5,
-  },
-
-  // ── Empty stack ─────────────────────────────────────────────────
-  emptyStack: {
-    paddingVertical: verticalScale(40),
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderStyle: 'dashed',
-    gap: Spacing.md,
-    marginTop: 1,
-  },
-  emptyStackText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.bodyLarge,
-    color: Colors.inkSecondary,
-  },
-
-  // ── First-time user hero ────────────────────────────────────────
-  heroSection: {
-    paddingHorizontal: Layout.screenPaddingHorizontal,
-    marginBottom: Spacing.xl,
-  },
-  archCard: {
-    backgroundColor: Colors.ink,
-    borderTopLeftRadius: Radius.arch,
-    borderTopRightRadius: Radius.arch,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-    paddingTop: verticalScale(80),
-    paddingBottom: verticalScale(60),
-    paddingHorizontal: scale(40),
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  archCardTexture: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    opacity: 0.03,
-    backgroundColor: Colors.bone,
-  },
-  heroTitle: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.giant,
-    color: Colors.bone,
-    textAlign: 'center',
-    lineHeight: FontSizes.giant * 1.1,
-    marginBottom: Spacing.lg,
-  },
-  heroPhilosophy: {
-    fontFamily: Fonts.serifItalic,
-    fontSize: FontSizes.title,
-    color: 'rgba(233, 230, 223, 0.8)',
-    textAlign: 'center',
-    lineHeight: FontSizes.title * 1.5,
-    maxWidth: scale(280),
-    marginBottom: verticalScale(40),
-  },
-  scanCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.bone,
-    paddingVertical: scale(14),
-    paddingHorizontal: scale(28),
-    borderRadius: Radius.pill,
-    gap: Spacing.sm,
-  },
-  scanCtaIcon: {
-    width: scale(16),
-    height: scale(16),
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scanCorner: {
-    position: 'absolute',
-    width: 5,
-    height: 5,
-    borderColor: Colors.ink,
-  },
-  scanCornerTL: { top: 0, left: 0, borderTopWidth: 1.5, borderLeftWidth: 1.5 },
-  scanCornerTR: { top: 0, right: 0, borderTopWidth: 1.5, borderRightWidth: 1.5 },
-  scanCornerBL: { bottom: 0, left: 0, borderBottomWidth: 1.5, borderLeftWidth: 1.5 },
-  scanCornerBR: { bottom: 0, right: 0, borderBottomWidth: 1.5, borderRightWidth: 1.5 },
-  scanCtaIconLine: {
-    width: '100%',
-    height: 1.5,
-    backgroundColor: Colors.ink,
-  },
-  scanCtaText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.caption,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: Colors.ink,
-  },
-});
