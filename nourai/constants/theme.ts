@@ -1,118 +1,102 @@
-/**
- * Nour AI Design System
- * Based on moodboard designs with bone/cream palette and clinical aesthetic
- * Includes responsive utilities for all phone sizes
- */
-
 import { Platform, Dimensions, PixelRatio, StyleSheet } from 'react-native';
 import { Easing } from 'react-native-reanimated';
 
-// Get device dimensions
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-// Base dimensions (iPhone 14/15 Pro as reference - 393x852)
 const BASE_WIDTH = 393;
 const BASE_HEIGHT = 852;
 
-/**
- * Responsive scaling utilities
- * Scale values based on screen width for consistent UI across devices
- */
 export const scale = (size: number): number => {
   const ratio = SCREEN_WIDTH / BASE_WIDTH;
-  const newSize = size * ratio;
-  return Math.round(PixelRatio.roundToNearestPixel(newSize));
+  return Math.round(PixelRatio.roundToNearestPixel(size * ratio));
 };
 
 export const verticalScale = (size: number): number => {
   const ratio = SCREEN_HEIGHT / BASE_HEIGHT;
-  const newSize = size * ratio;
-  return Math.round(PixelRatio.roundToNearestPixel(newSize));
+  return Math.round(PixelRatio.roundToNearestPixel(size * ratio));
 };
 
-// Moderate scaling - less aggressive for fonts and spacing
-export const moderateScale = (size: number, factor: number = 0.5): number => {
-  return Math.round(PixelRatio.roundToNearestPixel(size + (scale(size) - size) * factor));
-};
+export const moderateScale = (size: number, factor = 0.5): number =>
+  Math.round(PixelRatio.roundToNearestPixel(size + (scale(size) - size) * factor));
 
-// Font scaling with limits to prevent too large/small text
 export const fontScale = (size: number): number => {
   const scaled = moderateScale(size, 0.3);
-  const minSize = size * 0.85;
-  const maxSize = size * 1.2;
-  return Math.max(minSize, Math.min(maxSize, scaled));
+  return Math.max(size * 0.85, Math.min(size * 1.2, scaled));
 };
 
-// Device type detection
 export const isSmallDevice = SCREEN_WIDTH < 375;
 export const isMediumDevice = SCREEN_WIDTH >= 375 && SCREEN_WIDTH < 414;
 export const isLargeDevice = SCREEN_WIDTH >= 414;
 export const isTablet = SCREEN_WIDTH >= 768;
 
-// Core palette from moodboard
+// Elory palette — teal canonical
 export const Colors = {
-  // Primary backgrounds
-  bone: '#E9E6DF',
-  boneCard: '#F2F0EB',
-  boneDark: '#D6D3CC',
-  boneWarm: '#EFEDE8',
-  cardPure: '#FAF9F6',
+  // Surfaces
+  surface: '#F1EDE4',
+  surfaceAlt: '#E8E3D7',
+  surfaceCard: '#FAF7F0',
 
-  // Ink colors
-  ink: '#1C1C1C',
-  inkWarm: '#1A1918',
-  inkSecondary: 'rgba(28, 28, 28, 0.6)',
-  inkTertiary: 'rgba(28, 28, 28, 0.4)',
-  textMuted: '#585754',
+  // Ink
+  ink: '#0F2928',
+  inkSecondary: 'rgba(15, 41, 40, 0.62)',
+  inkTertiary: 'rgba(15, 41, 40, 0.38)',
 
   // Borders
-  borderHairline: 'rgba(28, 28, 28, 0.12)',
-  borderStrong: 'rgba(28, 28, 28, 1)',
+  borderHairline: 'rgba(15, 41, 40, 0.12)',
+  borderStrong: 'rgba(15, 41, 40, 0.85)',
 
-  // Accent colors for biosignals
-  accentClay: '#8C6A54',
-  accentMoss: '#5C6E5C',
-  accentHill: '#2F362F',
-  accentAlert: '#A34E4E',
+  // Brand
+  accent: '#1A5C5A',
+  accentInk: '#F1EDE4',
+  sand: '#E8D5B0',
+  sage: '#7BAE8E',
+  alert: '#C4654A',
 
-  // Alert backgrounds
-  alertBg: '#FDF1F1',
-  alertBorder: 'rgba(163, 75, 75, 0.2)',
-  alertText: '#5C2B2B',
+  // Premium / dark register
+  darkSurface: '#0F3E3D',
+  darkInk: '#F1EDE4',
 
-  // Semantic colors
-  success: '#5C6E5C',
-  warning: '#8C6A54',
-  error: '#A34E4E',
-
-  // Scanner specific
+  // Legacy aliases (keep so existing code doesn't break before screens are updated)
+  bone: '#F1EDE4',
+  boneCard: '#FAF7F0',
+  boneDark: '#E8E3D7',
+  boneWarm: '#F1EDE4',
+  cardPure: '#FAF7F0',
+  inkWarm: '#0F2928',
+  textMuted: 'rgba(15, 41, 40, 0.62)',
+  borderHairlineOld: 'rgba(15, 41, 40, 0.12)',
+  accentClay: '#C4654A',
+  accentMoss: '#7BAE8E',
+  accentHill: '#1A5C5A',
+  accentAlert: '#C4654A',
+  alertBg: 'rgba(196, 101, 74, 0.06)',
+  alertBorder: 'rgba(196, 101, 74, 0.2)',
+  alertText: '#C4654A',
+  success: '#7BAE8E',
+  warning: '#E8D5B0',
+  error: '#C4654A',
   scannerBg: '#000',
   scannerOverlay: 'rgba(0, 0, 0, 0.3)',
-  scannerGreen: '#4CAF50',
+  scannerGreen: '#7BAE8E',
 };
 
-// Typography — Cormorant Garamond for serif, Manrope for sans
+// Elory typography — Cormorant Garamond serif + DM Sans sans
 export const Fonts = {
   serif: 'CormorantGaramond_400Regular',
   serifMedium: 'CormorantGaramond_500Medium',
   serifItalic: 'CormorantGaramond_400Regular_Italic',
-  sans: 'Manrope_400Regular',
-  sansLight: 'Manrope_300Light',
-  sansMedium: 'Manrope_500Medium',
-  sansSemiBold: 'Manrope_600SemiBold',
+  sans: 'DMSans_400Regular',
+  sansLight: 'DMSans_300Light',
+  sansMedium: 'DMSans_500Medium',
+  sansSemiBold: 'DMSans_600SemiBold',
   mono: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })!,
 };
 
-// Animation duration constants
 export const DURATION_FAST = 200;
 export const DURATION_MEDIUM = 400;
 export const DURATION_SLOW = 600;
-
-// Easing presets matching moodboard CSS curves
 export const EASE_OUT_EXPO = Easing.bezier(0.16, 1, 0.3, 1);
 export const EASE_SPRING = { damping: 15, stiffness: 100 };
 
-// Responsive font sizes
 export const FontSizes = {
   xs: fontScale(9),
   sm: fontScale(10),
@@ -127,7 +111,6 @@ export const FontSizes = {
   giant: fontScale(42),
 };
 
-// Responsive spacing scale
 export const Spacing = {
   xs: scale(4),
   sm: scale(8),
@@ -137,17 +120,15 @@ export const Spacing = {
   xxl: scale(48),
 };
 
-// Border radius scale (less aggressive scaling)
 export const Radius = {
-  sm: moderateScale(4, 0.2),
-  md: moderateScale(12, 0.2),
-  lg: moderateScale(24, 0.2),
-  xl: moderateScale(32, 0.2),
-  pill: 100,
-  arch: 180, // For the arch cards
+  sm: 6,
+  md: 12,
+  lg: 20,
+  xl: 28,
+  pill: 999,
+  arch: 120,
 };
 
-// Shadow presets
 export const Shadows = {
   soft: {
     shadowColor: '#000',
@@ -170,6 +151,13 @@ export const Shadows = {
     shadowRadius: scale(32),
     elevation: 12,
   },
+  scanButton: {
+    shadowColor: '#0F2928',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    elevation: 10,
+  },
   glow: (color: string) => ({
     shadowColor: color,
     shadowOffset: { width: 0, height: 0 },
@@ -179,29 +167,26 @@ export const Shadows = {
   }),
 };
 
-// Common text styles matching moodboard
 export const TextStyles = StyleSheet.create({
-  // Labels (uppercase, spaced)
   label: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.sm,
     textTransform: 'uppercase' as const,
-    letterSpacing: 1.2,
+    letterSpacing: 1.4,
     color: Colors.inkSecondary,
   },
   labelSmall: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.xs,
     textTransform: 'uppercase' as const,
-    letterSpacing: 1,
+    letterSpacing: 1.0,
     color: Colors.inkSecondary,
   },
-  // Serif display text
   serifDisplay: {
     fontFamily: Fonts.serif,
     fontSize: FontSizes.display,
     color: Colors.ink,
-    lineHeight: FontSizes.display * 1.1,
+    lineHeight: FontSizes.display * 1.05,
   },
   serifTitle: {
     fontFamily: Fonts.serif,
@@ -211,11 +196,9 @@ export const TextStyles = StyleSheet.create({
   serifHero: {
     fontFamily: Fonts.serif,
     fontSize: FontSizes.hero,
-    color: Colors.bone,
-    textAlign: 'center' as const,
-    lineHeight: FontSizes.hero * 1.1,
+    color: Colors.surface,
+    lineHeight: FontSizes.hero * 1.05,
   },
-  // Body text
   body: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
@@ -228,37 +211,28 @@ export const TextStyles = StyleSheet.create({
     color: Colors.inkSecondary,
     lineHeight: FontSizes.body * 1.5,
   },
-  // Philosophy/italic text
   philosophy: {
     fontFamily: Fonts.serifItalic,
     fontSize: FontSizes.title,
-    color: 'rgba(233, 230, 223, 0.8)',
-    textAlign: 'center' as const,
+    color: 'rgba(241, 237, 228, 0.8)',
     lineHeight: FontSizes.title * 1.5,
   },
 });
 
-// Glassmorphism constants — iOS BlurView tint + overlay values
 export const Glass = {
-  // Use with expo-blur BlurView on iOS
   tint: 'systemUltraThinMaterialLight' as const,
   intensity: 88,
-  // Warm bone overlay on top of the blur (matches palette)
-  overlayBone: 'rgba(242, 240, 235, 0.58)',
-  // Top hairline — bright white catches light like real glass
+  overlayBone: 'rgba(241, 237, 228, 0.58)',
   border: 'rgba(255, 255, 255, 0.9)',
-  // Subtle inner border for glass cards
   borderSubtle: 'rgba(255, 255, 255, 0.35)',
-  // Android/non-iOS fallback (solid, no blur)
-  androidFallback: 'rgba(242, 240, 235, 0.97)',
+  androidFallback: 'rgba(241, 237, 228, 0.97)',
 };
 
-// Layout constants
 export const Layout = {
-  screenPaddingHorizontal: Spacing.lg,
+  screenPaddingHorizontal: scale(24),
   screenPaddingTop: verticalScale(60),
   tabBarHeight: verticalScale(80),
-  bottomPadding: verticalScale(120), // Account for tab bar
-  cardPadding: Spacing.md,
+  bottomPadding: verticalScale(120),
+  cardPadding: scale(16),
   scannerOverlaySize: scale(280),
 };

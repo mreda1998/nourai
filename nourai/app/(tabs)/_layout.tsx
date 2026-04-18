@@ -3,75 +3,79 @@ import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path, Circle } from 'react-native-svg';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated';
+import Svg, { Path, Circle, Line } from 'react-native-svg';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-
-import { Colors, Glass, scale } from '@/constants/theme';
+import { Colors, Glass, Fonts, scale } from '@/constants/theme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-// Tab icons
 function HomeIcon({ focused }: { focused: boolean }) {
+  const c = focused ? Colors.ink : Colors.inkTertiary;
   return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill={focused ? Colors.ink : 'none'} stroke={focused ? Colors.ink : Colors.inkTertiary} strokeWidth={2}>
-      <Path d="M3 13h1v7c0 1.103.897 2 2 2h12c1.103 0 2-.897 2-2v-7h1a1 1 0 0 0 .707-1.707l-9-9a1 1 0 0 0-1.414 0l-9 9A1 1 0 0 0 3 13zm7 7v-5h4v5h-4z" />
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.6}>
+      <Path d="M3 11l9-8 9 8v10a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1V11z" />
     </Svg>
   );
 }
 
-function SearchIcon({ focused }: { focused: boolean }) {
+function StackIcon({ focused }: { focused: boolean }) {
+  const c = focused ? Colors.ink : Colors.inkTertiary;
   return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={focused ? Colors.ink : Colors.inkTertiary} strokeWidth={2}>
-      <Circle cx={11} cy={11} r={8} />
-      <Path d="m21 21-4.3-4.3" strokeLinecap="round" />
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.6}>
+      <Path d="M12 3l9 5-9 5-9-5 9-5z" />
+      <Path d="M3 13l9 5 9-5" />
+      <Path d="M3 18l9 5 9-5" />
     </Svg>
   );
 }
 
-function HistoryIcon({ focused }: { focused: boolean }) {
+function ChatIcon({ focused }: { focused: boolean }) {
+  const c = focused ? Colors.ink : Colors.inkTertiary;
   return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={focused ? Colors.ink : Colors.inkTertiary} strokeWidth={2}>
-      <Path d="M12 20v-6M6 20V10M18 20V4" strokeLinecap="round" />
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.6}>
+      <Path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z" />
     </Svg>
   );
 }
 
-function SettingsIcon({ focused }: { focused: boolean }) {
+function ProfileIcon({ focused }: { focused: boolean }) {
+  const c = focused ? Colors.ink : Colors.inkTertiary;
   return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={focused ? Colors.ink : Colors.inkTertiary} strokeWidth={2}>
-      <Circle cx={12} cy={12} r={3} />
-      <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.6}>
+      <Circle cx={12} cy={8} r={4} />
+      <Path d="M4 21v-1a8 8 0 0116 0v1" />
     </Svg>
   );
 }
 
-function PlusIcon() {
+function ScanIcon() {
   return (
-    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={Colors.bone} strokeWidth={2.5}>
-      <Path d="M12 4v16m8-8H4" strokeLinecap="round" />
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={Colors.accentInk} strokeWidth={1.8}>
+      <Path d="M4 7V5a2 2 0 012-2h2M16 3h2a2 2 0 012 2v2M20 17v2a2 2 0 01-2 2h-2M8 21H6a2 2 0 01-2-2v-2" />
+      <Path d="M3 12h18" strokeDasharray="2 2" />
     </Svg>
   );
 }
 
 const TAB_CONFIG = [
-  { name: 'index', label: 'Home', icon: HomeIcon },
-  { name: 'search', label: 'Search', icon: SearchIcon },
-  { name: 'history', label: 'History', icon: HistoryIcon },
-  { name: 'stack', label: 'Stack', icon: SettingsIcon },
+  { name: 'index',   label: 'Home',    Icon: HomeIcon },
+  { name: 'stack',   label: 'Stack',   Icon: StackIcon },
+  { name: 'chat',    label: 'Chat',    Icon: ChatIcon },
+  { name: 'profile', label: 'Profile', Icon: ProfileIcon },
 ];
 
-function TabItem({ tab, isFocused, onPress }: { tab: typeof TAB_CONFIG[0]; isFocused: boolean; onPress: () => void }) {
+function TabItem({
+  tab,
+  isFocused,
+  onPress,
+}: {
+  tab: (typeof TAB_CONFIG)[0];
+  isFocused: boolean;
+  onPress: () => void;
+}) {
   const iconScale = useSharedValue(1);
-  const IconComponent = tab.icon;
-
-  const animatedIconStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: iconScale.value }],
-  }));
+  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: iconScale.value }] }));
 
   const handlePress = () => {
     iconScale.value = withSpring(0.82, { damping: 12, stiffness: 220 }, () => {
@@ -82,15 +86,16 @@ function TabItem({ tab, isFocused, onPress }: { tab: typeof TAB_CONFIG[0]; isFoc
   };
 
   return (
-    <Pressable onPress={handlePress} className="items-center" style={{ gap: scale(4) }}>
-      <Animated.View style={animatedIconStyle}>
-        <IconComponent focused={isFocused} />
+    <Pressable onPress={handlePress} style={{ alignItems: 'center', gap: 4 }}>
+      <Animated.View style={animatedStyle}>
+        <tab.Icon focused={isFocused} />
       </Animated.View>
       <Text
-        className="font-sans-semibold uppercase"
         style={{
+          fontFamily: Fonts.sansSemiBold,
           fontSize: scale(9),
-          letterSpacing: 1.5,
+          letterSpacing: 1.2,
+          textTransform: 'uppercase',
           color: isFocused ? Colors.ink : Colors.inkTertiary,
         }}
       >
@@ -100,23 +105,20 @@ function TabItem({ tab, isFocused, onPress }: { tab: typeof TAB_CONFIG[0]; isFoc
   );
 }
 
-function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const focusedRoute = state.routes[state.index];
   const scanScale = useSharedValue(1);
+  const focusedRoute = state.routes[state.index];
 
   const animatedScanStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: '45deg' }, { scale: scanScale.value }],
+    transform: [{ scale: scanScale.value }],
   }));
 
-  // Hide tab bar on scan screen (after all hooks)
-  if (focusedRoute?.name === 'scan') {
-    return null;
-  }
+  if (focusedRoute?.name === 'scan') return null;
 
-  const leftTabs = TAB_CONFIG.slice(0, 2);
-  const rightTabs = TAB_CONFIG.slice(2);
+  const leftTabs = TAB_CONFIG.slice(0, 2);   // Home, Stack
+  const rightTabs = TAB_CONFIG.slice(2);      // Chat, Profile
 
   const handleScanPress = () => {
     scanScale.value = withSpring(0.88, { damping: 10, stiffness: 200 }, () => {
@@ -127,37 +129,19 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   };
 
   return (
-    <View className="absolute bottom-0 left-0 right-0" style={{ paddingBottom: insets.bottom }}>
-      {/*
-       * Glass background layer.
-       * overflow: 'hidden' clips the BlurView to the tab bar bounds.
-       * The scan button lives as a sibling — outside this wrapper — so it
-       * can float above without being clipped.
-       */}
+    <View style={[styles.wrapper, { paddingBottom: insets.bottom }]}>
       <View style={styles.glassWrapper}>
         {Platform.OS === 'ios' ? (
-          <BlurView
-            tint={Glass.tint}
-            intensity={Glass.intensity}
-            style={StyleSheet.absoluteFill}
-          />
+          <BlurView tint={Glass.tint} intensity={Glass.intensity} style={StyleSheet.absoluteFill} />
         ) : (
-          // Android: solid fallback — no true blur support
-          <View style={[StyleSheet.absoluteFill, styles.androidFallback]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: Glass.androidFallback }]} />
         )}
-        {/* Warm bone overlay — anchors the blur to the app palette */}
-        <View style={[StyleSheet.absoluteFill, styles.glassOverlay]} />
-        {/* Top hairline — the "glass edge" that catches light */}
-        <View style={styles.glassTopBorder} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: Glass.overlayBone }]} />
+        <View style={styles.topBorder} />
       </View>
 
-      {/* Tab content sits on top of the glass layer */}
-      <View
-        className="flex-row items-center justify-between"
-        style={{ paddingHorizontal: scale(24), paddingTop: scale(16), paddingBottom: scale(24) }}
-      >
-        {/* Left tabs */}
-        <View className="flex-row" style={{ gap: scale(32) }}>
+      <View style={styles.row}>
+        <View style={styles.side}>
           {leftTabs.map((tab) => {
             const route = state.routes.find((r) => r.name === tab.name);
             if (!route) return null;
@@ -173,11 +157,9 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           })}
         </View>
 
-        {/* Center gap for the floating scan button */}
         <View style={styles.scanGap} />
 
-        {/* Right tabs */}
-        <View className="flex-row" style={{ gap: scale(32) }}>
+        <View style={styles.side}>
           {rightTabs.map((tab) => {
             const route = state.routes.find((r) => r.name === tab.name);
             if (!route) return null;
@@ -194,14 +176,8 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
         </View>
       </View>
 
-      {/* Diamond scan button — floats above the glass bar */}
-      <AnimatedPressable
-        style={[styles.scanButton, animatedScanStyle]}
-        onPress={handleScanPress}
-      >
-        <View style={styles.scanButtonInner}>
-          <PlusIcon />
-        </View>
+      <AnimatedPressable style={[styles.scanButton, animatedScanStyle]} onPress={handleScanPress}>
+        <ScanIcon />
       </AnimatedPressable>
     </View>
   );
@@ -213,25 +189,30 @@ export default function TabLayout() {
       screenOptions={{ headerShown: false }}
       tabBar={(props) => <CustomTabBar {...props} />}
     >
-      <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs.Screen name="search" options={{ title: 'Search' }} />
-      <Tabs.Screen name="scan" options={{ title: 'Scan' }} />
-      <Tabs.Screen name="history" options={{ title: 'History' }} />
-      <Tabs.Screen name="stack" options={{ title: 'Stack' }} />
+      <Tabs.Screen name="index"   options={{ title: 'Home' }} />
+      <Tabs.Screen name="stack"   options={{ title: 'Stack' }} />
+      <Tabs.Screen name="scan"    options={{ title: 'Scan' }} />
+      <Tabs.Screen name="chat"    options={{ title: 'Chat' }} />
+      <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
+      {/* Keep search/history registered but not in nav */}
+      <Tabs.Screen name="search"  options={{ href: null }} />
+      <Tabs.Screen name="history" options={{ href: null }} />
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
-  // ── Glass background ────────────────────────────────────────────────────────
+  wrapper: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
   glassWrapper: {
     ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden', // clips BlurView and overlays to the tab bar bounds
+    overflow: 'hidden',
   },
-  glassOverlay: {
-    backgroundColor: Glass.overlayBone,
-  },
-  glassTopBorder: {
+  topBorder: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -239,16 +220,21 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: Glass.border,
   },
-  androidFallback: {
-    backgroundColor: Glass.androidFallback,
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: scale(24),
+    paddingTop: scale(16),
+    paddingBottom: scale(24),
   },
-
-  // Placeholder that reserves space for the floating scan button
+  side: {
+    flexDirection: 'row',
+    gap: scale(32),
+  },
   scanGap: {
     width: scale(56),
   },
-
-  // ── Floating scan (diamond) button ─────────────────────────────────────────
   scanButton: {
     position: 'absolute',
     left: '50%',
@@ -256,22 +242,14 @@ const styles = StyleSheet.create({
     marginLeft: -scale(28),
     width: scale(56),
     height: scale(56),
-    backgroundColor: Colors.inkWarm,
-    borderRadius: scale(16),
+    backgroundColor: Colors.accent,
+    borderRadius: 999,
     justifyContent: 'center',
     alignItems: 'center',
-    // Refined shadow — diffuse glow rather than hard drop
     shadowColor: Colors.ink,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.28,
     shadowRadius: 18,
     elevation: 10,
-    // Subtle light-catching border (white edge, like anodised aluminium)
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.22)',
-  },
-  scanButtonInner: {
-    // Counter-rotate so the '+' stays upright inside the rotated diamond
-    transform: [{ rotate: '-45deg' }],
   },
 });

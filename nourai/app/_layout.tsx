@@ -12,11 +12,11 @@ import {
   CormorantGaramond_400Regular_Italic,
 } from '@expo-google-fonts/cormorant-garamond';
 import {
-  Manrope_300Light,
-  Manrope_400Regular,
-  Manrope_500Medium,
-  Manrope_600SemiBold,
-} from '@expo-google-fonts/manrope';
+  DMSans_300Light,
+  DMSans_400Regular,
+  DMSans_500Medium,
+  DMSans_600SemiBold,
+} from '@expo-google-fonts/dm-sans';
 import * as SplashScreen from 'expo-splash-screen';
 
 import { AppStateProvider, useAppState } from '@/context/app-state';
@@ -260,10 +260,10 @@ export default function RootLayout() {
     CormorantGaramond_400Regular,
     CormorantGaramond_500Medium,
     CormorantGaramond_400Regular_Italic,
-    Manrope_300Light,
-    Manrope_400Regular,
-    Manrope_500Medium,
-    Manrope_600SemiBold,
+    DMSans_300Light,
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_600SemiBold,
   });
 
   const onLayoutRootView = useCallback(async () => {
