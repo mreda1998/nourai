@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
-  Dimensions,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,67 +9,43 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
-import Svg, { Circle, G, Line, Polygon, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, Line } from 'react-native-svg';
 import { Swipeable } from 'react-native-gesture-handler';
 
 import {
   Colors,
   Fonts,
   FontSizes,
-  Layout,
   Radius,
   scale,
   Spacing,
   verticalScale,
+  Layout,
 } from '@/constants/theme';
 import {
   DOMAINS,
-  DOMAIN_SHORT_LABELS,
-  DOMAIN_RELEVANCE,
   DOMAIN_SLUGS,
   GOAL_LABELS,
   computeRadarScores,
-  domainScoreLabel,
   type Domain,
 } from '@/constants/domains';
 import { useAppState, type Product } from '@/context/app-state';
 import { useAuth } from '@/context/auth-context';
-import ProductListItem from '@/components/ProductListItem';
 import { StackAssistant } from '@/components/StackAssistant';
 import { MealInputSheet } from '@/components/MealInputSheet';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/services/api';
 import type { RecognizedFood, StackEntry } from '@/services/api';
+import {
+  Eyebrow,
+  SerifH,
+  EvidenceSpectrum,
+  SectionHead,
+  ProductThumb,
+  Tag,
+} from '@/components/elory';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const RADAR_SIZE = SCREEN_WIDTH - Layout.screenPaddingHorizontal * 2 - Spacing.md * 2;
-
-function scoreColor(score: number) {
-  if (score >= 70) return Colors.accentHill;
-  if (score >= 40) return Colors.inkSecondary;
-  return Colors.accentAlert;
-}
-
-// ─── Goal → Domain mapping ───────────────────────────────────────────────────
-
-const GOAL_TO_DOMAIN: Record<string, Domain> = {
-  clear_skin:          'Skin & Appearance',
-  anti_aging:          'Skin & Appearance',
-  brighter_skin:       'Skin & Appearance',
-  hair_growth:         'Skin & Appearance',
-  prevent_hair_loss:   'Skin & Appearance',
-  build_muscle:        'Energy & Metabolism',
-  fat_loss:            'Energy & Metabolism',
-  more_energy:         'Energy & Metabolism',
-  gut_health:          'Gut & Digestive',
-  less_inflammation:   'Inflammation & Immune',
-  mental_focus:        'Cognitive & Mental',
-  reduce_stress:       'Cognitive & Mental',
-  better_sleep:        'Sleep & Recovery',
-  recovery:            'Energy & Metabolism',
-};
-
-// ─── Protocol slots ──────────────────────────────────────────────────────────
+// ─── Category → time slot ─────────────────────────────────────────────────────
 
 const CATEGORY_SLOT: Record<string, string> = {
   food:       'Nutrition',
@@ -79,161 +54,18 @@ const CATEGORY_SLOT: Record<string, string> = {
   otc:        'Treatment',
 };
 
-// ─── Goal alignment row ──────────────────────────────────────────────────────
+// ─── ProductThumb color mapping ───────────────────────────────────────────────
 
-function GoalAlignmentRow({
-  goalId,
-  radarScores,
-}: {
-  goalId: string;
-  radarScores: number[];
-}) {
-  const label = GOAL_LABELS[goalId] ?? goalId;
-  const domain = GOAL_TO_DOMAIN[goalId];
-  const domainIndex = domain ? DOMAINS.indexOf(domain) : -1;
-  const score = domainIndex >= 0 ? radarScores[domainIndex] : 50;
-
-  const coverage = score >= 70 ? 'aligned' : score >= 40 ? 'partial' : 'gap';
-  const coverageStyle = {
-    aligned: { dot: Colors.accentHill, text: 'Aligned' },
-    partial:  { dot: Colors.accentClay, text: 'Partial' },
-    gap:      { dot: Colors.boneDark, text: 'Gap' },
-  }[coverage];
-
-  return (
-    <View style={styles.goalRow}>
-      <View style={[styles.goalDot, { backgroundColor: coverageStyle.dot }]} />
-      <Text style={styles.goalLabel}>{label}</Text>
-      <Text style={[styles.goalStatus, coverage === 'gap' && styles.goalStatusGap]}>
-        {coverageStyle.text}
-      </Text>
-    </View>
-  );
+function thumbColor(category: string): 'sand' | 'sage' | 'dark' | 'default' {
+  if (category === 'supplement') return 'sand';
+  if (category === 'cosmetic') return 'sage';
+  if (category === 'otc') return 'dark';
+  return 'default';
 }
 
-// ─── Custom radar chart ───────────────────────────────────────────────────────
+// ─── Swipeable product row (Elory style) ──────────────────────────────────────
 
-function CustomRadarChart({
-  scores,
-  onDomainPress,
-}: {
-  scores: number[];
-  onDomainPress: (slug: string) => void;
-}) {
-  const size = RADAR_SIZE;
-  const cx = size / 2;
-  const cy = size / 2;
-  const gridR = size * 0.28;   // outer grid ring radius
-  const labelR = size * 0.44;  // label center radius
-  const n = DOMAINS.length;
-
-  const ang = (i: number) => (i * 2 * Math.PI) / n - Math.PI / 2;
-
-  const ringPoints = (ratio: number) =>
-    Array.from({ length: n }, (_, i) => {
-      const a = ang(i);
-      return `${cx + gridR * ratio * Math.cos(a)},${cy + gridR * ratio * Math.sin(a)}`;
-    }).join(' ');
-
-  const dataPolyPoints = scores
-    .map((s, i) => {
-      const a = ang(i);
-      const ratio = Math.min(s / 100, 1);
-      return `${cx + gridR * ratio * Math.cos(a)},${cy + gridR * ratio * Math.sin(a)}`;
-    })
-    .join(' ');
-
-  return (
-    <Svg width={size} height={size}>
-      {/* Grid rings at 25 / 50 / 75 / 100% */}
-      {([0.25, 0.5, 0.75, 1] as const).map((level) => (
-        <Polygon
-          key={level}
-          points={ringPoints(level)}
-          fill="transparent"
-          stroke={level === 1 ? Colors.borderStrong : Colors.borderHairline}
-          strokeWidth={1}
-        />
-      ))}
-
-      {/* Axis spokes */}
-      {Array.from({ length: n }, (_, i) => {
-        const a = ang(i);
-        return (
-          <Line
-            key={i}
-            x1={cx}
-            y1={cy}
-            x2={cx + gridR * Math.cos(a)}
-            y2={cy + gridR * Math.sin(a)}
-            stroke={Colors.borderHairline}
-            strokeWidth={1}
-          />
-        );
-      })}
-
-      {/* Data polygon */}
-      <Polygon
-        points={dataPolyPoints}
-        fill={Colors.ink}
-        fillOpacity={0.1}
-        stroke={Colors.ink}
-        strokeWidth={1.5}
-        strokeOpacity={0.5}
-      />
-
-      {/* Score dots */}
-      {scores.map((s, i) => {
-        const a = ang(i);
-        const ratio = Math.min(s / 100, 1);
-        const vx = cx + gridR * ratio * Math.cos(a);
-        const vy = cy + gridR * ratio * Math.sin(a);
-        return (
-          <G key={i}>
-            <Circle cx={vx} cy={vy} r={5} fill={scoreColor(s)} opacity={0.9} />
-            <Circle cx={vx} cy={vy} r={2.5} fill={Colors.bone} />
-          </G>
-        );
-      })}
-
-      {/* Tappable labels */}
-      {DOMAINS.map((domain, i) => {
-        const a = ang(i);
-        const lx = cx + labelR * Math.cos(a);
-        const ly = cy + labelR * Math.sin(a);
-        const slug = DOMAIN_SLUGS[domain];
-        return (
-          <G key={i} onPress={() => onDomainPress(slug)}>
-            <SvgText
-              x={lx}
-              y={ly - 4}
-              textAnchor="middle"
-              fontSize={9}
-              fontFamily={Fonts.sansSemiBold}
-              fill={Colors.inkSecondary}
-            >
-              {DOMAIN_SHORT_LABELS[DOMAINS[i]].toUpperCase()}
-            </SvgText>
-            <SvgText
-              x={lx}
-              y={ly + 10}
-              textAnchor="middle"
-              fontSize={13}
-              fontFamily={Fonts.mono}
-              fill={scoreColor(scores[i])}
-            >
-              {Math.round(scores[i])}
-            </SvgText>
-          </G>
-        );
-      })}
-    </Svg>
-  );
-}
-
-// ─── Swipeable product row ────────────────────────────────────────────────────
-
-function SwipeableProductRow({
+function StackProductRow({
   product,
   onPress,
   onRemove,
@@ -256,6 +88,13 @@ function SwipeableProductRow({
     </Pressable>
   );
 
+  const letter = product.name.charAt(0).toUpperCase();
+  const color = thumbColor(product.category);
+
+  // Derive a coarse evidence strength from grade
+  const strengthFromGrade: Record<string, number> = { A: 4, B: 3, C: 2, D: 1 };
+  const strength = strengthFromGrade[product.grade ?? 'C'] ?? 2;
+
   return (
     <Swipeable
       ref={swipeRef}
@@ -263,14 +102,22 @@ function SwipeableProductRow({
       rightThreshold={60}
       overshootRight={false}
     >
-      <ProductListItem
-        id={product.id}
-        name={product.name}
-        brand={product.brand}
-        category={product.category}
-        grade={product.grade}
-        onPress={onPress}
-      />
+      <Pressable onPress={onPress} style={styles.productRow}>
+        <ProductThumb color={color} letter={letter} size={54} />
+        <View style={styles.productRowInfo}>
+          <Eyebrow style={{ marginBottom: 3 }}>
+            {product.brand ?? product.category}
+          </Eyebrow>
+          <Text style={styles.productRowName}>{product.name}</Text>
+          <View style={styles.productRowMeta}>
+            <EvidenceSpectrum strength={strength} max={4} />
+            {product.grade === 'D' && (
+              <Tag tone="alert" style={{ marginLeft: 8 }}>Flag</Tag>
+            )}
+          </View>
+        </View>
+        <Text style={styles.chevron}>›</Text>
+      </Pressable>
     </Swipeable>
   );
 }
@@ -285,13 +132,12 @@ export default function StackScreen() {
 
   const [chatVisible, setChatVisible] = useState(false);
   const [mealSheetVisible, setMealSheetVisible] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<string>('all');
 
-  // Server-synced stack entries (signed-in only).
-  // entryIdMap: productId → stack entry UUID (needed for DELETE).
+  // Server-synced stack entries (signed-in only)
   const [serverEntries, setServerEntries] = useState<StackEntry[]>([]);
   const [entryIdMap, setEntryIdMap] = useState<Record<string, string>>({});
 
-  // Hydrate entryIdMap from server when user is signed in.
   useEffect(() => {
     if (!isSignedIn) return;
     let cancelled = false;
@@ -304,9 +150,7 @@ export default function StackScreen() {
           setServerEntries(entries);
           setEntryIdMap(Object.fromEntries(entries.map((e) => [e.product_id, e.id])));
         })
-        .catch(() => {
-          // Non-fatal — local stack still visible
-        });
+        .catch(() => {});
     };
     loadServerStack();
     return () => { cancelled = true; };
@@ -314,9 +158,8 @@ export default function StackScreen() {
 
   const radarScores = useMemo(() => computeRadarScores([...stack, ...meals]), [stack, meals]);
 
-  // Wrap removeFromStack: call server when signed in, then update local state.
   const handleRemoveFromStack = async (productId: string) => {
-    removeFromStack(productId); // optimistic local update first
+    removeFromStack(productId);
     if (isSignedIn) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
@@ -324,11 +167,8 @@ export default function StackScreen() {
       if (entryId) {
         try {
           await api.removeFromStack(session.access_token, entryId);
-        } catch {
-          // Non-fatal — local state already updated optimistically
-        }
+        } catch {}
       }
-      // Refresh entryIdMap so future removals use fresh entry IDs.
       api.getStack(session.access_token)
         .then((entries) => {
           setServerEntries(entries);
@@ -352,21 +192,24 @@ export default function StackScreen() {
     });
     setMealSheetVisible(false);
   };
-  const goals = onboardingProfile?.goals ?? [];
-  const hasGoals = goals.length > 0;
 
-  // Group stack by protocol slot
+  const goals = onboardingProfile?.goals ?? [];
+
+  // Group stack by slot
   const slotGroups = useMemo(() => {
     const groups: Record<string, Product[]> = {};
-    stack.forEach((p) => {
+    const filteredStack = activeFilter === 'all'
+      ? stack
+      : stack.filter((p) => p.category === activeFilter);
+    filteredStack.forEach((p) => {
       const slot = CATEGORY_SLOT[p.category] ?? 'Other';
       if (!groups[slot]) groups[slot] = [];
       groups[slot].push(p);
     });
     return Object.entries(groups);
-  }, [stack]);
+  }, [stack, activeFilter]);
 
-  // Overlap detection: ingredient names that appear in >1 product
+  // Overlap detection
   const overlapIngredients = useMemo(() => {
     const counts: Record<string, number> = {};
     stack.forEach((p) => {
@@ -381,20 +224,49 @@ export default function StackScreen() {
       .slice(0, 4);
   }, [stack]);
 
+  // Stats for subtitle
+  const activeCount = stack.length;
+  const synergyCount = Math.max(0, stack.length - 1);
+  const flagCount = stack.filter((p) => p.grade === 'D').length;
+
+  // Filter categories
+  const FILTERS = [
+    { id: 'all', label: 'All' },
+    { id: 'supplement', label: 'Supplements' },
+    { id: 'cosmetic', label: 'Topical' },
+    { id: 'food', label: 'Food' },
+    { id: 'otc', label: 'Meds' },
+  ];
+
   if (stack.length === 0) {
     return (
       <View style={styles.screen}>
         <View style={[styles.emptyContainer, { paddingTop: insets.top + Spacing.xxl }]}>
           <Animated.View entering={FadeIn.duration(600)}>
-            <Text style={styles.emptyTitle}>Your stack is empty</Text>
+            <SerifH size={32} style={{ textAlign: 'center', marginBottom: Spacing.md }}>
+              Your stack is empty
+            </SerifH>
             <Text style={styles.emptyBody}>
-              Scan a product to start building your composition view.
+              Scan a product to start building your regimen.
             </Text>
             <Pressable style={styles.emptyBtn} onPress={() => router.push('/(tabs)/scan')}>
               <Text style={styles.emptyBtnText}>Start Scanning</Text>
             </Pressable>
           </Animated.View>
         </View>
+
+        <StackAssistant
+          visible={chatVisible}
+          onClose={() => setChatVisible(false)}
+          stack={stack}
+          radarScores={radarScores}
+          goals={goals}
+        />
+        <MealInputSheet
+          visible={mealSheetVisible}
+          onClose={() => setMealSheetVisible(false)}
+          onConfirm={handleMealsConfirm}
+        />
       </View>
     );
   }
@@ -402,144 +274,131 @@ export default function StackScreen() {
   return (
     <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={[
-          styles.container,
-          { paddingTop: insets.top + Spacing.lg },
-        ]}
+        contentContainerStyle={{ paddingBottom: verticalScale(120) }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.overline}>Composition View</Text>
-            <Text style={styles.title}>Stack</Text>
-          </View>
-          <View style={{ flexDirection: 'row', gap: scale(8) }}>
-            <Pressable style={styles.logBtn} onPress={() => setMealSheetVisible(true)}>
-              <Text style={styles.logBtnText}>+ Log</Text>
+        {/* ── Header ─────────────────────────────────────────────────────── */}
+        <View style={[styles.header, { paddingTop: insets.top + scale(24) }]}>
+          <Eyebrow style={{ marginBottom: 8 }}>Your regimen</Eyebrow>
+          <SerifH size={40} style={{ marginBottom: 6 }}>My Stack</SerifH>
+          <Text style={styles.headerSubtitle}>
+            {activeCount} active · {synergyCount} synergies · {flagCount} flags
+          </Text>
+          {/* Header action buttons */}
+          <View style={styles.headerActions}>
+            <Pressable style={styles.ghostBtn} onPress={() => setMealSheetVisible(true)}>
+              <Text style={styles.ghostBtnText}>+ Log Meal</Text>
             </Pressable>
-            <Pressable style={styles.aiBtn} onPress={() => setChatVisible(true)}>
-              <Text style={styles.aiBtnIcon}>✦</Text>
-              <Text style={styles.aiBtnText}>Ask AI</Text>
+            <Pressable style={styles.solidBtn} onPress={() => setChatVisible(true)}>
+              <Text style={styles.solidBtnIcon}>✦</Text>
+              <Text style={styles.solidBtnText}>Ask AI</Text>
             </Pressable>
           </View>
         </View>
 
-        {/* ── Domain Fingerprint ─────────────────────────────────────────── */}
-        <Animated.View entering={FadeIn.duration(400)} style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionLabel}>Domain Fingerprint</Text>
-            <Text style={styles.sectionHint}>evidence signal</Text>
-          </View>
-          <View style={styles.card}>
-            <View style={styles.radarContainer}>
-              <CustomRadarChart
-                scores={radarScores}
-                onDomainPress={(slug) => router.push(`/domain/${slug}`)}
+        {/* ── Synergy card ────────────────────────────────────────────────── */}
+        <Animated.View entering={FadeIn.duration(400)} style={styles.synergySection}>
+          <Pressable
+            onPress={() => router.push('/conflict-map')}
+            style={styles.synergyCard}
+          >
+            <Svg width={72} height={72} viewBox="0 0 72 72">
+              <Circle cx={36} cy={20} r={4} fill={Colors.accent} />
+              <Circle cx={20} cy={48} r={4} fill={Colors.sage} />
+              <Circle cx={52} cy={48} r={4} fill={Colors.sand} />
+              <Circle cx={36} cy={60} r={3} fill={Colors.alert} />
+              <Line x1={36} y1={20} x2={20} y2={48} stroke={Colors.accent} strokeWidth={1} />
+              <Line x1={36} y1={20} x2={52} y2={48} stroke={Colors.accent} strokeWidth={1} />
+              <Line
+                x1={20} y1={48} x2={52} y2={48}
+                stroke={Colors.sage} strokeWidth={1}
+                strokeDasharray="2 2"
               />
+            </Svg>
+            <View style={{ flex: 1 }}>
+              <Eyebrow style={{ marginBottom: 4 }}>Stack synergy map</Eyebrow>
+              <Text style={styles.synergyBody}>
+                Tap to view interactions between your supplements.
+              </Text>
             </View>
-            {/* Domain score rows — tappable → domain detail */}
-            {DOMAINS.map((domain, i) => {
-              const score = radarScores[i];
-              const label = domainScoreLabel(domain, score);
+            <Text style={styles.synergyChevron}>›</Text>
+          </Pressable>
+        </Animated.View>
+
+        {/* ── Filter chips ─────────────────────────────────────────────────── */}
+        <Animated.View entering={FadeIn.duration(400).delay(60)}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterRow}
+          >
+            {FILTERS.map((f) => {
+              const isActive = activeFilter === f.id;
               return (
                 <Pressable
-                  key={domain}
-                  style={[styles.scoreRow, i < DOMAINS.length - 1 && styles.scoreRowBorder]}
-                  onPress={() => router.push(`/domain/${DOMAIN_SLUGS[domain]}`)}
+                  key={f.id}
+                  style={[styles.filterChip, isActive && styles.filterChipActive]}
+                  onPress={() => setActiveFilter(f.id)}
                 >
-                  <Text style={styles.scoreRowDomain}>{domain}</Text>
-                  <View style={styles.scoreBarTrack}>
-                    <View
-                      style={[
-                        styles.scoreBarFill,
-                        {
-                          width: `${score}%`,
-                          backgroundColor: scoreColor(score),
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text style={[styles.scoreRowLabel, { color: scoreColor(score) }]}>
-                    {label}
+                  <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
+                    {f.label}
                   </Text>
-                  <Text style={styles.scoreRowChevron}>›</Text>
                 </Pressable>
               );
             })}
-          </View>
+          </ScrollView>
         </Animated.View>
 
-        {/* ── Goal Alignment ─────────────────────────────────────────────── */}
-        {hasGoals && (
-          <Animated.View entering={FadeInUp.duration(400).delay(100)} style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionLabel}>Goal Alignment</Text>
-            </View>
-            <View style={styles.card}>
-              {goals.map((goalId, i) => (
-                <View
-                  key={goalId}
-                  style={[
-                    styles.goalRowWrap,
-                    i < goals.length - 1 && styles.goalRowBorder,
-                  ]}
-                >
-                  <GoalAlignmentRow goalId={goalId} radarScores={radarScores} />
-                </View>
-              ))}
-            </View>
-            <Text style={styles.goalNote}>
-              Alignment is based on category-level evidence. Tap an ingredient for study-level detail.
-            </Text>
-          </Animated.View>
-        )}
-
-        {/* ── Ingredient Overlap ─────────────────────────────────────────── */}
+        {/* ── Overlap warning ───────────────────────────────────────────────── */}
         {overlapIngredients.length > 0 && (
-          <Animated.View entering={FadeInUp.duration(400).delay(160)} style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionLabel}>Overlap Detected</Text>
-            </View>
-            <View style={[styles.card, styles.overlapCard]}>
+          <Animated.View entering={FadeInUp.duration(400).delay(100)} style={styles.section}>
+            <SectionHead label="Overlap Detected" />
+            <View style={styles.overlapCard}>
               <Text style={styles.overlapBody}>
                 These ingredients appear in multiple products — monitor combined intake:
               </Text>
               <View style={styles.overlapTags}>
                 {overlapIngredients.map((ing) => (
-                  <View key={ing} style={styles.overlapTag}>
-                    <Text style={styles.overlapTagText}>{ing}</Text>
-                  </View>
+                  <Tag key={ing} tone="alert">{ing}</Tag>
                 ))}
               </View>
             </View>
           </Animated.View>
         )}
 
-        {/* ── Protocol / Product List ────────────────────────────────────── */}
-        <Animated.View entering={FadeInUp.duration(400).delay(220)} style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionLabel}>Your Protocol</Text>
-          </View>
+        {/* ── Product list ──────────────────────────────────────────────────── */}
+        <Animated.View entering={FadeInUp.duration(400).delay(160)} style={styles.section}>
           {slotGroups.map(([slot, products]) => (
             <View key={slot} style={styles.slotGroup}>
-              <View style={styles.slotHeader}>
-                <Text style={styles.slotLabel}>{slot}</Text>
-                <View style={styles.slotLine} />
-              </View>
-              {products.map((product) => (
-                <SwipeableProductRow
+              <SectionHead label={slot} />
+              {products.map((product, idx) => (
+                <View
                   key={product.id}
-                  product={product}
-                  onPress={() => router.push(`/product/${product.id}`)}
-                  onRemove={() => handleRemoveFromStack(product.id)}
-                />
+                  style={[
+                    styles.rowWrapper,
+                    idx < products.length - 1 && styles.rowBorder,
+                  ]}
+                >
+                  <StackProductRow
+                    product={product}
+                    onPress={() => router.push(`/product/${product.id}`)}
+                    onRemove={() => handleRemoveFromStack(product.id)}
+                  />
+                </View>
               ))}
             </View>
           ))}
         </Animated.View>
 
-        <View style={{ height: verticalScale(100) }} />
+        {/* ── Add button ───────────────────────────────────────────────────── */}
+        <View style={styles.addBtnRow}>
+          <Pressable
+            style={styles.addBtn}
+            onPress={() => router.push('/(tabs)/scan')}
+          >
+            <Text style={styles.addBtnText}>＋ Add to stack</Text>
+          </Pressable>
+        </View>
       </ScrollView>
 
       <StackAssistant
@@ -549,7 +408,6 @@ export default function StackScreen() {
         radarScores={radarScores}
         goals={goals}
       />
-
       <MealInputSheet
         visible={mealSheetVisible}
         onClose={() => setMealSheetVisible(false)}
@@ -564,24 +422,14 @@ export default function StackScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.bone,
-  },
-  container: {
-    paddingBottom: Layout.bottomPadding,
+    backgroundColor: Colors.surface,
   },
 
-  // ── Empty state
+  // Empty state
   emptyContainer: {
     flex: 1,
-    paddingHorizontal: Layout.screenPaddingHorizontal,
+    paddingHorizontal: scale(24),
     alignItems: 'center',
-  },
-  emptyTitle: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.display,
-    color: Colors.ink,
-    textAlign: 'center',
-    marginBottom: Spacing.md,
   },
   emptyBody: {
     fontFamily: Fonts.sans,
@@ -600,201 +448,167 @@ const styles = StyleSheet.create({
   emptyBtnText: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.body,
-    color: Colors.bone,
+    color: Colors.surface,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
   },
 
-  // ── Header
+  // Header
   header: {
-    paddingHorizontal: Layout.screenPaddingHorizontal,
-    marginBottom: Spacing.xl,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    paddingHorizontal: scale(24),
+    paddingBottom: scale(20),
   },
-  overline: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
+  headerSubtitle: {
+    fontFamily: Fonts.serifItalic,
+    fontSize: FontSizes.bodyLarge,
     color: Colors.inkSecondary,
-    marginBottom: Spacing.xs,
+    marginBottom: scale(20),
   },
-  title: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.display,
-    color: Colors.ink,
+  headerActions: {
+    flexDirection: 'row',
+    gap: scale(10),
   },
-  logBtn: {
-    paddingHorizontal: scale(14),
-    paddingVertical: scale(8),
-    borderRadius: Radius.pill,
+  ghostBtn: {
     borderWidth: 1,
     borderColor: Colors.borderStrong,
+    paddingHorizontal: scale(16),
+    paddingVertical: scale(9),
+    borderRadius: Radius.pill,
   },
-  logBtnText: {
+  ghostBtnText: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.caption,
     textTransform: 'uppercase',
     letterSpacing: 1,
     color: Colors.ink,
   },
-  aiBtn: {
+  solidBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: scale(5),
-    paddingHorizontal: scale(14),
-    paddingVertical: scale(8),
     backgroundColor: Colors.ink,
+    paddingHorizontal: scale(16),
+    paddingVertical: scale(9),
     borderRadius: Radius.pill,
   },
-  aiBtnIcon: {
+  solidBtnIcon: {
     fontSize: FontSizes.caption,
-    color: Colors.bone,
-    lineHeight: FontSizes.caption * 1.2,
+    color: Colors.surface,
   },
-  aiBtnText: {
+  solidBtnText: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.caption,
     textTransform: 'uppercase',
     letterSpacing: 1,
-    color: Colors.bone,
+    color: Colors.surface,
   },
 
-  // ── Section
-  section: {
-    paddingHorizontal: Layout.screenPaddingHorizontal,
-    marginBottom: Spacing.xl,
+  // Synergy card
+  synergySection: {
+    paddingHorizontal: scale(24),
+    marginBottom: scale(28),
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: Spacing.sm,
-    paddingBottom: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderStrong,
-    marginBottom: Spacing.md,
-  },
-  sectionLabel: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    color: Colors.ink,
-  },
-  sectionHint: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.xs,
-    color: Colors.inkTertiary,
-    letterSpacing: 0.3,
-  },
-  card: {
-    backgroundColor: Colors.boneCard,
+  synergyCard: {
     borderWidth: 1,
     borderColor: Colors.borderHairline,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
-
-  // ── Radar chart
-  radarContainer: {
-    alignItems: 'center',
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderHairline,
-  },
-
-  // ── Score rows
-  scoreRow: {
+    borderRadius: Radius.lg,
+    padding: 18,
+    backgroundColor: Colors.surfaceCard,
     flexDirection: 'row',
+    gap: 14,
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: scale(11),
-    gap: Spacing.sm,
   },
-  scoreRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderHairline,
-  },
-  scoreRowDomain: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
+  synergyBody: {
+    fontFamily: Fonts.serif,
+    fontSize: 16,
+    lineHeight: 21,
     color: Colors.ink,
-    width: scale(100),
   },
-  scoreBarTrack: {
-    flex: 1,
-    height: scale(4),
-    backgroundColor: Colors.boneDark,
-    borderRadius: scale(2),
-    overflow: 'hidden',
-  },
-  scoreBarFill: {
-    height: '100%',
-    borderRadius: scale(2),
-  },
-  scoreRowLabel: {
-    fontFamily: Fonts.sansMedium,
-    fontSize: FontSizes.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    width: scale(64),
-    textAlign: 'right',
-  },
-  scoreRowChevron: {
+  synergyChevron: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.bodyLarge,
     color: Colors.inkTertiary,
-    marginLeft: scale(2),
   },
 
-  // ── Goal alignment
-  goalRowWrap: {},
-  goalRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderHairline,
+  // Filter chips
+  filterRow: {
+    paddingHorizontal: scale(24),
+    gap: scale(8),
+    marginBottom: scale(20),
   },
-  goalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: scale(12),
-    gap: Spacing.sm,
+  filterChip: {
+    paddingVertical: scale(7),
+    paddingHorizontal: scale(16),
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    backgroundColor: 'transparent',
   },
-  goalDot: {
-    width: scale(8),
-    height: scale(8),
-    borderRadius: scale(4),
+  filterChipActive: {
+    backgroundColor: Colors.ink,
+    borderColor: Colors.ink,
   },
-  goalLabel: {
-    flex: 1,
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.ink,
-  },
-  goalStatus: {
-    fontFamily: Fonts.sansMedium,
+  filterChipText: {
+    fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.caption,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-    color: Colors.accentHill,
+    color: Colors.inkSecondary,
   },
-  goalStatusGap: {
-    color: Colors.inkTertiary,
-  },
-  goalNote: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.xs,
-    color: Colors.inkTertiary,
-    marginTop: Spacing.sm,
-    lineHeight: FontSizes.xs * 1.6,
-    paddingHorizontal: Spacing.xs,
+  filterChipTextActive: {
+    color: Colors.surface,
   },
 
-  // ── Overlap card
+  // Section / groups
+  section: {
+    paddingHorizontal: scale(24),
+    marginBottom: scale(20),
+  },
+  slotGroup: {
+    marginBottom: scale(24),
+  },
+  rowWrapper: {},
+  rowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.borderHairline,
+  },
+
+  // Product row
+  productRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(14),
+    paddingVertical: scale(16),
+    backgroundColor: Colors.surface,
+  },
+  productRowInfo: {
+    flex: 1,
+  },
+  productRowName: {
+    fontFamily: Fonts.serif,
+    fontSize: 17,
+    lineHeight: 22,
+    color: Colors.ink,
+    marginBottom: 4,
+  },
+  productRowMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  chevron: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.bodyLarge,
+    color: Colors.inkTertiary,
+  },
+
+  // Overlap
   overlapCard: {
+    backgroundColor: Colors.surfaceCard,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.md,
     padding: Spacing.md,
+    marginBottom: scale(12),
   },
   overlapBody: {
     fontFamily: Fonts.sans,
@@ -808,45 +622,10 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.xs,
   },
-  overlapTag: {
-    paddingVertical: scale(5),
-    paddingHorizontal: scale(10),
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(163, 78, 78, 0.3)',
-    backgroundColor: 'rgba(163, 78, 78, 0.06)',
-  },
-  overlapTagText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: Colors.accentAlert,
-    textTransform: 'capitalize',
-  },
 
-  // ── Protocol groups
-  slotGroup: {
-    marginBottom: Spacing.lg,
-  },
-  slotHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  slotLabel: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-    color: Colors.inkTertiary,
-  },
-  slotLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.borderHairline,
-  },
+  // Delete action
   deleteAction: {
-    backgroundColor: Colors.accentAlert,
+    backgroundColor: Colors.alert,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: scale(20),
@@ -860,5 +639,26 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
     color: '#FFFFFF',
+  },
+
+  // Add button
+  addBtnRow: {
+    paddingHorizontal: scale(24),
+    paddingVertical: scale(12),
+    alignItems: 'center',
+  },
+  addBtn: {
+    borderWidth: 1,
+    borderColor: Colors.ink,
+    paddingHorizontal: scale(32),
+    paddingVertical: scale(14),
+    borderRadius: Radius.pill,
+  },
+  addBtnText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
 });

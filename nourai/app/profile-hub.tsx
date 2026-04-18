@@ -570,6 +570,33 @@ export default function ProfileHubScreen() {
           </View>
         </View>
 
+        {/* Atelier Section */}
+        <View style={styles.atelierSection}>
+          <View style={styles.atelierHeader}>
+            <Text style={styles.atelierEyebrow}>◆ Atelier</Text>
+            <Text style={styles.atelierSubtitle}>Premium intelligence features</Text>
+          </View>
+          {[
+            { label: 'Ask Elory', sub: 'AI chat about your stack', route: '/chat' },
+            { label: 'Circadian Protocol', sub: 'Optimal timing for your chronotype', route: '/circadian' },
+            { label: 'Conflict Map', sub: 'Biochemical interaction graph', route: '/conflict-map' },
+            { label: 'Exposure Ledger', sub: '14-day compound exposure tracking', route: '/exposure' },
+            { label: 'Evidence Pulse', sub: 'New research on your stack', route: '/pulse' },
+          ].map((item, i) => (
+            <Pressable
+              key={item.route}
+              style={[styles.atelierRow, i > 0 && styles.atelierRowBorder]}
+              onPress={() => router.push(item.route as any)}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.atelierRowLabel}>{item.label}</Text>
+                <Text style={styles.atelierRowSub}>{item.sub}</Text>
+              </View>
+              <Text style={styles.atelierArrow}>›</Text>
+            </Pressable>
+          ))}
+        </View>
+
         {/* Sign Out Button */}
         {isSignedIn && (
           <Pressable style={styles.signOutBtn} onPress={handleSignOut}>
@@ -927,6 +954,57 @@ const styles = StyleSheet.create({
   settingsArrow: {
     fontSize: FontSizes.heading,
     color: Colors.inkTertiary,
+  },
+  atelierSection: {
+    marginHorizontal: Layout.screenPaddingHorizontal,
+    marginBottom: Spacing.xl,
+    backgroundColor: Colors.darkSurface,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+  },
+  atelierHeader: {
+    padding: scale(16),
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(241,237,228,0.1)',
+  },
+  atelierEyebrow: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1.8,
+    color: Colors.sand,
+    marginBottom: scale(4),
+  },
+  atelierSubtitle: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    color: 'rgba(241,237,228,0.45)',
+  },
+  atelierRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: scale(16),
+    paddingVertical: scale(14),
+  },
+  atelierRowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(241,237,228,0.08)',
+  },
+  atelierRowLabel: {
+    fontFamily: Fonts.sansMedium,
+    fontSize: FontSizes.body,
+    color: Colors.darkInk,
+    marginBottom: scale(2),
+  },
+  atelierRowSub: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    color: 'rgba(241,237,228,0.4)',
+  },
+  atelierArrow: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.heading,
+    color: 'rgba(241,237,228,0.3)',
   },
   signOutBtn: {
     marginHorizontal: Layout.screenPaddingHorizontal,

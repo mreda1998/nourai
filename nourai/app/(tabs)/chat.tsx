@@ -1,7 +1,5 @@
-import { View } from 'react-native';
-import { Colors } from '@/constants/theme';
+import { Redirect } from 'expo-router';
 
-// Chat tab — placeholder until premium/chat screen is built
 export default function ChatTab() {
-  return <View style={{ flex: 1, backgroundColor: Colors.surface }} />;
+  return <Redirect href="/chat" />;
 }

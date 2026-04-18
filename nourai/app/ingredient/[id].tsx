@@ -35,6 +35,7 @@ import { BIODOMAIN_BY_KEY } from '@/constants/biodomains';
 import { api } from '@/services/api';
 import type { IngredientDetail, IngredientEvidenceRecord, IngredientBioDomainScore } from '@/services/api';
 import { useAuth } from '@/context/auth-context';
+import { Eyebrow, SerifH, SectionHead, Tag, AlertNote, SpectrumBar } from '@/components/elory';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -137,8 +138,8 @@ function aggregateVerdict(ev: IngredientEvidenceRecord[]): {
 
 function directionColor(d: string) {
   switch (d) {
-    case 'benefit': return '#3B6E52';
-    case 'risk':    return '#A34B4B';
+    case 'benefit': return Colors.sage;
+    case 'risk':    return Colors.alert;
     case 'mixed':   return '#8B6914';
     default:        return Colors.inkTertiary;
   }
@@ -179,7 +180,7 @@ function BackIcon() {
 
 function AlertIcon() {
   return (
-    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#A34B4B" strokeWidth={2}>
+    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={Colors.alert} strokeWidth={2}>
       <Path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
       <Path d="M12 9v4M12 17h.01" strokeLinecap="round" />
     </Svg>
@@ -214,10 +215,10 @@ function RelevanceBanner({
   );
 }
 
-// ─── Verdict Strip ────────────────────────────────────────────────────────────
-// The single most important line on the page: what does the evidence say?
+// ─── Evidence Grid ────────────────────────────────────────────────────────────
+// 2×2 grid: Evidence base, Study count, Consensus, Confidence
 
-function VerdictStrip({
+function EvidenceGrid({
   evidence,
   evidenceLevel,
 }: {
@@ -225,36 +226,23 @@ function VerdictStrip({
   evidenceLevel: string | null;
 }) {
   const { direction, confidence } = aggregateVerdict(evidence);
-  const color = directionColor(direction);
-  const levelLabel = evidenceLevel ? EVIDENCE_LEVEL_LABEL[evidenceLevel] : null;
+  const levelLabel = evidenceLevel ? EVIDENCE_LEVEL_LABEL[evidenceLevel] : 'Insufficient';
+
+  const cells = [
+    { label: 'Evidence base', value: levelLabel },
+    { label: 'Studies', value: evidence.length > 0 ? String(evidence.length) : '—' },
+    { label: 'Consensus', value: directionLabel(direction) },
+    { label: 'Confidence', value: confidence.charAt(0).toUpperCase() + confidence.slice(1) },
+  ];
 
   return (
-    <Animated.View entering={FadeIn.delay(80).duration(300)} style={styles.verdictStrip}>
-      <View style={[styles.verdictIconWrap, { backgroundColor: color + '18' }]}>
-        <Text style={[styles.verdictIcon, { color }]}>{directionIcon(direction)}</Text>
-      </View>
-      <View style={styles.verdictBody}>
-        <Text style={[styles.verdictDirection, { color }]}>{directionLabel(direction)}</Text>
-        <View style={styles.verdictMeta}>
-          {levelLabel && <Text style={styles.verdictMetaText}>{levelLabel}</Text>}
-          {levelLabel && evidence.length > 0 && (
-            <Text style={styles.verdictMetaDot}>·</Text>
-          )}
-          {evidence.length > 0 && (
-            <Text style={styles.verdictMetaText}>
-              {evidence.length} {evidence.length === 1 ? 'study' : 'studies'}
-            </Text>
-          )}
-          {confidence === 'high' && (
-            <>
-              <Text style={styles.verdictMetaDot}>·</Text>
-              <Text style={[styles.verdictMetaText, { color: Colors.accentHill }]}>
-                High confidence
-              </Text>
-            </>
-          )}
+    <Animated.View entering={FadeIn.delay(80).duration(300)} style={styles.evidenceGrid}>
+      {cells.map((cell, i) => (
+        <View key={cell.label} style={[styles.evidenceGridCell, i % 2 === 0 && i < 2 && styles.evidenceGridCellBorderR, i < 2 && styles.evidenceGridCellBorderB]}>
+          <Eyebrow style={{ marginBottom: 6 }}>{cell.label}</Eyebrow>
+          <SerifH size={18}>{cell.value}</SerifH>
         </View>
-      </View>
+      ))}
     </Animated.View>
   );
 }
@@ -287,7 +275,7 @@ function MechanismSection({
 
   return (
     <Animated.View entering={FadeInUp.delay(120).duration(350)}>
-      <Text style={styles.sectionLabel}>How it works</Text>
+      <SectionHead label="How it works" />
 
       {/* Image or placeholder */}
       <View style={styles.mechanismImageWrap}>
@@ -332,7 +320,7 @@ function MechanismSection({
 }
 
 // ─── Belief vs Reality ────────────────────────────────────────────────────────
-// Updated with expand toggle — shows 2 lines by default.
+// Shown as AlertNote pair — belief (alert) + reality (sage)
 
 function BeliefRealityCard({
   commonBelief,
@@ -341,31 +329,14 @@ function BeliefRealityCard({
   commonBelief: string;
   evidenceReality: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
-
   return (
-    <Animated.View entering={FadeInUp.delay(100).duration(400)} style={styles.beliefCard}>
-      {/* Common belief */}
-      <View style={styles.beliefHalf}>
-        <Text style={styles.beliefLabel}>Common belief</Text>
-        <Text style={styles.beliefText} numberOfLines={expanded ? undefined : 2}>
-          {commonBelief}
-        </Text>
-      </View>
-
-      <View style={styles.beliefDivider} />
-
-      {/* Evidence reality */}
-      <View style={styles.beliefHalf}>
-        <Text style={[styles.beliefLabel, styles.beliefRealityLabel]}>What research shows</Text>
-        <Text style={[styles.beliefText, styles.beliefRealityText]} numberOfLines={expanded ? undefined : 2}>
-          {evidenceReality}
-        </Text>
-      </View>
-
-      <Pressable onPress={() => toggle(setExpanded)} style={styles.beliefExpandBtn}>
-        <Text style={styles.beliefExpandText}>{expanded ? 'Show less' : 'Read more'}</Text>
-      </Pressable>
+    <Animated.View entering={FadeInUp.delay(100).duration(400)} style={{ gap: 10 }}>
+      <AlertNote tone="alert" title="Common belief">
+        {commonBelief}
+      </AlertNote>
+      <AlertNote tone="sage" title="What research shows">
+        {evidenceReality}
+      </AlertNote>
     </Animated.View>
   );
 }
@@ -388,29 +359,30 @@ function EvidenceSnapshot({ evidence }: { evidence: IngredientEvidenceRecord[] }
 
   return (
     <Animated.View entering={FadeInUp.delay(140).duration(350)}>
-      <Text style={styles.sectionLabel}>
-        Research · {evidence.length} {evidence.length === 1 ? 'study' : 'studies'}
-      </Text>
+      <SectionHead
+        label="Research"
+        right={`${evidence.length} ${evidence.length === 1 ? 'study' : 'studies'}`}
+      />
 
       {/* Distribution bar */}
       <View style={styles.evidenceBarWrap}>
         <View style={styles.evidenceBar}>
           {counts.benefit > 0 && (
-            <View style={[styles.evidenceBarSeg, { flex: counts.benefit, backgroundColor: '#3B6E52' }]} />
+            <View style={[styles.evidenceBarSeg, { flex: counts.benefit, backgroundColor: Colors.sage }]} />
           )}
           {counts.mixed > 0 && (
-            <View style={[styles.evidenceBarSeg, { flex: counts.mixed, backgroundColor: '#8B6914' }]} />
+            <View style={[styles.evidenceBarSeg, { flex: counts.mixed, backgroundColor: Colors.sand }]} />
           )}
           {counts.neutral > 0 && (
-            <View style={[styles.evidenceBarSeg, { flex: counts.neutral, backgroundColor: Colors.boneDark }]} />
+            <View style={[styles.evidenceBarSeg, { flex: counts.neutral, backgroundColor: Colors.surfaceAlt }]} />
           )}
           {counts.risk > 0 && (
-            <View style={[styles.evidenceBarSeg, { flex: counts.risk, backgroundColor: '#A34B4B' }]} />
+            <View style={[styles.evidenceBarSeg, { flex: counts.risk, backgroundColor: Colors.alert }]} />
           )}
         </View>
         <View style={styles.evidenceBarLabels}>
           {counts.benefit > 0 && (
-            <Text style={[styles.evidenceBarLabel, { color: '#3B6E52' }]}>
+            <Text style={[styles.evidenceBarLabel, { color: Colors.sage }]}>
               {counts.benefit} benefit
             </Text>
           )}
@@ -425,7 +397,7 @@ function EvidenceSnapshot({ evidence }: { evidence: IngredientEvidenceRecord[] }
             </Text>
           )}
           {counts.risk > 0 && (
-            <Text style={[styles.evidenceBarLabel, { color: '#A34B4B' }]}>
+            <Text style={[styles.evidenceBarLabel, { color: Colors.alert }]}>
               {counts.risk} risk
             </Text>
           )}
@@ -460,10 +432,10 @@ function EvidenceCard({ ev, index }: { ev: IngredientEvidenceRecord; index: numb
   const dirColor = directionColor(ev.direction);
   const studyLabel = ev.study_type ? (STUDY_TYPE_LABEL[ev.study_type] ?? ev.study_type) : null;
   const confColors = {
-    high:     { bg: Colors.ink,         text: Colors.bone },
-    moderate: { bg: Colors.inkSecondary, text: Colors.bone },
-    low:      { bg: Colors.boneDark,     text: Colors.inkSecondary },
-  }[ev.confidence] ?? { bg: Colors.boneDark, text: Colors.inkSecondary };
+    high:     { bg: Colors.ink,          text: Colors.surface },
+    moderate: { bg: Colors.inkSecondary, text: Colors.surface },
+    low:      { bg: Colors.surfaceAlt,   text: Colors.inkSecondary },
+  }[ev.confidence] ?? { bg: Colors.surfaceAlt, text: Colors.inkSecondary };
 
   return (
     <Animated.View
@@ -519,7 +491,7 @@ function BioDomainEffects({
 
   return (
     <Animated.View entering={FadeInUp.delay(155).duration(350)}>
-      <Text style={styles.sectionLabel}>Bio-Domain Effects</Text>
+      <SectionHead label="Bio-Domain Effects" />
       <View style={styles.domainTable}>
         {DOMAIN_ORDER.map(({ slug, label }, i) => {
           const effect = domainEffects?.[slug];
@@ -578,7 +550,7 @@ function DoseCard({ ingredient }: { ingredient: IngredientDetail }) {
 
   return (
     <Animated.View entering={FadeInUp.delay(160).duration(350)}>
-      <Text style={styles.sectionLabel}>Dosage</Text>
+      <SectionHead label="Dosage" />
       <View style={styles.doseCard}>
         {cells.map((cell, i) => (
           <View
@@ -682,8 +654,8 @@ function BioDomainRow({ score, index }: { score: IngredientBioDomainScore; index
   const barWidth = `${Math.round(score.magnitude * 100)}%` as const;
 
   const directionColor =
-    score.direction === 'benefit' ? '#3B6E52' :
-    score.direction === 'harm'    ? '#A34B4B' :
+    score.direction === 'benefit' ? Colors.sage :
+    score.direction === 'harm'    ? Colors.alert :
     score.direction === 'mixed'   ? '#8B6914' :
                                     Colors.inkTertiary;
 
@@ -700,51 +672,24 @@ function BioDomainRow({ score, index }: { score: IngredientBioDomainScore; index
       } ${score.dose_unit ?? ''}`
     : null;
 
+  const spectrumTone =
+    score.direction === 'benefit' ? 'sage' :
+    score.direction === 'harm' ? 'alert' :
+    'ink';
+
+  const rightLabel = doseNote ?? `${score.confidence} conf.`;
+
   return (
     <Animated.View
       entering={FadeInUp.delay(index * 50).duration(300)}
       style={styles.bioDomainRow}
     >
-      {/* Domain name + direction badge */}
-      <View style={styles.bioDomainHeader}>
-        <Text style={styles.bioDomainName}>{displayName}</Text>
-        <View style={[styles.bioDomainBadge, { borderColor: directionColor }]}>
-          <Text style={[styles.bioDomainBadgeText, { color: directionColor }]}>
-            {directionLabel}
-          </Text>
-        </View>
-      </View>
-
-      {/* Bar */}
-      <View style={styles.bioDomainBarTrack}>
-        <View
-          style={[
-            styles.bioDomainBarFill,
-            {
-              width: barWidth,
-              backgroundColor:
-                score.direction === 'harm'
-                  ? '#A34B4B'
-                  : score.direction === 'benefit'
-                  ? barColor
-                  : Colors.inkTertiary,
-              opacity: score.direction === 'neutral' ? 0.3 : 1,
-            },
-          ]}
-        />
-      </View>
-
-      {/* Dose context + confidence */}
-      <View style={styles.bioDomainMeta}>
-        {doseNote && (
-          <Text style={styles.bioDomainDoseNote}>{doseNote}</Text>
-        )}
-        <Text style={styles.bioDomainConfidence}>
-          {score.confidence} confidence · {score.evidence_count} {score.evidence_count === 1 ? 'study' : 'studies'}
-        </Text>
-      </View>
-
-      {/* Notes */}
+      <SpectrumBar
+        position={score.magnitude}
+        label={displayName}
+        right={rightLabel}
+        tone={spectrumTone as 'ink' | 'alert' | 'sage' | 'accent'}
+      />
       {score.notes && (
         <Text style={styles.bioDomainNotes}>{score.notes}</Text>
       )}
@@ -833,13 +778,13 @@ export default function IngredientDetailScreen() {
       >
         {/* ── Title ──────────────────────────────────────────────────────── */}
         <Animated.View entering={FadeIn.duration(250)} style={styles.titleSection}>
-          <Text style={styles.categoryLabel}>{categoryLabel(ingredient.category)}</Text>
-          <Text style={styles.ingredientName}>{ingredient.canonical_name}</Text>
-          {evidenceLevelLabel && (
-            <View style={styles.evidencePill}>
-              <Text style={styles.evidencePillText}>{evidenceLevelLabel}</Text>
-            </View>
-          )}
+          <Eyebrow style={{ marginBottom: scale(8) }}>{categoryLabel(ingredient.category)}</Eyebrow>
+          <SerifH size={40} style={{ marginBottom: scale(12), lineHeight: scale(42) }}>
+            {ingredient.canonical_name}
+          </SerifH>
+          <View style={styles.tagRow}>
+            {evidenceLevelLabel && <Tag tone="sage">{evidenceLevelLabel}</Tag>}
+          </View>
         </Animated.View>
 
         {/* ── Relevance Banner ───────────────────────────────────────────── */}
@@ -847,8 +792,8 @@ export default function IngredientDetailScreen() {
           <RelevanceBanner evidence={ingredient.evidence} userGoals={userGoals} />
         )}
 
-        {/* ── Verdict Strip ──────────────────────────────────────────────── */}
-        <VerdictStrip
+        {/* ── Evidence Grid ──────────────────────────────────────────────── */}
+        <EvidenceGrid
           evidence={ingredient.evidence}
           evidenceLevel={ingredient.evidence_level}
         />
@@ -866,7 +811,7 @@ export default function IngredientDetailScreen() {
         {hasBelief && (
           <>
             <View style={styles.divider} />
-            <Text style={styles.sectionLabel}>Belief vs. Reality</Text>
+            <SectionHead label="Belief vs. Reality" />
             <BeliefRealityCard
               commonBelief={ingredient.common_belief!}
               evidenceReality={ingredient.evidence_reality!}
@@ -878,7 +823,7 @@ export default function IngredientDetailScreen() {
         {ingredient.biodomain_scores && ingredient.biodomain_scores.length > 0 && (
           <>
             <View style={styles.divider} />
-            <Text style={styles.sectionLabel}>Health domain impact</Text>
+            <SectionHead label="Health domain impact" />
             {ingredient.biodomain_scores
               .slice()
               .sort((a, b) => {
@@ -948,9 +893,9 @@ export default function IngredientDetailScreen() {
         {ingredient.found_in.length > 0 && (
           <>
             <View style={styles.divider} />
-            <Text style={styles.sectionLabel}>
-              Found in {ingredient.found_in.length} product{ingredient.found_in.length !== 1 ? 's' : ''}
-            </Text>
+            <SectionHead
+              label={`Found in ${ingredient.found_in.length} product${ingredient.found_in.length !== 1 ? 's' : ''}`}
+            />
             {ingredient.found_in.map((p, i) => (
               <Animated.View
                 key={`${p.id}-${i}`}
@@ -986,11 +931,11 @@ export default function IngredientDetailScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.bone,
+    backgroundColor: Colors.surface,
   },
   centered: {
     flex: 1,
-    backgroundColor: Colors.bone,
+    backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: scale(32),
@@ -1017,7 +962,7 @@ const styles = StyleSheet.create({
   backBtnFallbackText: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.body,
-    color: Colors.bone,
+    color: Colors.surface,
   },
 
   // ── Nav ─────────────────────────────────────────────────────────────────────
@@ -1052,36 +997,34 @@ const styles = StyleSheet.create({
   titleSection: {
     marginBottom: Spacing.sm,
   },
-  categoryLabel: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 1.4,
-    color: Colors.inkSecondary,
-    marginBottom: scale(6),
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: scale(6),
   },
-  ingredientName: {
-    fontFamily: 'CormorantGaramond_600SemiBold',
-    fontSize: scale(38),
-    lineHeight: scale(40),
-    color: Colors.ink,
-    marginBottom: scale(12),
+
+  // ── Evidence Grid ────────────────────────────────────────────────────────────
+  evidenceGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    backgroundColor: Colors.surfaceCard,
+    marginTop: Spacing.sm,
   },
-  evidencePill: {
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.boneCard,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.inkTertiary,
-    borderRadius: Radius.pill,
-    paddingHorizontal: scale(10),
-    paddingVertical: scale(3),
+  evidenceGridCell: {
+    width: '50%',
+    padding: scale(14),
   },
-  evidencePillText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: Colors.inkSecondary,
+  evidenceGridCellBorderR: {
+    borderRightWidth: 1,
+    borderRightColor: Colors.borderHairline,
+  },
+  evidenceGridCellBorderB: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderHairline,
   },
 
   // ── Relevance Banner ────────────────────────────────────────────────────────
@@ -1089,9 +1032,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: scale(8),
-    backgroundColor: Colors.accentHill + '10',
+    backgroundColor: Colors.accent + '10',
     borderWidth: 1,
-    borderColor: Colors.accentHill + '25',
+    borderColor: Colors.accent + '25',
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
@@ -1100,7 +1043,7 @@ const styles = StyleSheet.create({
   },
   relevanceIcon: {
     fontSize: FontSizes.caption,
-    color: Colors.accentHill,
+    color: Colors.accent,
     marginTop: scale(1),
   },
   relevanceText: {
@@ -1112,51 +1055,9 @@ const styles = StyleSheet.create({
   },
   relevanceGoals: {
     fontFamily: Fonts.sansSemiBold,
-    color: Colors.accentHill,
+    color: Colors.accent,
   },
 
-  // ── Verdict Strip ───────────────────────────────────────────────────────────
-  verdictStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
-  },
-  verdictIconWrap: {
-    width: scale(40),
-    height: scale(40),
-    borderRadius: scale(20),
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  verdictIcon: {
-    fontSize: scale(18),
-    fontFamily: Fonts.sansSemiBold,
-  },
-  verdictBody: {
-    flex: 1,
-  },
-  verdictDirection: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.subtitle,
-    marginBottom: scale(2),
-  },
-  verdictMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: scale(4),
-  },
-  verdictMetaText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: Colors.inkSecondary,
-  },
-  verdictMetaDot: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: Colors.inkTertiary,
-  },
 
   // ── Divider ─────────────────────────────────────────────────────────────────
   divider: {
@@ -1196,7 +1097,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     overflow: 'hidden',
     marginBottom: Spacing.md,
-    backgroundColor: Colors.boneCard,
+    backgroundColor: Colors.surfaceCard,
     borderWidth: 1,
     borderColor: Colors.borderHairline,
   },
@@ -1212,7 +1113,7 @@ const styles = StyleSheet.create({
   },
   mechanismPlaceholderIcon: {
     fontSize: scale(32),
-    color: Colors.boneDark,
+    color: Colors.borderHairline,
   },
   mechanismPlaceholderText: {
     fontFamily: Fonts.sans,
@@ -1237,55 +1138,6 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
 
-  // ── Belief vs Reality ────────────────────────────────────────────────────────
-  beliefCard: {
-    backgroundColor: Colors.boneCard,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
-  beliefHalf: {
-    padding: scale(18),
-  },
-  beliefDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.borderHairline,
-    marginHorizontal: scale(18),
-  },
-  beliefLabel: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    color: Colors.inkTertiary,
-    marginBottom: scale(8),
-  },
-  beliefRealityLabel: {
-    color: Colors.inkSecondary,
-  },
-  beliefText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    lineHeight: FontSizes.body * 1.6,
-    color: Colors.inkSecondary,
-    fontStyle: 'italic',
-  },
-  beliefRealityText: {
-    fontFamily: Fonts.sansMedium,
-    fontStyle: 'normal',
-    color: Colors.ink,
-  },
-  beliefExpandBtn: {
-    paddingHorizontal: scale(18),
-    paddingBottom: scale(14),
-    paddingTop: scale(4),
-  },
-  beliefExpandText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    color: Colors.inkTertiary,
-  },
 
   // ── Evidence Snapshot ────────────────────────────────────────────────────────
   evidenceBarWrap: {
@@ -1293,10 +1145,10 @@ const styles = StyleSheet.create({
   },
   evidenceBar: {
     flexDirection: 'row',
-    height: scale(6),
-    borderRadius: scale(3),
+    height: scale(4),
+    borderRadius: scale(2),
     overflow: 'hidden',
-    backgroundColor: Colors.boneDark,
+    backgroundColor: Colors.surfaceAlt,
   },
   evidenceBarSeg: {},
   evidenceBarLabels: {
@@ -1309,7 +1161,7 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.xs,
   },
   evidenceCard: {
-    backgroundColor: Colors.boneCard,
+    backgroundColor: Colors.surfaceCard,
     borderRadius: Radius.md,
     padding: scale(14),
     marginBottom: scale(8),
@@ -1342,7 +1194,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
   },
   confidenceText: {
-    fontFamily: 'Manrope_700Bold',
+    fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.xs,
     letterSpacing: 0.6,
   },
@@ -1373,7 +1225,7 @@ const styles = StyleSheet.create({
 
   // ── No evidence ──────────────────────────────────────────────────────────────
   noEvidenceCard: {
-    backgroundColor: Colors.boneCard,
+    backgroundColor: Colors.surfaceCard,
     borderRadius: Radius.md,
     padding: scale(18),
   },
@@ -1393,7 +1245,7 @@ const styles = StyleSheet.create({
   // ── Dose Card ────────────────────────────────────────────────────────────────
   doseCard: {
     flexDirection: 'row',
-    backgroundColor: Colors.boneCard,
+    backgroundColor: Colors.surfaceCard,
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: Colors.borderHairline,
@@ -1424,7 +1276,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   doseCellWarn: {
-    color: '#A34B4B',
+    color: Colors.alert,
   },
 
   // ── Safety ───────────────────────────────────────────────────────────────────
@@ -1437,7 +1289,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.borderHairline,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
-    backgroundColor: Colors.boneCard,
+    backgroundColor: Colors.surfaceCard,
   },
   safetyRowLeft: {
     flexDirection: 'row',
@@ -1451,7 +1303,7 @@ const styles = StyleSheet.create({
     color: Colors.inkSecondary,
   },
   safetyRowTextWarn: {
-    color: '#A34B4B',
+    color: Colors.alert,
   },
   safetyChevron: {
     fontFamily: Fonts.sans,
@@ -1482,11 +1334,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     paddingHorizontal: scale(10),
     paddingVertical: scale(4),
-    backgroundColor: Colors.boneCard,
+    backgroundColor: Colors.surfaceCard,
   },
   chipWarn: {
-    borderColor: 'rgba(163,75,75,0.3)',
-    backgroundColor: 'rgba(163,75,75,0.04)',
+    borderColor: 'rgba(196,101,74,0.3)',
+    backgroundColor: 'rgba(196,101,74,0.04)',
   },
   chipText: {
     fontFamily: Fonts.sansMedium,
@@ -1494,7 +1346,7 @@ const styles = StyleSheet.create({
     color: Colors.inkSecondary,
   },
   chipTextWarn: {
-    color: '#A34B4B',
+    color: Colors.alert,
   },
 
   // ── Bio-Domain Effects ───────────────────────────────────────────────────────
@@ -1592,7 +1444,7 @@ const styles = StyleSheet.create({
     marginBottom: scale(6),
   },
   bioDomainName: {
-    fontFamily: 'Manrope_600SemiBold',
+    fontFamily: Fonts.sansSemiBold,
     fontSize: scale(13),
     color: Colors.ink,
     flex: 1,
@@ -1605,15 +1457,15 @@ const styles = StyleSheet.create({
     paddingVertical: scale(2),
   },
   bioDomainBadgeText: {
-    fontFamily: 'Manrope_600SemiBold',
+    fontFamily: Fonts.sansSemiBold,
     fontSize: scale(10),
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   bioDomainBarTrack: {
-    height: scale(5),
-    backgroundColor: Colors.boneDark,
-    borderRadius: scale(3),
+    height: scale(2),
+    backgroundColor: Colors.borderHairline,
+    borderRadius: scale(1),
     overflow: 'hidden',
     marginBottom: scale(5),
   },
@@ -1628,17 +1480,17 @@ const styles = StyleSheet.create({
     gap: scale(6),
   },
   bioDomainDoseNote: {
-    fontFamily: 'Manrope_400Regular',
+    fontFamily: Fonts.sans,
     fontSize: scale(11),
     color: Colors.inkSecondary,
   },
   bioDomainConfidence: {
-    fontFamily: 'Manrope_400Regular',
+    fontFamily: Fonts.sans,
     fontSize: scale(11),
     color: Colors.inkTertiary,
   },
   bioDomainNotes: {
-    fontFamily: 'Manrope_400Regular',
+    fontFamily: Fonts.sans,
     fontSize: scale(12),
     color: Colors.inkSecondary,
     marginTop: scale(4),
@@ -1649,7 +1501,7 @@ const styles = StyleSheet.create({
   // ── Loading / error (upstream aliases) ───────────────────────────────────
   centeredContainer: {
     flex: 1,
-    backgroundColor: Colors.bone,
+    backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: scale(32),
@@ -1661,8 +1513,8 @@ const styles = StyleSheet.create({
     borderRadius: scale(8),
   },
   backButtonFallbackText: {
-    fontFamily: 'Manrope_600SemiBold',
+    fontFamily: Fonts.sansSemiBold,
     fontSize: scale(13),
-    color: Colors.bone,
+    color: Colors.surface,
   },
 });
