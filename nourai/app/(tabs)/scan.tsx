@@ -29,7 +29,6 @@ import Animated, {
   Easing,
   interpolate,
 } from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -39,19 +38,13 @@ import {
   Spacing,
   Radius,
   FontSizes,
-  Layout,
   scale,
   verticalScale,
 } from '@/constants/theme';
 import { useAppState } from '@/context/app-state';
-import { api, type MealAnalysisResponse, type Product } from '@/services/api';
+import { api, type MealAnalysisResponse, type Product, type ProductListItem } from '@/services/api';
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
-type InputMode = 'scan' | 'photo' | 'type';
-
-const MODE_TAB_WIDTH = scale(44);
-const MODE_TAB_PADDING = scale(4);
+type InputMode = 'scan' | 'photo' | 'type' | 'search';
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -76,6 +69,11 @@ export default function ScanScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
 
+  // Search mode state
+  const [productQuery, setProductQuery] = useState('');
+  const [productResults, setProductResults] = useState<ProductListItem[]>([]);
+  const [searchingProducts, setSearchingProducts] = useState(false);
+
   // Photo mode state
   const [capturedImageUri, setCapturedImageUri] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -84,15 +82,11 @@ export default function ScanScreen() {
   const [mealAnalysis, setMealAnalysis] = useState<MealAnalysisResponse | null>(null);
 
   // Reanimated shared values
-  const scanLineProgress = useSharedValue(0);
-  const cornerPulse = useSharedValue(1);
-  const panelTranslateY = useSharedValue(verticalScale(300));
-  const modeToggleX = useSharedValue(0);
+  const sweepY = useSharedValue(0);
 
   // Called by CameraView when a barcode is detected
   const handleBarcodeScanned = ({ data }: { data: string }) => {
     if (!isScanning || loading || data === lastScannedRef.current) return;
-    // Debounce — ignore the same barcode for 3s
     lastScannedRef.current = data;
     setTimeout(() => { lastScannedRef.current = null; }, 3000);
     fetchProduct(data);
@@ -108,9 +102,7 @@ export default function ScanScreen() {
       setProduct(data);
       setProductDetected(true);
       setIsScanning(false);
-
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      panelTranslateY.value = withSpring(0, { damping: 15, stiffness: 100 });
     } catch (err) {
       console.error('Error fetching product:', err);
       setError('Failed to load product');
@@ -123,7 +115,6 @@ export default function ScanScreen() {
   // Type mode: describe your meal → AI analysis
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
-
     Keyboard.dismiss();
     setSearching(true);
     setError(null);
@@ -132,7 +123,6 @@ export default function ScanScreen() {
       const data = await api.analyzeMeal({ description: searchQuery.trim() });
       setMealAnalysis(data);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      panelTranslateY.value = withSpring(0, { damping: 15, stiffness: 100 });
     } catch (err) {
       console.error('Error analyzing meal:', err);
       setError('Analysis failed. Please try again.');
@@ -145,7 +135,6 @@ export default function ScanScreen() {
   const handleTakePhoto = async () => {
     const permResult = await ImagePicker.requestCameraPermissionsAsync();
     if (!permResult.granted) {
-      // Fall back to photo library on simulator or if camera denied
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         quality: 0.7,
@@ -174,19 +163,32 @@ export default function ScanScreen() {
     setError(null);
 
     try {
-      if (!base64) {
-        throw new Error('Could not read image data');
-      }
+      if (!base64) throw new Error('Could not read image data');
       const data = await api.analyzeMeal({ image_base64: base64 });
       setMealAnalysis(data);
       setAnalyzing(false);
-
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      panelTranslateY.value = withSpring(0, { damping: 15, stiffness: 100 });
     } catch (err) {
       console.error('Error analyzing image:', err);
       setError('Failed to analyze image. Please try again.');
       setAnalyzing(false);
+    }
+  };
+
+  // Search mode: look up products from DB by name
+  const handleProductSearch = async () => {
+    if (!productQuery.trim()) return;
+    Keyboard.dismiss();
+    setSearchingProducts(true);
+    setProductResults([]);
+    setError(null);
+    try {
+      const results = await api.searchProducts(productQuery.trim());
+      setProductResults(results.products);
+    } catch {
+      setError('Search failed. Please try again.');
+    } finally {
+      setSearchingProducts(false);
     }
   };
 
@@ -202,37 +204,20 @@ export default function ScanScreen() {
     }
   };
 
-  // Scanning animations + permission request
+  // Sweep animation
   useEffect(() => {
     if (mode === 'scan' && isScanning) {
-      // Request camera permission as soon as the user enters scan mode
       if (!cameraPermission?.granted) {
         requestCameraPermission();
       }
-
-      scanLineProgress.value = 0;
-      scanLineProgress.value = withRepeat(
-        withTiming(1, { duration: 3000, easing: Easing.linear }),
+      sweepY.value = 0;
+      sweepY.value = withRepeat(
+        withTiming(340, { duration: 2400, easing: Easing.linear }),
         -1,
-        false
-      );
-
-      cornerPulse.value = withRepeat(
-        withSequence(
-          withTiming(1.05, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.ease) })
-        ),
-        -1,
-        false
+        false,
       );
     }
   }, [mode, isScanning, cameraPermission?.granted]);
-
-  // Mode toggle animation
-  useEffect(() => {
-    const modeIndex = mode === 'scan' ? 0 : mode === 'photo' ? 1 : 2;
-    modeToggleX.value = withSpring(modeIndex, { damping: 15, stiffness: 120 });
-  }, [mode]);
 
   // Reset when switching modes
   useEffect(() => {
@@ -243,10 +228,10 @@ export default function ScanScreen() {
     setSearchQuery('');
     setCapturedImageUri(null);
     setAnalyzing(false);
-    panelTranslateY.value = verticalScale(300);
-    if (mode === 'scan') {
-      setIsScanning(true);
-    }
+    setProductQuery('');
+    setProductResults([]);
+    setSearchingProducts(false);
+    if (mode === 'scan') setIsScanning(true);
   }, [mode]);
 
   const handleAddToStack = () => {
@@ -270,228 +255,215 @@ export default function ScanScreen() {
 
   const dismissMealPanel = () => {
     setMealAnalysis(null);
-    panelTranslateY.value = verticalScale(300);
     if (mode === 'photo') setCapturedImageUri(null);
   };
 
-  // Status text logic
-  const getStatusText = () => {
-    if (mealAnalysis) return 'Analysis Complete';
-    if (productDetected) return mode === 'photo' ? 'Analysis Complete' : 'Product Detected';
-    switch (mode) {
-      case 'scan':
-        return isScanning ? 'Scanning...' : 'Product Detected';
-      case 'photo':
-        return analyzing ? 'Analyzing...' : 'Ready';
-      case 'type':
-        return searching ? 'Analyzing...' : 'Describe Your Meal';
-    }
-  };
-
-  // Animated styles
-  const scanLineStyle = useAnimatedStyle(() => {
-    const translateY = interpolate(
-      scanLineProgress.value,
-      [0, 1],
-      [Layout.scannerOverlaySize * 0.1, Layout.scannerOverlaySize * 0.9]
-    );
-    const opacity = interpolate(
-      scanLineProgress.value,
-      [0, 0.1, 0.9, 1],
-      [0, 1, 1, 0]
-    );
-    return {
-      transform: [{ translateY }],
-      opacity,
-    };
-  });
-
-  const cornerStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: cornerPulse.value }],
-  }));
-
-  const panelStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: panelTranslateY.value }],
-  }));
-
-  const modeTogglePillStyle = useAnimatedStyle(() => {
-    const tabFullWidth = MODE_TAB_WIDTH + scale(16);
-    const translateX = interpolate(modeToggleX.value, [0, 1, 2], [0, tabFullWidth, tabFullWidth * 2]);
-    return { transform: [{ translateX }] };
-  });
-
-  // Button press animation
-  const confirmScale = useSharedValue(1);
-  const confirmAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: confirmScale.value }],
-  }));
-
+  const isDetected = productDetected && !!product;
   const hasMealResult = !!mealAnalysis;
-  const hasProductResult = productDetected && !!product;
+  const hasSearchResults = mode === 'search' && productResults.length > 0;
+
+  // Sweep animated style
+  const sweepStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sweepY.value }],
+    opacity: isScanning ? 1 : 0,
+  }));
 
   return (
     <KeyboardAvoidingView
       style={styles.screen}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* Background */}
-      <View style={styles.viewfinder}>
-        {/* Mode Toggle */}
-        <View style={[styles.modeToggle, { top: insets.top + verticalScale(70) }]}>
-          <Animated.View style={[styles.modeTogglePill, modeTogglePillStyle]} />
-          {(['scan', 'photo', 'type'] as InputMode[]).map((m) => (
-            <Pressable
-              key={m}
-              style={styles.modeTab}
-              onPress={() => { setMode(m); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-            >
-              <Text style={[styles.modeTabText, mode === m && styles.modeTabTextActive]}>
-                {m === 'scan' ? 'Scan' : m === 'photo' ? 'Photo' : 'Type'}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+      {/* Camera fill (scan mode only) */}
+      {mode === 'scan' && cameraPermission?.granted && Constants.isDevice && (
+        <CameraView
+          style={StyleSheet.absoluteFill}
+          facing="back"
+          onBarcodeScanned={isScanning ? handleBarcodeScanned : undefined}
+          barcodeScannerSettings={{
+            barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'qr', 'code128', 'code39'],
+          }}
+        />
+      )}
 
-        {/* Scan Mode — live camera + overlay */}
-        {mode === 'scan' && (
-          <>
-            {!Constants.isDevice ? (
-              <Animated.View entering={FadeIn.duration(300)} style={styles.permissionContainer}>
-                <Text style={styles.permissionTitle}>Simulator Detected</Text>
-                <Text style={styles.permissionSubtitle}>
-                  Camera scanning requires a real device. Use the "Type" tab to search by product name instead.
-                </Text>
-              </Animated.View>
-            ) : cameraPermission?.granted ? (
-              <CameraView
-                style={StyleSheet.absoluteFill}
-                facing="back"
-                onBarcodeScanned={isScanning ? handleBarcodeScanned : undefined}
-                barcodeScannerSettings={{
-                  barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'qr', 'code128', 'code39'],
-                }}
-              />
-            ) : (
-              <Animated.View entering={FadeIn.duration(300)} style={styles.permissionContainer}>
-                <Text style={styles.permissionTitle}>Camera Required</Text>
-                <Text style={styles.permissionSubtitle}>
-                  Allow camera access to scan product barcodes
-                </Text>
-                <Pressable style={styles.permissionBtn} onPress={requestCameraPermission}>
-                  <Text style={styles.permissionBtnText}>Grant Access</Text>
-                </Pressable>
-              </Animated.View>
-            )}
+      {/* Dark bg overlay when not in scan/camera mode */}
+      {(mode !== 'scan' || !cameraPermission?.granted || !Constants.isDevice) && (
+        <View style={StyleSheet.absoluteFill} />
+      )}
 
-            {/* Crosshair overlay on top of camera */}
-            <View style={styles.scanOverlay}>
-              <Animated.View style={[styles.cornerContainer, cornerStyle]}>
-                <View style={[styles.corner, styles.cornerTL]} />
-                <View style={[styles.corner, styles.cornerTR]} />
-                <View style={[styles.corner, styles.cornerBL]} />
-                <View style={[styles.corner, styles.cornerBR]} />
-              </Animated.View>
-
-              {isScanning && cameraPermission?.granted && Constants.isDevice && (
-                <Animated.View style={[styles.scanLine, scanLineStyle]} />
-              )}
-            </View>
-          </>
-        )}
-
-        {/* Photo Mode */}
-        {mode === 'photo' && (
-          <Animated.View entering={FadeIn.duration(300)} style={styles.photoContainer}>
-            {capturedImageUri ? (
-              <Image source={{ uri: capturedImageUri }} style={styles.capturedImage} />
-            ) : (
-              <>
-                {/* Camera icon placeholder */}
-                <View style={styles.cameraIconContainer}>
-                  <View style={styles.cameraIcon}>
-                    <View style={styles.cameraBody} />
-                    <View style={styles.cameraLens} />
-                    <View style={styles.cameraFlash} />
-                  </View>
-                </View>
-                <Text style={styles.photoTitle}>Take a photo of your meal</Text>
-                <Text style={styles.photoSubtitle}>
-                  Claude AI will identify every ingredient
-                </Text>
-              </>
-            )}
-
-            {/* Shutter button */}
-            {!hasMealResult && (
-              <Pressable
-                style={styles.shutterButton}
-                onPress={handleTakePhoto}
-              >
-                <View style={styles.shutterButtonInner} />
-              </Pressable>
-            )}
-          </Animated.View>
-        )}
-
-        {/* Type Mode */}
-        {mode === 'type' && (
-          <Animated.View entering={FadeIn.duration(300)} style={styles.typeContainer}>
-            <Text style={styles.typeTitle}>What did you eat?</Text>
-            <Text style={styles.typeSubtitle}>
-              Describe your meal and AI will break it down
-            </Text>
-
-            <View style={styles.searchInputContainer}>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="e.g. Grilled salmon with quinoa and broccoli..."
-                placeholderTextColor={Colors.inkTertiary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                onSubmitEditing={handleSearch}
-                returnKeyType="search"
-                autoCapitalize="none"
-                autoCorrect={false}
-                multiline
-              />
-              <Pressable style={styles.searchBtn} onPress={handleSearch}>
-                <Text style={styles.searchBtnText}>Analyze</Text>
-              </Pressable>
-            </View>
-          </Animated.View>
-        )}
-      </View>
-
-      {/* Top Navigation */}
-      <View style={[styles.topNav, { top: insets.top + Spacing.md }]}>
-        <Pressable onPress={handleClose} style={styles.closeBtn}>
-          <Text style={styles.closeBtnText}>✕</Text>
+      {/* ── Top bar ─────────────────────────────────────────────────────── */}
+      <View style={[styles.topBar, { top: insets.top + scale(12) }]}>
+        {/* Close button */}
+        <Pressable style={styles.glassCircle} onPress={handleClose}>
+          <Text style={styles.glassIcon}>✕</Text>
         </Pressable>
 
-        <View style={styles.statusBadge}>
-          <View style={[styles.statusDot, (hasProductResult || hasMealResult) && styles.statusDotSuccess]} />
-          <Text style={styles.statusText}>{getStatusText()}</Text>
+        {/* Status pill */}
+        <View style={styles.statusPill}>
+          <View style={[
+            styles.statusDot,
+            { backgroundColor: isDetected || hasMealResult ? Colors.sage : Colors.sand },
+          ]} />
+          <Text style={styles.statusText}>
+            {isDetected || hasMealResult ? 'Ingredients Read' : 'Reading label'}
+          </Text>
         </View>
 
-        <View style={{ width: scale(24) }} />
+        {/* Expand / placeholder button */}
+        <View style={styles.glassCircle} />
       </View>
 
-      {/* Loading Indicator */}
-      {(loading || searching || analyzing) && (
-        <View style={[styles.loadingOverlay, { bottom: insets.bottom + scale(40) }]}>
-          <ActivityIndicator size="large" color={Colors.bone} />
+      {/* ── Scan frame (scan mode only) ─────────────────────────────────── */}
+      {mode === 'scan' && (
+        <View style={styles.scanFrame}>
+          {/* Corner brackets */}
+          {([
+            { top: 0, left: 0, borderTopWidth: 2, borderLeftWidth: 2 },
+            { top: 0, right: 0, borderTopWidth: 2, borderRightWidth: 2 },
+            { bottom: 0, left: 0, borderBottomWidth: 2, borderLeftWidth: 2 },
+            { bottom: 0, right: 0, borderBottomWidth: 2, borderRightWidth: 2 },
+          ] as const).map((pos, i) => (
+            <View
+              key={i}
+              style={{
+                position: 'absolute',
+                width: 32,
+                height: 32,
+                borderColor: isDetected ? Colors.sage : 'rgba(255,255,255,0.85)',
+                ...pos,
+              }}
+            />
+          ))}
+
+          {/* Sweep line */}
+          {isScanning && (
+            <Animated.View style={[styles.sweepLine, sweepStyle]} />
+          )}
+        </View>
+      )}
+
+      {/* ── Permission / simulator placeholders ─────────────────────────── */}
+      {mode === 'scan' && !Constants.isDevice && (
+        <Animated.View entering={FadeIn.duration(300)} style={styles.permissionContainer}>
+          <Text style={styles.permissionTitle}>Simulator Detected</Text>
+          <Text style={styles.permissionSubtitle}>
+            Camera scanning requires a real device. Use the "Type" tab to search by product name.
+          </Text>
+        </Animated.View>
+      )}
+      {mode === 'scan' && Constants.isDevice && !cameraPermission?.granted && (
+        <Animated.View entering={FadeIn.duration(300)} style={styles.permissionContainer}>
+          <Text style={styles.permissionTitle}>Camera Required</Text>
+          <Text style={styles.permissionSubtitle}>
+            Allow camera access to scan product barcodes
+          </Text>
+          <Pressable style={styles.permissionBtn} onPress={requestCameraPermission}>
+            <Text style={styles.permissionBtnText}>Grant Access</Text>
+          </Pressable>
+        </Animated.View>
+      )}
+
+      {/* ── Photo mode ──────────────────────────────────────────────────── */}
+      {mode === 'photo' && (
+        <Animated.View entering={FadeIn.duration(300)} style={styles.photoContainer}>
+          {capturedImageUri ? (
+            <Image source={{ uri: capturedImageUri }} style={styles.capturedImage} />
+          ) : (
+            <>
+              <Text style={styles.permissionTitle}>Take a photo of your meal</Text>
+              <Text style={styles.permissionSubtitle}>
+                Claude AI will identify every ingredient
+              </Text>
+            </>
+          )}
+          {!hasMealResult && (
+            <Pressable style={styles.shutterButton} onPress={handleTakePhoto}>
+              <View style={styles.shutterInner} />
+            </Pressable>
+          )}
+        </Animated.View>
+      )}
+
+      {/* ── Type mode ───────────────────────────────────────────────────── */}
+      {mode === 'type' && (
+        <Animated.View entering={FadeIn.duration(300)} style={styles.typeContainer}>
+          <Text style={styles.permissionTitle}>What did you eat?</Text>
+          <Text style={styles.permissionSubtitle}>
+            Describe your meal and AI will break it down
+          </Text>
+          <View style={styles.searchRow}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="e.g. Grilled salmon with quinoa..."
+              placeholderTextColor="rgba(255,255,255,0.4)"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onSubmitEditing={handleSearch}
+              returnKeyType="search"
+              autoCapitalize="none"
+              autoCorrect={false}
+              multiline
+            />
+            <Pressable style={styles.searchBtn} onPress={handleSearch}>
+              <Text style={styles.searchBtnText}>Analyze</Text>
+            </Pressable>
+          </View>
+        </Animated.View>
+      )}
+
+      {/* ── Search mode ─────────────────────────────────────────────────── */}
+      {mode === 'search' && (
+        <Animated.View entering={FadeIn.duration(300)} style={styles.typeContainer}>
+          <Text style={styles.permissionTitle}>Search products</Text>
+          <Text style={styles.permissionSubtitle}>
+            Find any product already in our database
+          </Text>
+          <View style={styles.searchRow}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="e.g. Vitamin D, Creatine..."
+              placeholderTextColor="rgba(255,255,255,0.4)"
+              value={productQuery}
+              onChangeText={setProductQuery}
+              onSubmitEditing={handleProductSearch}
+              returnKeyType="search"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <Pressable style={styles.searchBtn} onPress={handleProductSearch}>
+              <Text style={styles.searchBtnText}>Search</Text>
+            </Pressable>
+          </View>
+        </Animated.View>
+      )}
+
+      {/* ── Mode toggle ─────────────────────────────────────────────────── */}
+      <View style={[styles.modeToggle, { bottom: isDetected || hasMealResult || hasSearchResults ? verticalScale(340) : verticalScale(220) }]}>
+        {(['scan', 'photo', 'type', 'search'] as InputMode[]).map((m) => (
+          <Pressable
+            key={m}
+            style={[styles.modeTab, mode === m && styles.modeTabActive]}
+            onPress={() => { setMode(m); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+          >
+            <Text style={[styles.modeTabText, mode === m && styles.modeTabTextActive]}>
+              {m === 'scan' ? 'Scan' : m === 'photo' ? 'Photo' : m === 'type' ? 'Type' : 'Search'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {/* ── Loading ─────────────────────────────────────────────────────── */}
+      {(loading || searching || analyzing || searchingProducts) && (
+        <View style={[styles.loadingOverlay, { bottom: insets.bottom + scale(180) }]}>
+          <ActivityIndicator size="large" color="rgba(255,255,255,0.9)" />
           <Text style={styles.loadingText}>
-            {searching ? 'Analyzing your meal...' : analyzing ? 'Analyzing photo...' : 'Looking up product...'}
+            {searching ? 'Analyzing your meal...' : analyzing ? 'Analyzing photo...' : searchingProducts ? 'Searching products...' : 'Looking up product...'}
           </Text>
         </View>
       )}
 
-      {/* Error State */}
-      {error && !loading && !searching && !analyzing && !hasProductResult && !hasMealResult && (
-        <Animated.View
-          entering={FadeIn.duration(300)}
-          style={[styles.errorPanel, { bottom: insets.bottom + scale(40) }]}
-        >
+      {/* ── Error ───────────────────────────────────────────────────────── */}
+      {error && !loading && !searching && !analyzing && !isDetected && !hasMealResult && (
+        <Animated.View entering={FadeIn.duration(300)} style={[styles.errorOverlay, { bottom: insets.bottom + scale(180) }]}>
           <Text style={styles.errorText}>{error}</Text>
           <Pressable
             style={styles.retryBtn}
@@ -508,139 +480,122 @@ export default function ScanScreen() {
         </Animated.View>
       )}
 
-      {/* Product Recognition Panel (scan mode) */}
-      {hasProductResult && (
-        <Animated.View
-          style={[
-            styles.recognitionPanelWrapper,
-            panelStyle,
-            { bottom: insets.bottom + scale(40) },
-          ]}
-        >
-          <BlurView
-            intensity={20}
-            tint="light"
-            style={[
-              styles.recognitionPanel,
-              product.is_ai_generated && styles.recognitionPanelAI,
-            ]}
-          >
-            {product.is_ai_generated && (
-              <View style={styles.aiBadge}>
-                <Text style={styles.aiBadgeIcon}>✦</Text>
-                <Text style={styles.aiBadgeText}>AI-Generated Analysis</Text>
-              </View>
-            )}
+      {/* ── Bottom sheet ────────────────────────────────────────────────── */}
+      <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + scale(16) }]}>
+        {/* Aligning / idle state */}
+        {!isDetected && !hasMealResult && !hasSearchResults && (
+          <Text style={styles.alignText}>
+            {mode === 'search' && !searchingProducts
+              ? 'Search for a product above…'
+              : 'Hold steady over the ingredients panel…'}
+          </Text>
+        )}
 
-            <View style={styles.productDetectedRow}>
-              <View style={styles.productInfo}>
-                <Text style={styles.detectedLabel}>
-                  {product.is_ai_generated ? 'Generated' : 'Detected'}
-                </Text>
+        {/* Product detected */}
+        {isDetected && product && (
+          <Animated.View entering={FadeInUp.duration(300)}>
+            {/* Product info row */}
+            <View style={styles.productRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.productBrand}>{product.brand?.toUpperCase() ?? ''}</Text>
                 <Text style={styles.productName}>{product.name}</Text>
-                {product.brand && (
-                  <Text style={styles.productBrand}>{product.brand}</Text>
-                )}
               </View>
-              <Text style={styles.gradeDisplay}>{product.grade}</Text>
+              <View style={styles.gradeBadge}>
+                <Text style={styles.gradeText}>{product.grade}</Text>
+              </View>
             </View>
 
-            <View style={styles.ingredientCloud}>
-              {product.ingredients.slice(0, 6).map((ingredient, index) => (
-                <Animated.View
-                  key={ingredient.name}
-                  entering={FadeInUp.duration(300).delay(100 + index * 100)}
-                >
-                  <View style={styles.ingredientTag}>
-                    <Text style={styles.ingredientTagText}>{ingredient.name}</Text>
+            {/* Ingredient chips */}
+            <View style={styles.chipRow}>
+              {product.ingredients.slice(0, 5).map((ing, idx) => (
+                <Animated.View key={ing.name} entering={FadeInUp.duration(200).delay(idx * 60)}>
+                  <View style={styles.chip}>
+                    <Text style={styles.chipText}>{ing.name}</Text>
                   </View>
                 </Animated.View>
               ))}
             </View>
 
-            <AnimatedPressable
-              style={[styles.confirmBtn, confirmAnimStyle]}
-              onPress={handleAddToStack}
-              onPressIn={() => { confirmScale.value = withSpring(0.96, { damping: 15, stiffness: 200 }); }}
-              onPressOut={() => { confirmScale.value = withSpring(1, { damping: 15, stiffness: 200 }); }}
-            >
-              <Text style={styles.confirmBtnText}>Add to Stack</Text>
-            </AnimatedPressable>
-          </BlurView>
-        </Animated.View>
-      )}
+            {/* CTA */}
+            <Pressable style={styles.ctaBtn} onPress={handleAddToStack}>
+              <Text style={styles.ctaBtnText}>Analyze →</Text>
+            </Pressable>
+          </Animated.View>
+        )}
 
-      {/* Meal Analysis Panel (photo + type modes) */}
-      {hasMealResult && (
-        <Animated.View
-          style={[
-            styles.recognitionPanelWrapper,
-            panelStyle,
-            { bottom: insets.bottom + scale(40) },
-          ]}
-        >
-          <BlurView intensity={20} tint="light" style={styles.recognitionPanel}>
-            {/* Header */}
-            <View style={styles.productDetectedRow}>
-              <View style={styles.productInfo}>
-                <Text style={styles.detectedLabel}>
-                  {mealAnalysis.analysis_type === 'image' ? 'Meal Analyzed' : 'Meal Identified'}
-                </Text>
+        {/* Meal analysis result */}
+        {hasMealResult && mealAnalysis && (
+          <Animated.View entering={FadeInUp.duration(300)}>
+            <View style={styles.productRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.productBrand}>MEAL IDENTIFIED</Text>
                 <Text style={styles.productName} numberOfLines={2}>
                   {mealAnalysis.meal_summary}
                 </Text>
               </View>
-              <View style={styles.mealCountBadge}>
-                <Text style={styles.mealCountNumber}>{mealAnalysis.foods.length}</Text>
-                <Text style={styles.mealCountLabel}>foods</Text>
+              <View style={styles.gradeBadge}>
+                <Text style={styles.gradeText}>{mealAnalysis.foods.length}</Text>
               </View>
             </View>
 
-            {/* Food list */}
-            <ScrollView
-              style={styles.mealFoodList}
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled
-            >
-              {mealAnalysis.foods.map((food, index) => (
-                <Animated.View
-                  key={`${food.name}-${index}`}
-                  entering={FadeInUp.duration(250).delay(index * 60)}
+            <ScrollView style={styles.mealList} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+              {mealAnalysis.foods.map((food, idx) => (
+                <Pressable
+                  key={`${food.name}-${idx}`}
+                  style={styles.mealItem}
+                  onPress={() => handleFoodTap(food.name)}
                 >
-                  <Pressable
-                    style={styles.mealFoodItem}
-                    onPress={() => handleFoodTap(food.name)}
-                  >
-                    <View style={styles.mealFoodRow}>
-                      <Text style={styles.mealFoodName}>{food.name}</Text>
-                      {food.estimated_amount ? (
-                        <Text style={styles.mealFoodAmount}>{food.estimated_amount}</Text>
-                      ) : null}
-                    </View>
-                    <View style={styles.mealConfidenceTrack}>
-                      <View
-                        style={[
-                          styles.mealConfidenceFill,
-                          { width: `${Math.round(food.confidence * 100)}%` },
-                        ]}
-                      />
-                    </View>
-                  </Pressable>
-                </Animated.View>
+                  <Text style={styles.mealItemName}>{food.name}</Text>
+                  {food.estimated_amount ? (
+                    <Text style={styles.mealItemAmt}>{food.estimated_amount}</Text>
+                  ) : null}
+                </Pressable>
               ))}
             </ScrollView>
 
-            <AnimatedPressable
-              style={[styles.confirmBtn, confirmAnimStyle]}
-              onPress={dismissMealPanel}
-              onPressIn={() => { confirmScale.value = withSpring(0.96, { damping: 15, stiffness: 200 }); }}
-              onPressOut={() => { confirmScale.value = withSpring(1, { damping: 15, stiffness: 200 }); }}
-            >
-              <Text style={styles.confirmBtnText}>Done</Text>
-            </AnimatedPressable>
-          </BlurView>
-        </Animated.View>
-      )}
+            <Pressable style={styles.ctaBtn} onPress={dismissMealPanel}>
+              <Text style={styles.ctaBtnText}>Done →</Text>
+            </Pressable>
+          </Animated.View>
+        )}
+
+        {/* Product search results */}
+        {hasSearchResults && (
+          <Animated.View entering={FadeInUp.duration(300)}>
+            <View style={styles.productRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.productBrand}>Results</Text>
+                <Text style={styles.productName}>
+                  {productResults.length} product{productResults.length !== 1 ? 's' : ''} found
+                </Text>
+              </View>
+            </View>
+            <ScrollView style={styles.mealList} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+              {productResults.map((p) => (
+                <Pressable
+                  key={p.id}
+                  style={styles.searchResultRow}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push(`/product/${p.id}`);
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    {p.brand ? (
+                      <Text style={styles.productBrand}>{p.brand.toUpperCase()}</Text>
+                    ) : null}
+                    <Text style={styles.searchResultName}>{p.name}</Text>
+                  </View>
+                  <View style={[styles.chip, { flexShrink: 0 }]}>
+                    <Text style={styles.chipText}>{p.category}</Text>
+                  </View>
+                  <Text style={styles.searchResultArrow}>›</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Animated.View>
+        )}
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -648,187 +603,135 @@ export default function ScanScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.scannerBg,
+    backgroundColor: '#0A0A0A',
   },
-  viewfinder: {
-    flex: 1,
-    backgroundColor: '#1a1a1a',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modeToggle: {
+
+  // Top bar
+  topBar: {
     position: 'absolute',
+    left: scale(20),
+    right: scale(20),
+    zIndex: 20,
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: Radius.pill,
-    padding: MODE_TAB_PADDING,
-  },
-  modeTogglePill: {
-    position: 'absolute',
-    top: MODE_TAB_PADDING,
-    left: MODE_TAB_PADDING,
-    width: MODE_TAB_WIDTH + scale(16),
-    height: scale(34),
-    backgroundColor: Colors.bone,
-    borderRadius: Radius.pill,
-  },
-  modeTab: {
-    width: MODE_TAB_WIDTH + scale(16),
-    paddingVertical: scale(10),
-    borderRadius: Radius.pill,
-    zIndex: 1,
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  modeTabText: {
+  glassCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  glassIcon: {
+    color: '#fff',
+    fontSize: 14,
     fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.body,
-    color: 'rgba(255,255,255,0.6)',
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(6),
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    paddingVertical: scale(7),
+    paddingHorizontal: scale(14),
+    borderRadius: Radius.pill,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
+    color: '#fff',
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
-  modeTabTextActive: {
-    color: Colors.ink,
+
+  // Scan frame
+  scanFrame: {
+    position: 'absolute',
+    width: 280,
+    height: 340,
+    top: '38%',
+    left: '50%',
+    marginLeft: -140,
+    marginTop: -170,
+    zIndex: 10,
   },
-  scanOverlay: {
-    width: Layout.scannerOverlaySize,
-    height: Layout.scannerOverlaySize,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    borderRadius: scale(40),
-    position: 'relative',
+  sweepLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    shadowColor: '#fff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 6,
   },
-  cornerContainer: {
+
+  // Permission / simulator
+  permissionContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-  },
-  corner: {
-    position: 'absolute',
-    width: scale(40),
-    height: scale(40),
-    borderColor: '#fff',
-    borderWidth: 2,
-  },
-  cornerTL: {
-    top: -2,
-    left: -2,
-    borderRightWidth: 0,
-    borderBottomWidth: 0,
-    borderTopLeftRadius: scale(40),
-  },
-  cornerTR: {
-    top: -2,
-    right: -2,
-    borderLeftWidth: 0,
-    borderBottomWidth: 0,
-    borderTopRightRadius: scale(40),
-  },
-  cornerBL: {
-    bottom: -2,
-    left: -2,
-    borderRightWidth: 0,
-    borderTopWidth: 0,
-    borderBottomLeftRadius: scale(40),
-  },
-  cornerBR: {
-    bottom: -2,
-    right: -2,
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
-    borderBottomRightRadius: scale(40),
-  },
-  scanLine: {
-    position: 'absolute',
-    top: 0,
-    left: '10%',
-    width: '80%',
-    height: 2,
-    backgroundColor: '#fff',
-    shadowColor: '#fff',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: scale(15),
-  },
-  // Photo mode
-  photoContainer: {
-    flex: 1,
-    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: scale(24),
+    paddingHorizontal: scale(32),
   },
-  cameraIconContainer: {
-    width: scale(80),
-    height: scale(80),
-    marginBottom: Spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cameraIcon: {
-    width: scale(72),
-    height: scale(56),
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.8)',
-    borderRadius: scale(12),
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  cameraBody: {
-    position: 'absolute',
-    top: -scale(10),
-    left: scale(20),
-    width: scale(24),
-    height: scale(12),
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.8)',
-    borderTopLeftRadius: scale(4),
-    borderTopRightRadius: scale(4),
-    borderBottomWidth: 0,
-  },
-  cameraLens: {
-    width: scale(24),
-    height: scale(24),
-    borderRadius: scale(12),
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.8)',
-  },
-  cameraFlash: {
-    position: 'absolute',
-    top: -scale(6),
-    right: scale(10),
-    width: scale(6),
-    height: scale(6),
-    borderRadius: scale(3),
-    backgroundColor: 'rgba(255,255,255,0.5)',
-  },
-  photoTitle: {
+  permissionTitle: {
     fontFamily: Fonts.serif,
     fontSize: FontSizes.display,
-    color: Colors.bone,
+    color: '#fff',
     textAlign: 'center',
     marginBottom: Spacing.sm,
   },
-  photoSubtitle: {
+  permissionSubtitle: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
     color: 'rgba(255,255,255,0.6)',
     textAlign: 'center',
     marginBottom: Spacing.xl,
   },
-  capturedImage: {
+  permissionBtn: {
+    backgroundColor: '#fff',
+    paddingHorizontal: scale(32),
+    paddingVertical: scale(14),
+    borderRadius: Radius.pill,
+  },
+  permissionBtnText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+
+  // Photo mode
+  photoContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: scale(24),
+  },
+  capturedImage: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
     resizeMode: 'cover',
   },
   shutterButton: {
     position: 'absolute',
-    bottom: verticalScale(60),
+    bottom: verticalScale(200),
     width: scale(64),
     height: scale(64),
     borderRadius: scale(32),
@@ -838,33 +741,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shutterButtonInner: {
+  shutterInner: {
     width: scale(52),
     height: scale(52),
     borderRadius: scale(26),
     backgroundColor: 'rgba(255,255,255,0.3)',
   },
+
   // Type mode
   typeContainer: {
-    width: '100%',
-    paddingHorizontal: scale(24),
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: scale(24),
   },
-  typeTitle: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.display,
-    color: Colors.bone,
-    textAlign: 'center',
-    marginBottom: Spacing.sm,
-  },
-  typeSubtitle: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: 'rgba(255,255,255,0.6)',
-    textAlign: 'center',
-    marginBottom: Spacing.xl,
-  },
-  searchInputContainer: {
+  searchRow: {
     width: '100%',
     flexDirection: 'row',
     gap: Spacing.sm,
@@ -878,11 +770,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
-    color: Colors.bone,
+    color: '#fff',
     maxHeight: verticalScale(100),
   },
   searchBtn: {
-    backgroundColor: Colors.bone,
+    backgroundColor: '#fff',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
     borderRadius: Radius.md,
@@ -893,89 +785,78 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.body,
     color: Colors.ink,
   },
-  // Navigation & overlays
-  topNav: {
+
+  // Mode toggle
+  modeToggle: {
     position: 'absolute',
-    left: 0,
-    right: 0,
+    alignSelf: 'center',
+    left: scale(20),
+    right: scale(20),
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-  },
-  closeBtn: {
-    width: scale(40),
-    height: scale(40),
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeBtnText: {
-    color: '#fff',
-    fontSize: FontSizes.heading,
-  },
-  statusBadge: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingVertical: scale(6),
-    paddingHorizontal: scale(16),
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: Radius.pill,
-    flexDirection: 'row',
+    padding: scale(4),
+    zIndex: 15,
+  },
+  modeTab: {
+    flex: 1,
+    paddingVertical: scale(9),
+    paddingHorizontal: scale(8),
+    borderRadius: Radius.pill,
     alignItems: 'center',
-    gap: scale(8),
-    overflow: 'hidden',
   },
-  statusDot: {
-    width: scale(6),
-    height: scale(6),
-    borderRadius: scale(3),
-    backgroundColor: Colors.scannerGreen,
+  modeTabActive: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
   },
-  statusDotSuccess: {
-    backgroundColor: Colors.scannerGreen,
-    shadowColor: Colors.scannerGreen,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: scale(8),
-  },
-  statusText: {
-    color: '#fff',
+  modeTabText: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.caption,
+    color: 'rgba(255,255,255,0.6)',
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
+  modeTabTextActive: {
+    color: Colors.ink,
+  },
+
+  // Loading
   loadingOverlay: {
     position: 'absolute',
     left: scale(20),
     right: scale(20),
-    backgroundColor: 'rgba(28, 28, 28, 0.9)',
-    borderRadius: scale(24),
+    backgroundColor: 'rgba(28,28,28,0.92)',
+    borderRadius: scale(20),
     padding: scale(24),
     alignItems: 'center',
+    zIndex: 30,
   },
   loadingText: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
-    color: Colors.bone,
+    color: '#fff',
     marginTop: Spacing.md,
   },
-  errorPanel: {
+
+  // Error
+  errorOverlay: {
     position: 'absolute',
     left: scale(20),
     right: scale(20),
-    backgroundColor: 'rgba(163, 75, 75, 0.95)',
-    borderRadius: scale(24),
+    backgroundColor: 'rgba(163,75,75,0.95)',
+    borderRadius: scale(20),
     padding: scale(24),
     alignItems: 'center',
+    zIndex: 30,
   },
   errorText: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
-    color: Colors.bone,
+    color: '#fff',
     marginBottom: Spacing.md,
     textAlign: 'center',
   },
   retryBtn: {
-    backgroundColor: Colors.bone,
+    backgroundColor: '#fff',
     paddingVertical: scale(12),
     paddingHorizontal: scale(24),
     borderRadius: Radius.pill,
@@ -987,195 +868,138 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     color: Colors.ink,
   },
-  // Shared panel wrapper
-  recognitionPanelWrapper: {
+
+  // Bottom sheet
+  bottomSheet: {
     position: 'absolute',
-    left: scale(20),
-    right: scale(20),
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    paddingHorizontal: scale(24),
+    paddingTop: scale(24),
+    zIndex: 25,
+    minHeight: verticalScale(130),
+    justifyContent: 'center',
   },
-  recognitionPanel: {
-    borderRadius: scale(24),
-    padding: scale(24),
-    overflow: 'hidden',
-    backgroundColor: 'rgba(233, 230, 223, 0.9)',
+  alignText: {
+    fontFamily: Fonts.serifItalic,
+    fontSize: FontSizes.bodyLarge,
+    color: Colors.inkSecondary,
+    textAlign: 'center',
+    paddingVertical: scale(12),
   },
-  recognitionPanelAI: {
-    borderWidth: 2,
-    borderColor: 'rgba(163, 75, 75, 0.5)',
-  },
-  aiBadge: {
+  productRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    backgroundColor: 'rgba(163, 75, 75, 0.1)',
-    paddingVertical: scale(6),
-    paddingHorizontal: scale(12),
-    borderRadius: Radius.pill,
-    alignSelf: 'flex-start',
-    marginBottom: Spacing.md,
-  },
-  aiBadgeIcon: {
-    fontSize: FontSizes.body,
-    color: Colors.accentAlert,
-  },
-  aiBadgeText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    color: Colors.accentAlert,
-  },
-  productDetectedRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: scale(20),
+    marginBottom: scale(14),
+    gap: scale(12),
   },
-  productInfo: {
-    flex: 1,
-    marginRight: Spacing.sm,
-  },
-  detectedLabel: {
-    fontFamily: Fonts.sans,
+  productBrand: {
+    fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.caption,
     textTransform: 'uppercase',
+    letterSpacing: 1.2,
     color: Colors.inkSecondary,
-    letterSpacing: 0.5,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   productName: {
     fontFamily: Fonts.serif,
     fontSize: FontSizes.heading,
     color: Colors.ink,
+    lineHeight: FontSizes.heading * 1.1,
   },
-  productBrand: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: Colors.inkSecondary,
-    marginTop: 2,
+  gradeBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
-  gradeDisplay: {
+  gradeText: {
     fontFamily: Fonts.serif,
-    fontSize: FontSizes.display,
-    color: Colors.ink,
+    fontSize: FontSizes.bodyLarge,
+    color: Colors.surface,
+    lineHeight: FontSizes.bodyLarge * 1.2,
   },
-  ingredientCloud: {
+  chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: scale(8),
-    marginBottom: scale(24),
+    gap: scale(6),
+    marginBottom: scale(20),
   },
-  ingredientTag: {
+  chip: {
     paddingVertical: scale(4),
     paddingHorizontal: scale(10),
-    backgroundColor: 'rgba(28, 28, 28, 0.05)',
     borderWidth: 1,
     borderColor: Colors.borderHairline,
     borderRadius: Radius.pill,
   },
-  ingredientTagText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.sm,
-    color: Colors.ink,
-  },
-  confirmBtn: {
-    backgroundColor: Colors.ink,
-    paddingVertical: scale(18),
-    borderRadius: Radius.pill,
-    alignItems: 'center',
-  },
-  confirmBtnText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.body,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-    color: Colors.bone,
-  },
-  // Camera permission prompt
-  permissionContainer: {
-    alignItems: 'center',
-    paddingHorizontal: scale(32),
-  },
-  permissionTitle: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.display,
-    color: Colors.bone,
-    textAlign: 'center',
-    marginBottom: Spacing.sm,
-  },
-  permissionSubtitle: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: 'rgba(255,255,255,0.6)',
-    textAlign: 'center',
-    marginBottom: Spacing.xl,
-  },
-  permissionBtn: {
-    backgroundColor: Colors.bone,
-    paddingHorizontal: scale(32),
-    paddingVertical: scale(14),
-    borderRadius: Radius.pill,
-  },
-  permissionBtnText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.body,
-    color: Colors.ink,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  // Meal analysis panel
-  mealCountBadge: {
-    alignItems: 'center',
-    minWidth: scale(48),
-  },
-  mealCountNumber: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.display,
-    color: Colors.ink,
-    lineHeight: FontSizes.display * 1.1,
-  },
-  mealCountLabel: {
+  chipText: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.caption,
-    color: Colors.inkSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    color: Colors.ink,
   },
-  mealFoodList: {
-    maxHeight: verticalScale(180),
+  ctaBtn: {
+    backgroundColor: Colors.ink,
+    borderRadius: Radius.pill,
+    paddingVertical: scale(16),
+    alignItems: 'center',
+  },
+  ctaBtnText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.body,
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
+    color: Colors.surface,
+  },
+  mealList: {
+    maxHeight: verticalScale(120),
     marginBottom: scale(16),
   },
-  mealFoodItem: {
-    paddingVertical: scale(10),
+  mealItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: scale(8),
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.borderHairline,
   },
-  mealFoodRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: scale(5),
-  },
-  mealFoodName: {
-    fontFamily: Fonts.sansMedium,
+  mealItemName: {
+    fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.body,
     color: Colors.ink,
     flex: 1,
   },
-  mealFoodAmount: {
+  mealItemAmt: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.caption,
     color: Colors.inkSecondary,
     marginLeft: scale(8),
   },
-  mealConfidenceTrack: {
-    height: 2,
-    backgroundColor: 'rgba(28, 28, 28, 0.08)',
-    borderRadius: 1,
+
+  // Search results
+  searchResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: scale(12),
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.borderHairline,
+    gap: scale(8),
   },
-  mealConfidenceFill: {
-    height: 2,
-    backgroundColor: Colors.accentHill,
-    borderRadius: 1,
+  searchResultName: {
+    fontFamily: Fonts.serif,
+    fontSize: FontSizes.subtitle,
+    color: Colors.ink,
+    lineHeight: FontSizes.subtitle * 1.2,
+  },
+  searchResultArrow: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.heading,
+    color: Colors.inkTertiary,
+    flexShrink: 0,
   },
 });
