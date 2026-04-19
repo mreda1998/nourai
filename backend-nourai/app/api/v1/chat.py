@@ -1,19 +1,25 @@
 """
 Stack assistant chat endpoint.
 
-POST /chat/message
-
-Accepts a conversation history and the user's full stack context, then
-returns a Claude-generated response grounded in evidence-based nutrition
-and supplement science.
+POST /chat/message  — send message, persists both turns (best-effort)
+GET  /chat/history  — paginated history for authenticated user
+DELETE /chat/history — hard-delete all messages for authenticated user
 """
 from __future__ import annotations
 
 import anthropic
 from fastapi import APIRouter, HTTPException
+from sqlalchemy import delete, func, select
 
+from app.api.deps import CurrentUser, DBSession, OptionalUser
 from app.core.config import settings
-from app.schemas.chat import ChatRequest, ChatResponse
+from app.models.chat_message import ChatMessage
+from app.schemas.chat import (
+    ChatHistoryResponse,
+    ChatMessageResponse,
+    ChatRequest,
+    ChatResponse,
+)
 
 router = APIRouter()
 
@@ -88,14 +94,60 @@ Your role:
 - Never provide medical diagnoses or replace professional medical advice"""
 
 
+@router.get("/history", response_model=ChatHistoryResponse)
+async def get_chat_history(
+    db: DBSession,
+    current_user: CurrentUser,
+    limit: int = 50,
+    offset: int = 0,
+) -> ChatHistoryResponse:
+    """Return paginated chat history for the current user, oldest-first."""
+    total_result = await db.execute(
+        select(func.count()).where(ChatMessage.user_id == current_user.id)
+    )
+    total = total_result.scalar_one()
+
+    result = await db.execute(
+        select(ChatMessage)
+        .where(ChatMessage.user_id == current_user.id)
+        .order_by(ChatMessage.created_at.asc())
+        .limit(limit)
+        .offset(offset)
+    )
+    messages = result.scalars().all()
+
+    return ChatHistoryResponse(
+        messages=[ChatMessageResponse.model_validate(m) for m in messages],
+        total=total,
+    )
+
+
+@router.delete("/history", status_code=200)
+async def clear_chat_history(
+    db: DBSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Hard-delete all chat messages for the current user."""
+    await db.execute(
+        delete(ChatMessage).where(ChatMessage.user_id == current_user.id)
+    )
+    await db.commit()
+    return {}
+
+
 @router.post("/message", response_model=ChatResponse)
-async def chat_message(request: ChatRequest) -> ChatResponse:
+async def chat_message(
+    request: ChatRequest,
+    db: DBSession,
+    current_user: OptionalUser,
+) -> ChatResponse:
     """
     Send a message to the Elory stack assistant.
 
     The conversation history (messages) and the user's stack context are
     forwarded to Claude. The assistant returns a single reply grounded in
     the user's actual ingredients and domain evidence scores.
+    Both turns are persisted for authenticated users (best-effort).
     """
     if not settings.anthropic_api_key:
         raise HTTPException(
@@ -126,5 +178,15 @@ async def chat_message(request: ChatRequest) -> ChatResponse:
         reply = response.content[0].text
     except anthropic.APIError as exc:
         raise HTTPException(status_code=502, detail=f"AI service error: {exc}") from exc
+
+    # Persist both turns — best-effort, never blocks the user
+    if current_user is not None:
+        try:
+            last_user_content = request.messages[-1].content
+            db.add(ChatMessage(user_id=current_user.id, role="user", content=last_user_content))
+            db.add(ChatMessage(user_id=current_user.id, role="assistant", content=reply))
+            await db.commit()
+        except Exception:
+            await db.rollback()
 
     return ChatResponse(message=reply)
