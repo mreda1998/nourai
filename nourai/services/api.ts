@@ -253,6 +253,18 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface ChatMessageItem {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+}
+
+export interface ChatHistoryResponse {
+  messages: ChatMessageItem[];
+  total: number;
+}
+
 export interface StackProduct {
   name: string;
   brand?: string;
@@ -716,6 +728,32 @@ class APIService {
     return this.fetch<{ message: string }>('/chat/message', {
       method: 'POST',
       body: JSON.stringify(request),
+    });
+  }
+
+  async getChatHistory(authToken: string, limit = 50, offset = 0): Promise<ChatHistoryResponse> {
+    return this.fetch<ChatHistoryResponse>(
+      `/chat/history?limit=${limit}&offset=${offset}`,
+      { headers: { Authorization: `Bearer ${authToken}` } },
+    );
+  }
+
+  async deleteChatHistory(authToken: string): Promise<void> {
+    await this.fetch<unknown>('/chat/history', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+  }
+
+  async sendChatMessage(
+    authToken: string,
+    messages: { role: string; content: string }[],
+    stackContext: { products: unknown[]; domain_scores: Record<string, number>; goals: string[] },
+  ): Promise<{ message: string }> {
+    return this.fetch<{ message: string }>('/chat/message', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ messages, stack_context: stackContext }),
     });
   }
 
