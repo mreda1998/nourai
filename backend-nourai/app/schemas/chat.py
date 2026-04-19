@@ -1,4 +1,7 @@
 """Chat assistant request/response schemas."""
+from datetime import datetime
+from uuid import UUID
+
 from pydantic import BaseModel
 
 
@@ -28,3 +31,17 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     message: str
+
+
+class ChatMessageResponse(BaseModel):
+    id: UUID
+    role: str
+    content: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ChatHistoryResponse(BaseModel):
+    messages: list[ChatMessageResponse]
+    total: int
