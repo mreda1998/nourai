@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy import Boolean, DateTime, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.models.product import ProductIngredient
     from app.models.ingredient_evidence import IngredientEvidence
     from app.models.ingredient_biodomain_score import IngredientBioDomainScore
+    from app.models.ingredient_interaction import IngredientInteraction
 
 
 class IngredientCategory(str, Enum):
@@ -92,6 +93,11 @@ class Ingredient(Base, UUIDMixin, TimestampMixin):
     # Set by the research agent after image generation (future step).
     mechanism_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Circadian timing fields — written by research agent (--atelier flag)
+    optimal_times: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    avoid_near_sleep: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    circadian_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Research pipeline tracking
     research_status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=ResearchStatus.PENDING
@@ -116,6 +122,18 @@ class Ingredient(Base, UUIDMixin, TimestampMixin):
         back_populates="ingredient",
         cascade="all, delete-orphan",
         order_by="IngredientBioDomainScore.biodomain",
+    )
+    interactions_as_a: Mapped[list["IngredientInteraction"]] = relationship(
+        "IngredientInteraction",
+        foreign_keys="IngredientInteraction.ingredient_id_a",
+        back_populates="ingredient_a",
+        cascade="all, delete-orphan",
+    )
+    interactions_as_b: Mapped[list["IngredientInteraction"]] = relationship(
+        "IngredientInteraction",
+        foreign_keys="IngredientInteraction.ingredient_id_b",
+        back_populates="ingredient_b",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:

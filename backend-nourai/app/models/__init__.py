@@ -9,6 +9,7 @@ from app.models.user import UserProfile, UserStackEntry, BiologicalSex, TimeOfDa
 from app.models.subscription import Subscription, SubscriptionTier, SubscriptionStatus
 from app.models.unmatched_ingredient_log import UnmatchedIngredientLog  # noqa: F401
 from app.models.chat_message import ChatMessage  # noqa: F401
+from app.models.ingredient_interaction import IngredientInteraction  # noqa: F401
 
 __all__ = [
     # Product
@@ -43,4 +44,6 @@ __all__ = [
     "UnmatchedIngredientLog",
     # Chat
     "ChatMessage",
+    # Ingredient interactions
+    "IngredientInteraction",
 ]
