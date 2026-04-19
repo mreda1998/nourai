@@ -1,4 +1,6 @@
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,231 +10,214 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInUp } from 'react-native-reanimated';
-import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, Defs, Line, Path, Pattern, Rect, Text as SvgText } from 'react-native-svg';
+import { SectionHead } from '@/components/elory';
 import { Colors, Fonts, FontSizes, scale, Radius } from '@/constants/theme';
-import { PremiumLock, SectionHead } from '@/components/elory';
+import { supabase } from '@/lib/supabase';
+import { api, ConflictNode, ConflictEdge, ConflictNote } from '@/services/api';
 
-const NODES = [
-  { id: 'creatine',   label: 'Creatine',   x: 160, y: 60 },
-  { id: 'mgly',       label: 'Magnesium',  x: 80,  y: 140 },
-  { id: 'zinc',       label: 'Zinc',       x: 240, y: 140 },
-  { id: 'vd3',        label: 'Vitamin D3', x: 50,  y: 60 },
-  { id: 'omega',      label: 'Omega-3',    x: 270, y: 60 },
-];
-
-const EDGES = [
-  { from: 'creatine', to: 'omega',   type: 'synergy' },
-  { from: 'mgly',     to: 'zinc',    type: 'compete' },
-  { from: 'vd3',      to: 'mgly',    type: 'synergy' },
-  { from: 'creatine', to: 'zinc',    type: 'compete' },
-];
-
-const NOTES = [
-  { type: 'synergy', text: 'Creatine + Omega-3 both support cell membrane integrity — complementary effects.' },
-  { type: 'synergy', text: 'Vitamin D3 requires magnesium for conversion to active form (calcitriol).' },
-  { type: 'compete', text: 'Magnesium and zinc compete for intestinal absorption — separate by 2h.' },
-  { type: 'compete', text: 'High-dose creatine may transiently increase zinc excretion.' },
-];
-
-function BackIcon() {
-  return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.darkInk} strokeWidth={2}>
-      <Path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
+function nodeColor(tone: string): string {
+  if (tone === 'accent') return Colors.sage;
+  if (tone === 'alert') return Colors.alert;
+  return Colors.sand;
 }
 
-function ForceGraph() {
-  const nodeMap: Record<string, { x: number; y: number }> = {};
-  NODES.forEach((n) => { nodeMap[n.id] = { x: n.x, y: n.y }; });
+function layoutNodes(nodes: ConflictNode[]): Array<ConflictNode & { x: number; y: number }> {
+  const CX = 170;
+  const CY = 170;
+  const R = 120;
+  return nodes.map((n, i) => {
+    const angle = (i / nodes.length) * 2 * Math.PI - Math.PI / 2;
+    return { ...n, x: Math.round(CX + R * Math.cos(angle)), y: Math.round(CY + R * Math.sin(angle)) };
+  });
+}
+
+function ForceGraph({ nodes, edges }: { nodes: ConflictNode[]; edges: ConflictEdge[] }) {
+  const laid = layoutNodes(nodes);
+  const posMap: Record<string, { x: number; y: number }> = {};
+  laid.forEach((n) => { posMap[n.id] = { x: n.x, y: n.y }; });
 
   return (
-    <Svg width={320} height={200} style={{ marginVertical: scale(8) }}>
-      {/* Edges */}
-      {EDGES.map((e, i) => {
-        const from = nodeMap[e.from];
-        const to = nodeMap[e.to];
-        const isSynergy = e.type === 'synergy';
+    <Svg width={340} height={340}>
+      <Defs>
+        <Pattern id="dots" width={16} height={16} patternUnits="userSpaceOnUse">
+          <Circle cx={1} cy={1} r={0.5} fill="rgba(241,237,228,0.08)" />
+        </Pattern>
+      </Defs>
+      <Rect width={340} height={340} fill="url(#dots)" />
+
+      {edges.map((e, i) => {
+        const a = posMap[e.ingredient_a_id];
+        const b = posMap[e.ingredient_b_id];
+        if (!a || !b) return null;
+        const color = e.type === 'synergy' ? Colors.sand : Colors.alert;
         return (
           <Line
             key={i}
-            x1={from.x} y1={from.y}
-            x2={to.x} y2={to.y}
-            stroke={isSynergy ? Colors.sand : Colors.alert}
-            strokeWidth={isSynergy ? 1.5 : 1.5}
-            strokeDasharray={isSynergy ? undefined : '5 3'}
-            opacity={0.7}
+            x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+            stroke={color}
+            strokeWidth={0.9}
+            strokeDasharray={e.type === 'compete' ? '3 3' : undefined}
+            opacity={0.75}
           />
         );
       })}
-      {/* Nodes */}
-      {NODES.map((n) => (
-        <React.Fragment key={n.id}>
-          <Circle cx={n.x} cy={n.y} r={20} fill="rgba(15,62,61,0.8)" stroke="rgba(241,237,228,0.2)" strokeWidth={1} />
-          <Circle cx={n.x} cy={n.y} r={3} fill={Colors.sand} />
-          <SvgText
-            x={n.x} y={n.y + 34}
-            textAnchor="middle"
-            fill="rgba(241,237,228,0.65)"
-            fontSize={9}
-            fontFamily={Fonts.serifItalic}
-          >
-            {n.label}
-          </SvgText>
-        </React.Fragment>
-      ))}
+
+      {laid.map((n) => {
+        const color = nodeColor(n.tone);
+        return (
+          <React.Fragment key={n.id}>
+            <Circle cx={n.x} cy={n.y} r={18} fill={Colors.darkSurface} stroke={color} strokeWidth={1.2} />
+            <Circle cx={n.x} cy={n.y} r={3.5} fill={color} />
+            <SvgText
+              x={n.x} y={n.y + 30}
+              textAnchor="middle"
+              fill="rgba(241,237,228,0.75)"
+              fontSize={10}
+              fontFamily={Fonts.serifItalic}
+            >
+              {n.label}
+            </SvgText>
+          </React.Fragment>
+        );
+      })}
     </Svg>
   );
 }
-
-import React from 'react';
 
 export default function ConflictMapScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [nodes, setNodes] = useState<ConflictNode[]>([]);
+  const [edges, setEdges] = useState<ConflictEdge[]>([]);
+  const [notes, setNotes] = useState<ConflictNote[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const synergies = EDGES.filter((e) => e.type === 'synergy').length;
-  const conflicts = EDGES.filter((e) => e.type === 'compete').length;
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
+        if (!token) return;
+        const res = await api.getConflictMap(token);
+        setNodes(res.nodes);
+        setEdges(res.edges);
+        setNotes(res.notes);
+      } catch {
+        // Non-fatal — keep empty state
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const synCount = edges.filter((e) => e.type === 'synergy').length;
+  const compCount = edges.filter((e) => e.type === 'compete').length;
 
   return (
     <View style={styles.root}>
-      <View style={[styles.header, { paddingTop: insets.top + scale(8) }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
-          <BackIcon />
-        </Pressable>
-        <Text style={styles.headerEyebrow}>Atelier</Text>
-        <View style={{ width: scale(36) }} />
-      </View>
-
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + scale(48) }]}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + scale(48) }]}
       >
-        <Animated.View entering={FadeInUp.duration(300)}>
-          <Text style={styles.title}>Biochemical conflict map.</Text>
-          <Text style={styles.subtitle}>
-            {NODES.length} compounds · {synergies} synergies · {conflicts} competitions
-          </Text>
-        </Animated.View>
-
-        {/* Legend */}
-        <View style={styles.legend}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendLine, { backgroundColor: Colors.sand }]} />
-            <Text style={styles.legendText}>Synergy</Text>
+        {/* Editorial header */}
+        <View style={{ paddingTop: insets.top + scale(12), paddingHorizontal: scale(24), paddingBottom: scale(20) }}>
+          <View style={styles.headerRow}>
+            <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="rgba(241,237,228,0.6)" strokeWidth={2}>
+                <Path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+              <Text style={styles.backText}>Back</Text>
+            </Pressable>
+            <View style={styles.atelierBadge}>
+              <Text style={styles.atelierBadgeText}>◆ Atelier</Text>
+            </View>
           </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendLine, { backgroundColor: Colors.alert, borderStyle: 'dashed' }]} />
-            <Text style={styles.legendText}>Competes</Text>
-          </View>
+          <Text style={styles.eyebrow}>Premium · Interactions</Text>
+          <Text style={styles.title}>Biochemical{'\n'}<Text style={{ fontStyle: 'italic' }}>conflict</Text> map.</Text>
         </View>
 
-        {/* Graph */}
-        <Animated.View entering={FadeInUp.delay(80).duration(300)} style={styles.graphWrap}>
-          <ForceGraph />
-        </Animated.View>
-
-        {/* Notes */}
-        <SectionHead label="What this means" dark />
-        {NOTES.map((note, i) => (
-          <Animated.View
-            key={i}
-            entering={FadeInUp.delay(i * 60).duration(280)}
-            style={[
-              styles.noteRow,
-              { borderLeftColor: note.type === 'synergy' ? Colors.sand : Colors.alert },
-            ]}
-          >
-            <Text style={styles.noteText}>{note.text}</Text>
+        <View style={{ paddingHorizontal: scale(24) }}>
+          <Animated.View entering={FadeInUp.duration(300)}>
+            {loading ? (
+              <ActivityIndicator color={Colors.sand} style={{ marginVertical: scale(32) }} />
+            ) : nodes.length === 0 ? (
+              <Text style={styles.emptyText}>
+                No interactions found between your current stack ingredients.
+              </Text>
+            ) : (
+              <>
+                <Text style={styles.subtitle}>
+                  <Text style={{ color: Colors.sand }}>{nodes.length} compounds</Text>
+                  {' '}active in your stack. {synCount} {synCount === 1 ? 'synergy' : 'synergies'}, {compCount} {compCount === 1 ? 'competition' : 'competitions'}.
+                </Text>
+                <View style={styles.subtitleDivider} />
+              </>
+            )}
           </Animated.View>
-        ))}
-      </ScrollView>
 
-      <PremiumLock featureName="Conflict Map" />
+          {!loading && nodes.length > 0 && (
+            <>
+              <Animated.View entering={FadeInUp.delay(60).duration(280)} style={styles.legend}>
+                <View style={styles.legendItem}>
+                  <Svg width={20} height={2} style={{ marginRight: 6 }}>
+                    <Line x1={0} y1={1} x2={20} y2={1} stroke={Colors.sand} strokeWidth={1.2} />
+                  </Svg>
+                  <Text style={styles.legendText}>Synergy</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <Svg width={20} height={2} style={{ marginRight: 6 }}>
+                    <Line x1={0} y1={1} x2={20} y2={1} stroke={Colors.alert} strokeWidth={1.2} strokeDasharray="3 3" />
+                  </Svg>
+                  <Text style={styles.legendText}>Competes</Text>
+                </View>
+              </Animated.View>
+
+              <Animated.View entering={FadeInUp.delay(100).duration(300)} style={styles.graphCard}>
+                <ForceGraph nodes={nodes} edges={edges} />
+              </Animated.View>
+
+              <SectionHead label="What this means" dark />
+              {notes.map((note, i) => (
+                <Animated.View
+                  key={i}
+                  entering={FadeInUp.delay(i * 60 + 180).duration(280)}
+                  style={[styles.noteRow, { borderLeftColor: note.type === 'synergy' ? Colors.sand : Colors.alert }]}
+                >
+                  <Text style={[styles.noteType, { color: note.type === 'synergy' ? Colors.sand : Colors.alert }]}>
+                    {note.type}
+                  </Text>
+                  <Text style={styles.notePair}>{note.pair}</Text>
+                  <Text style={styles.noteText}>{note.note}</Text>
+                </Animated.View>
+              ))}
+            </>
+          )}
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: Colors.darkSurface,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: scale(24),
-    paddingBottom: scale(8),
-  },
-  backBtn: {
-    width: scale(36),
-    height: scale(36),
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerEyebrow: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 1.8,
-    color: 'rgba(241,237,228,0.4)',
-  },
-  scroll: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: scale(24),
-    paddingTop: scale(8),
-  },
-  title: {
-    fontFamily: Fonts.serifItalic,
-    fontSize: FontSizes.heading,
-    color: Colors.darkInk,
-    lineHeight: FontSizes.heading * 1.1,
-    marginBottom: scale(8),
-  },
-  subtitle: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: 'rgba(241,237,228,0.55)',
-    marginBottom: scale(20),
-  },
-  legend: {
-    flexDirection: 'row',
-    gap: scale(20),
-    marginBottom: scale(8),
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scale(6),
-  },
-  legendLine: {
-    width: scale(20),
-    height: 1.5,
-  },
-  legendText: {
-    fontFamily: Fonts.sans,
-    fontSize: 10,
-    color: 'rgba(241,237,228,0.45)',
-  },
-  graphWrap: {
-    backgroundColor: 'rgba(241,237,228,0.03)',
-    borderRadius: scale(12),
-    alignItems: 'center',
-    padding: scale(16),
-    marginBottom: scale(28),
-  },
-  noteRow: {
-    borderLeftWidth: 2,
-    paddingLeft: scale(12),
-    paddingVertical: scale(8),
-    marginBottom: scale(10),
-  },
-  noteText: {
-    fontFamily: Fonts.serifItalic,
-    fontSize: FontSizes.body,
-    color: 'rgba(241,237,228,0.75)',
-    lineHeight: FontSizes.body * 1.5,
-  },
+  root: { flex: 1, backgroundColor: Colors.darkSurface },
+  scroll: {},
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: scale(24) },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  backText: { fontFamily: Fonts.sansSemiBold, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'rgba(241,237,228,0.6)' },
+  atelierBadge: { paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(241,237,228,0.22)', borderRadius: 999 },
+  atelierBadgeText: { fontFamily: Fonts.sansSemiBold, fontSize: 9, letterSpacing: 1.8, textTransform: 'uppercase', color: Colors.sand },
+  eyebrow: { fontFamily: Fonts.sansSemiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, color: 'rgba(241,237,228,0.45)', marginBottom: scale(10) },
+  title: { fontFamily: Fonts.serif, fontSize: scale(38), lineHeight: scale(40), color: Colors.darkInk, letterSpacing: -0.5 },
+  subtitle: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, lineHeight: FontSizes.subtitle * 1.5, color: 'rgba(241,237,228,0.75)', paddingBottom: scale(20) },
+  subtitleDivider: { height: 1, backgroundColor: 'rgba(241,237,228,0.12)', marginBottom: scale(24) },
+  legend: { flexDirection: 'row', gap: scale(20), marginBottom: scale(16), alignItems: 'center' },
+  legendItem: { flexDirection: 'row', alignItems: 'center' },
+  legendText: { fontFamily: Fonts.sans, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.0, color: 'rgba(241,237,228,0.55)' },
+  graphCard: { backgroundColor: 'rgba(241,237,228,0.03)', borderWidth: 1, borderColor: 'rgba(241,237,228,0.1)', borderRadius: Radius.lg, overflow: 'hidden', marginBottom: scale(28) },
+  noteRow: { borderLeftWidth: 2, paddingLeft: scale(14), paddingVertical: scale(12), marginBottom: scale(10), gap: scale(4) },
+  noteType: { fontFamily: Fonts.sansSemiBold, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1.4 },
+  notePair: { fontFamily: Fonts.serif, fontSize: FontSizes.title, color: Colors.darkInk },
+  noteText: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, color: 'rgba(241,237,228,0.65)', lineHeight: FontSizes.subtitle * 1.45 },
+  emptyText: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, color: 'rgba(241,237,228,0.5)', lineHeight: FontSizes.subtitle * 1.5 },
 });

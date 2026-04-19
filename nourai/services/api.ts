@@ -282,6 +282,49 @@ export interface ChatRequest {
   };
 }
 
+// ─── Atelier ─────────────────────────────────────────────────────────────────
+
+export interface CircadianScheduleItem {
+  time: string;
+  ingredient_name: string;
+  note: string;
+  with_food: boolean;
+  synergy: boolean;
+  evidence_dots: number;
+}
+
+export interface CircadianResponse {
+  chronotype: string;
+  schedule: CircadianScheduleItem[];
+  empty_reason?: string | null;
+}
+
+export interface ConflictNode {
+  id: string;
+  label: string;
+  tone: string;
+}
+
+export interface ConflictEdge {
+  ingredient_a_id: string;
+  ingredient_b_id: string;
+  type: string;
+  mechanism: string;
+  confidence: string;
+}
+
+export interface ConflictNote {
+  type: string;
+  pair: string;
+  note: string;
+}
+
+export interface ConflictMapResponse {
+  nodes: ConflictNode[];
+  edges: ConflictEdge[];
+  notes: ConflictNote[];
+}
+
 // ─── Meal Analysis ───────────────────────────────────────────────────────────
 
 export interface RecognizedFood {
@@ -741,6 +784,18 @@ class APIService {
   async deleteChatHistory(authToken: string): Promise<void> {
     await this.fetch<unknown>('/chat/history', {
       method: 'DELETE',
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+  }
+
+  async getCircadian(authToken: string): Promise<CircadianResponse> {
+    return this.fetch<CircadianResponse>('/atelier/circadian', {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+  }
+
+  async getConflictMap(authToken: string): Promise<ConflictMapResponse> {
+    return this.fetch<ConflictMapResponse>('/atelier/conflict-map', {
       headers: { Authorization: `Bearer ${authToken}` },
     });
   }
