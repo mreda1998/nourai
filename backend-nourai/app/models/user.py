@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin, UUIDMixin
 
 if TYPE_CHECKING:
+    from app.models.chat_message import ChatMessage
     from app.models.product import Product
     from app.models.subscription import Subscription
 
@@ -92,6 +93,12 @@ class UserProfile(Base, UUIDMixin, TimestampMixin):
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan",
+    )
+    chat_messages: Mapped[list["ChatMessage"]] = relationship(
+        "ChatMessage",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="ChatMessage.created_at",
     )
 
     def __repr__(self) -> str:
