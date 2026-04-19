@@ -4,7 +4,6 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import Constants from 'expo-constants';
 import {
   ActivityIndicator,
-  Image,
   Keyboard,
   Pressable,
   StyleSheet,
@@ -30,7 +29,6 @@ import Animated, {
   interpolate,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import * as ImagePicker from 'expo-image-picker';
 
 import {
   Colors,
@@ -42,9 +40,9 @@ import {
   verticalScale,
 } from '@/constants/theme';
 import { useAppState } from '@/context/app-state';
-import { api, type MealAnalysisResponse, type Product, type ProductListItem } from '@/services/api';
+import { api, type Product, type ProductListItem } from '@/services/api';
 
-type InputMode = 'scan' | 'photo' | 'type' | 'search';
+type InputMode = 'scan' | 'type' | 'search';
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -74,12 +72,8 @@ export default function ScanScreen() {
   const [productResults, setProductResults] = useState<ProductListItem[]>([]);
   const [searchingProducts, setSearchingProducts] = useState(false);
 
-  // Photo mode state
-  const [capturedImageUri, setCapturedImageUri] = useState<string | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
-
-  // Meal analysis state (photo + type modes)
-  const [mealAnalysis, setMealAnalysis] = useState<MealAnalysisResponse | null>(null);
+  // Type mode — meal analysis result
+  const [mealAnalysis, setMealAnalysis] = useState<{ meal_summary: string; foods: { name: string; estimated_amount?: string }[] } | null>(null);
 
   // Reanimated shared values
   const sweepY = useSharedValue(0);
@@ -128,50 +122,6 @@ export default function ScanScreen() {
       setError('Analysis failed. Please try again.');
     } finally {
       setSearching(false);
-    }
-  };
-
-  // Photo mode: take a picture and analyze as meal
-  const handleTakePhoto = async () => {
-    const permResult = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permResult.granted) {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 0.7,
-        base64: true,
-      });
-      if (!result.canceled && result.assets.length > 0) {
-        processPhoto(result.assets[0].uri, result.assets[0].base64 ?? null);
-      }
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 0.7,
-      base64: true,
-    });
-
-    if (!result.canceled && result.assets.length > 0) {
-      processPhoto(result.assets[0].uri, result.assets[0].base64 ?? null);
-    }
-  };
-
-  const processPhoto = async (uri: string, base64: string | null) => {
-    setCapturedImageUri(uri);
-    setAnalyzing(true);
-    setError(null);
-
-    try {
-      if (!base64) throw new Error('Could not read image data');
-      const data = await api.analyzeMeal({ image_base64: base64 });
-      setMealAnalysis(data);
-      setAnalyzing(false);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch (err) {
-      console.error('Error analyzing image:', err);
-      setError('Failed to analyze image. Please try again.');
-      setAnalyzing(false);
     }
   };
 
@@ -226,8 +176,6 @@ export default function ScanScreen() {
     setMealAnalysis(null);
     setError(null);
     setSearchQuery('');
-    setCapturedImageUri(null);
-    setAnalyzing(false);
     setProductQuery('');
     setProductResults([]);
     setSearchingProducts(false);
@@ -253,10 +201,7 @@ export default function ScanScreen() {
     router.back();
   };
 
-  const dismissMealPanel = () => {
-    setMealAnalysis(null);
-    if (mode === 'photo') setCapturedImageUri(null);
-  };
+  const dismissMealPanel = () => setMealAnalysis(null);
 
   const isDetected = productDetected && !!product;
   const hasMealResult = !!mealAnalysis;
@@ -362,27 +307,6 @@ export default function ScanScreen() {
         </Animated.View>
       )}
 
-      {/* ── Photo mode ──────────────────────────────────────────────────── */}
-      {mode === 'photo' && (
-        <Animated.View entering={FadeIn.duration(300)} style={styles.photoContainer}>
-          {capturedImageUri ? (
-            <Image source={{ uri: capturedImageUri }} style={styles.capturedImage} />
-          ) : (
-            <>
-              <Text style={styles.permissionTitle}>Take a photo of your meal</Text>
-              <Text style={styles.permissionSubtitle}>
-                Claude AI will identify every ingredient
-              </Text>
-            </>
-          )}
-          {!hasMealResult && (
-            <Pressable style={styles.shutterButton} onPress={handleTakePhoto}>
-              <View style={styles.shutterInner} />
-            </Pressable>
-          )}
-        </Animated.View>
-      )}
-
       {/* ── Type mode ───────────────────────────────────────────────────── */}
       {mode === 'type' && (
         <Animated.View entering={FadeIn.duration(300)} style={styles.typeContainer}>
@@ -410,53 +334,33 @@ export default function ScanScreen() {
         </Animated.View>
       )}
 
-      {/* ── Search mode ─────────────────────────────────────────────────── */}
-      {mode === 'search' && (
-        <Animated.View entering={FadeIn.duration(300)} style={styles.typeContainer}>
-          <Text style={styles.permissionTitle}>Search products</Text>
-          <Text style={styles.permissionSubtitle}>
-            Find any product already in our database
-          </Text>
-          <View style={styles.searchRow}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="e.g. Vitamin D, Creatine..."
-              placeholderTextColor="rgba(255,255,255,0.4)"
-              value={productQuery}
-              onChangeText={setProductQuery}
-              onSubmitEditing={handleProductSearch}
-              returnKeyType="search"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <Pressable style={styles.searchBtn} onPress={handleProductSearch}>
-              <Text style={styles.searchBtnText}>Search</Text>
-            </Pressable>
-          </View>
-        </Animated.View>
-      )}
-
       {/* ── Mode toggle ─────────────────────────────────────────────────── */}
-      <View style={[styles.modeToggle, { bottom: isDetected || hasMealResult || hasSearchResults ? verticalScale(340) : verticalScale(220) }]}>
-        {(['scan', 'photo', 'type', 'search'] as InputMode[]).map((m) => (
+      <View style={[styles.modeToggle, {
+        bottom: isDetected || hasMealResult || hasSearchResults
+          ? verticalScale(340)
+          : mode === 'search'
+          ? verticalScale(240)
+          : verticalScale(220),
+      }]}>
+        {(['scan', 'type', 'search'] as InputMode[]).map((m) => (
           <Pressable
             key={m}
             style={[styles.modeTab, mode === m && styles.modeTabActive]}
             onPress={() => { setMode(m); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
           >
             <Text style={[styles.modeTabText, mode === m && styles.modeTabTextActive]}>
-              {m === 'scan' ? 'Scan' : m === 'photo' ? 'Photo' : m === 'type' ? 'Type' : 'Search'}
+              {m === 'scan' ? 'Scan' : m === 'type' ? 'Type' : 'Search'}
             </Text>
           </Pressable>
         ))}
       </View>
 
       {/* ── Loading ─────────────────────────────────────────────────────── */}
-      {(loading || searching || analyzing || searchingProducts) && (
+      {(loading || searching || searchingProducts) && (
         <View style={[styles.loadingOverlay, { bottom: insets.bottom + scale(180) }]}>
           <ActivityIndicator size="large" color="rgba(255,255,255,0.9)" />
           <Text style={styles.loadingText}>
-            {searching ? 'Analyzing your meal...' : analyzing ? 'Analyzing photo...' : searchingProducts ? 'Searching products...' : 'Looking up product...'}
+            {searching ? 'Analyzing your meal...' : searchingProducts ? 'Searching products...' : 'Looking up product...'}
           </Text>
         </View>
       )}
@@ -469,25 +373,46 @@ export default function ScanScreen() {
             style={styles.retryBtn}
             onPress={() => {
               if (mode === 'scan') setIsScanning(true);
-              if (mode === 'photo') setCapturedImageUri(null);
               setError(null);
             }}
           >
             <Text style={styles.retryBtnText}>
-              {mode === 'scan' ? 'Retry' : mode === 'photo' ? 'Retake' : 'Try Again'}
+              {mode === 'scan' ? 'Retry' : 'Try Again'}
             </Text>
           </Pressable>
         </Animated.View>
       )}
 
       {/* ── Bottom sheet ────────────────────────────────────────────────── */}
-      <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + scale(16) }]}>
+      <View style={[
+        styles.bottomSheet,
+        { paddingBottom: insets.bottom + scale(16) },
+        mode === 'search' && styles.bottomSheetSearch,
+      ]}>
+        {/* Search input — lives in the sheet when in search mode */}
+        {mode === 'search' && (
+          <View style={styles.sheetSearchRow}>
+            <TextInput
+              style={styles.sheetSearchInput}
+              placeholder="Product name, ingredient…"
+              placeholderTextColor={Colors.inkTertiary}
+              value={productQuery}
+              onChangeText={setProductQuery}
+              onSubmitEditing={handleProductSearch}
+              returnKeyType="search"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <Pressable style={styles.sheetSearchBtn} onPress={handleProductSearch}>
+              <Text style={styles.sheetSearchBtnText}>Search</Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* Aligning / idle state */}
-        {!isDetected && !hasMealResult && !hasSearchResults && (
+        {!isDetected && !hasMealResult && !hasSearchResults && mode !== 'search' && (
           <Text style={styles.alignText}>
-            {mode === 'search' && !searchingProducts
-              ? 'Search for a product above…'
-              : 'Hold steady over the ingredients panel…'}
+            Hold steady over the ingredients panel…
           </Text>
         )}
 
@@ -713,41 +638,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  // Photo mode
-  photoContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: scale(24),
-  },
-  capturedImage: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    resizeMode: 'cover',
-  },
-  shutterButton: {
-    position: 'absolute',
-    bottom: verticalScale(200),
-    width: scale(64),
-    height: scale(64),
-    borderRadius: scale(32),
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.9)',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shutterInner: {
-    width: scale(52),
-    height: scale(52),
-    borderRadius: scale(26),
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-
   // Type mode
   typeContainer: {
     position: 'absolute',
@@ -884,6 +774,10 @@ const styles = StyleSheet.create({
     minHeight: verticalScale(130),
     justifyContent: 'center',
   },
+  bottomSheetSearch: {
+    justifyContent: 'flex-start',
+    maxHeight: '65%',
+  },
   alignText: {
     fontFamily: Fonts.serifItalic,
     fontSize: FontSizes.bodyLarge,
@@ -979,6 +873,38 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.caption,
     color: Colors.inkSecondary,
     marginLeft: scale(8),
+  },
+
+  // In-sheet search bar (search mode)
+  sheetSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(8),
+    marginBottom: scale(12),
+  },
+  sheetSearchInput: {
+    flex: 1,
+    height: scale(44),
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.pill,
+    paddingHorizontal: scale(16),
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+  },
+  sheetSearchBtn: {
+    height: scale(44),
+    paddingHorizontal: scale(18),
+    backgroundColor: Colors.ink,
+    borderRadius: Radius.pill,
+    justifyContent: 'center',
+  },
+  sheetSearchBtnText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    color: Colors.surface,
   },
 
   // Search results
