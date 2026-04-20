@@ -642,6 +642,141 @@ function StepAha2({ onNext }: { onNext: () => void }) {
   );
 }
 
+// ─── Step 9: Sleep Quality ────────────────────────────────────────────────────
+
+const SLEEP_OPTIONS: { value: OnboardingProfile['sleepQuality']; label: string; hint: string }[] = [
+  { value: 'excellent', label: 'Excellent', hint: 'Fall asleep easily, wake refreshed' },
+  { value: 'good',      label: 'Good',      hint: 'Generally rested, occasional disruptions' },
+  { value: 'fair',      label: 'Fair',      hint: 'Tired most mornings, irregular rhythm' },
+  { value: 'poor',      label: 'Poor',      hint: 'Chronic difficulty sleeping or staying asleep' },
+];
+
+function StepSleepQuality({
+  value,
+  onSelect,
+  onNext,
+}: {
+  value: OnboardingProfile['sleepQuality'];
+  onSelect: (v: OnboardingProfile['sleepQuality']) => void;
+  onNext: () => void;
+}) {
+  return (
+    <ScrollView
+      contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 60 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text
+        style={{
+          fontFamily: Fonts.serifItalic,
+          fontSize: scale(32),
+          lineHeight: scale(38),
+          color: Colors.ink,
+          marginBottom: 8,
+        }}
+      >
+        How would you{'\n'}rate your sleep?
+      </Text>
+      <Text
+        style={{
+          fontFamily: Fonts.sans,
+          fontSize: FontSizes.body,
+          color: Colors.inkSecondary,
+          lineHeight: FontSizes.body * 1.5,
+          marginBottom: 24,
+        }}
+      >
+        This unlocks your personalised Circadian Protocol — a time-ordered supplement schedule.
+      </Text>
+      <View style={{ gap: 10, marginBottom: 32 }}>
+        {SLEEP_OPTIONS.map((opt) => (
+          <OptionPill
+            key={opt.value}
+            label={opt.label}
+            hint={opt.hint}
+            selected={value === opt.value}
+            onPress={() => onSelect(opt.value)}
+          />
+        ))}
+      </View>
+      <Pressable
+        style={[s.pillBtn, !value && s.pillBtnDisabled]}
+        onPress={onNext}
+        disabled={!value}
+      >
+        <Text style={s.pillBtnText}>Continue</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+// ─── Step 10: Activity Level ──────────────────────────────────────────────────
+
+const ACTIVITY_OPTIONS: { value: OnboardingProfile['activityLevel']; label: string; hint: string }[] = [
+  { value: 'sedentary', label: 'Sedentary', hint: 'Desk job, little to no exercise' },
+  { value: 'light',     label: 'Light',     hint: '1–2 days/week of light activity' },
+  { value: 'moderate',  label: 'Moderate',  hint: '3–4 days/week, moderate intensity' },
+  { value: 'active',    label: 'Active',    hint: '5+ days/week, consistent training' },
+  { value: 'athlete',   label: 'Athlete',   hint: 'Daily training, competitive sport' },
+];
+
+function StepActivityLevel({
+  value,
+  onSelect,
+  onNext,
+}: {
+  value: OnboardingProfile['activityLevel'];
+  onSelect: (v: OnboardingProfile['activityLevel']) => void;
+  onNext: () => void;
+}) {
+  return (
+    <ScrollView
+      contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 60 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text
+        style={{
+          fontFamily: Fonts.serifItalic,
+          fontSize: scale(32),
+          lineHeight: scale(38),
+          color: Colors.ink,
+          marginBottom: 8,
+        }}
+      >
+        How active{'\n'}are you?
+      </Text>
+      <Text
+        style={{
+          fontFamily: Fonts.sans,
+          fontSize: FontSizes.body,
+          color: Colors.inkSecondary,
+          lineHeight: FontSizes.body * 1.5,
+          marginBottom: 24,
+        }}
+      >
+        Affects protein, electrolyte, and recovery-related ingredient context.
+      </Text>
+      <View style={{ gap: 10, marginBottom: 32 }}>
+        {ACTIVITY_OPTIONS.map((opt) => (
+          <OptionPill
+            key={opt.value}
+            label={opt.label}
+            hint={opt.hint}
+            selected={value === opt.value}
+            onPress={() => onSelect(opt.value)}
+          />
+        ))}
+      </View>
+      <Pressable
+        style={[s.pillBtn, !value && s.pillBtnDisabled]}
+        onPress={onNext}
+        disabled={!value}
+      >
+        <Text style={s.pillBtnText}>Continue</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
 // ─── Onboarding Screen ────────────────────────────────────────────────────────
 
 export default function OnboardingScreen() {
@@ -652,6 +787,8 @@ export default function OnboardingScreen() {
   const [name, setName] = useState('');
   const [ageRange, setAgeRange] = useState<OnboardingProfile['ageRange']>('');
   const [biologicalSex, setBiologicalSex] = useState<OnboardingProfile['biologicalSex'] | ''>('');
+  const [sleepQuality, setSleepQuality] = useState<OnboardingProfile['sleepQuality']>('');
+  const [activityLevel, setActivityLevel] = useState<OnboardingProfile['activityLevel']>('');
 
   const next = () => setStep((s) => s + 1);
 
@@ -672,7 +809,9 @@ export default function OnboardingScreen() {
       {step === 5 && <StepAgeRange value={ageRange} onSelect={setAgeRange} onNext={next} />}
       {step === 6 && <StepBiologicalSex value={biologicalSex} onSelect={setBiologicalSex} onNext={next} />}
       {step === 7 && <StepAha2 onNext={next} />}
-      {step >= 8 && <Text style={{ padding: 24 }}>Steps 9–13 coming soon</Text>}
+      {step === 8 && <StepSleepQuality value={sleepQuality} onSelect={setSleepQuality} onNext={next} />}
+      {step === 9 && <StepActivityLevel value={activityLevel} onSelect={setActivityLevel} onNext={next} />}
+      {step >= 10 && <Text style={{ padding: 24 }}>Steps 11–13 coming soon</Text>}
     </SafeAreaView>
   );
 }
