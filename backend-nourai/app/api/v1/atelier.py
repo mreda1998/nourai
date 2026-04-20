@@ -15,6 +15,7 @@ from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DBSession
 from app.models.ingredient import Ingredient
+from app.models.ingredient_evidence import IngredientEvidence
 from app.models.ingredient_interaction import IngredientInteraction
 from app.models.product import ProductIngredient
 from app.models.user import UserStackEntry
@@ -261,3 +262,88 @@ async def get_conflict_map(
     ]
 
     return ConflictMapResponse(nodes=nodes, edges=edges, notes=notes)
+
+
+# ─── Evidence Pulse ───────────────────────────────────────────────────────────
+
+_STUDY_TIER: dict[str, int] = {
+    "meta_analysis": 4,
+    "systematic_review": 4,
+    "rct": 3,
+    "cohort": 2,
+    "case_control": 2,
+    "cross_sectional": 1,
+    "review": 1,
+    "in_vitro": 1,
+    "animal": 1,
+    "case_report": 1,
+    "other": 1,
+}
+
+_CONFIDENCE_BOOST: dict[str, int] = {"high": 1, "moderate": 0, "low": -1}
+
+
+def _evidence_dots_from_study(study_type: str | None, confidence: str) -> int:
+    tier = _STUDY_TIER.get(study_type or "other", 1)
+    boost = _CONFIDENCE_BOOST.get(confidence, 0)
+    return max(1, min(4, tier + boost))
+
+
+def _tone_from_direction(direction: str) -> str:
+    if direction == "benefit":
+        return "sage"
+    if direction == "risk":
+        return "alert"
+    return "ink"
+
+
+class EvidenceArticle(BaseModel):
+    ingredient: str
+    tone: str
+    dots: int
+    headline: str
+    excerpt: str
+    journal: str
+
+
+class EvidencePulseResponse(BaseModel):
+    articles: list[EvidenceArticle]
+
+
+@router.get("/evidence-pulse", response_model=EvidencePulseResponse)
+async def get_evidence_pulse(
+    db: DBSession,
+    current_user: CurrentUser,
+    limit: int = 10,
+) -> EvidencePulseResponse:
+    """Return the most recent high-confidence evidence for the user's stack ingredients."""
+    ingredient_ids = await _stack_ingredient_ids(db, current_user.id)
+    if not ingredient_ids:
+        return EvidencePulseResponse(articles=[])
+
+    ev_result = await db.execute(
+        select(IngredientEvidence, Ingredient.canonical_name)
+        .join(Ingredient, IngredientEvidence.ingredient_id == Ingredient.id)
+        .where(IngredientEvidence.ingredient_id.in_(ingredient_ids))
+        .order_by(
+            IngredientEvidence.year.desc().nulls_last(),
+            IngredientEvidence.confidence.desc(),
+        )
+        .limit(limit)
+    )
+    rows = ev_result.all()
+
+    articles = []
+    for ev, ingredient_name in rows:
+        year_str = str(ev.year) if ev.year else "—"
+        journal_str = f"{ev.journal or 'Unknown journal'} · {year_str}"
+        articles.append(EvidenceArticle(
+            ingredient=ingredient_name,
+            tone=_tone_from_direction(ev.direction),
+            dots=_evidence_dots_from_study(ev.study_type, ev.confidence),
+            headline=ev.title or ev.finding,
+            excerpt=ev.finding,
+            journal=journal_str,
+        ))
+
+    return EvidencePulseResponse(articles=articles)

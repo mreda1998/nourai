@@ -1,4 +1,6 @@
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,56 +11,33 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
-import { Colors, Fonts, FontSizes, scale, Radius } from '@/constants/theme';
-import { PremiumLock, SectionHead } from '@/components/elory';
+import { Colors, Fonts, FontSizes, scale } from '@/constants/theme';
+import { supabase } from '@/lib/supabase';
+import { api, EvidenceArticle } from '@/services/api';
 
-const ARTICLES = [
-  {
-    ingredient: 'Creatine Monohydrate',
-    tone: 'sage',
-    evidenceDots: 4,
-    headline: 'Creatine supplementation improves working memory in older adults',
-    excerpt: 'A new systematic review of 14 RCTs found consistent improvements in working memory and processing speed among adults over 55 receiving 3–5g/day creatine monohydrate over 4–12 weeks.',
-    journal: 'Neuroscience & Biobehavioral Reviews · Mar 2026',
-  },
-  {
-    ingredient: 'Ashwagandha KSM-66',
-    tone: 'sage',
-    evidenceDots: 3,
-    headline: 'KSM-66 reduces morning cortisol by 28% in stressed professionals',
-    excerpt: 'Double-blind RCT (n=240) confirms significant cortisol reduction and subjective stress scores after 60 days of 600mg KSM-66 daily. Effect size greater in those with baseline high cortisol.',
-    journal: 'Journal of Ethnopharmacology · Feb 2026',
-  },
-  {
-    ingredient: 'Magnesium Glycinate',
-    tone: 'alert',
-    evidenceDots: 2,
-    headline: 'High-dose magnesium may interfere with zinc absorption in older populations',
-    excerpt: 'A pharmacokinetic study suggests supplemental magnesium above 400mg/day reduces zinc bioavailability by 15–22% when co-administered. Relevant to stacks containing both minerals.',
-    journal: 'American Journal of Clinical Nutrition · Jan 2026',
-  },
-];
+function toneColor(tone: string) {
+  if (tone === 'sage') return Colors.sage;
+  if (tone === 'alert') return Colors.alert;
+  return Colors.sand;
+}
 
-function BackIcon() {
-  return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.darkInk} strokeWidth={2}>
-      <Path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
+function toneIcon(tone: string) {
+  if (tone === 'alert') return '◐';
+  if (tone === 'sage') return '◉';
+  return '◇';
 }
 
 function EvidenceDots({ count, tone }: { count: number; tone: string }) {
-  const fill = tone === 'sage' ? Colors.sage : tone === 'alert' ? Colors.alert : Colors.sand;
+  const fill = toneColor(tone);
   return (
-    <View style={{ flexDirection: 'row', gap: 4 }}>
+    <View style={{ flexDirection: 'row', gap: 3 }}>
       {[1, 2, 3, 4].map((i) => (
         <View
           key={i}
           style={{
-            width: 6,
-            height: 6,
-            borderRadius: 3,
-            backgroundColor: i <= count ? fill : 'rgba(241,237,228,0.15)',
+            width: 5, height: 5, borderRadius: 3,
+            backgroundColor: i <= count ? fill : 'transparent',
+            borderWidth: 1, borderColor: fill,
           }}
         />
       ))}
@@ -69,165 +48,117 @@ function EvidenceDots({ count, tone }: { count: number; tone: string }) {
 export default function PulseScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [articles, setArticles] = useState<EvidenceArticle[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
+        if (!token) return;
+        const res = await api.getEvidencePulse(token, 10);
+        setArticles(res.articles);
+      } catch {
+        // Non-fatal — keep empty state
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   return (
     <View style={styles.root}>
-      <View style={[styles.header, { paddingTop: insets.top + scale(8) }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
-          <BackIcon />
-        </Pressable>
-        <Text style={styles.headerEyebrow}>Atelier</Text>
-        <View style={{ width: scale(36) }} />
-      </View>
-
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + scale(48) }]}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + scale(48) }]}
       >
-        <Animated.View entering={FadeInUp.duration(300)}>
-          <Text style={styles.title}>Evidence pulse.</Text>
-          <Text style={styles.subtitle}>
-            {ARTICLES.length} new signals this week across ingredients in your stack
-          </Text>
-        </Animated.View>
+        {/* Editorial header */}
+        <View style={{ paddingTop: insets.top + scale(12), paddingHorizontal: scale(24), paddingBottom: scale(20) }}>
+          <View style={styles.headerRow}>
+            <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="rgba(241,237,228,0.6)" strokeWidth={2}>
+                <Path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+              <Text style={styles.backText}>Back</Text>
+            </Pressable>
+            <View style={styles.atelierBadge}>
+              <Text style={styles.atelierBadgeText}>◆ Atelier</Text>
+            </View>
+          </View>
+          <Text style={styles.eyebrow}>Premium · Science Brief</Text>
+          <Text style={styles.title}>Evidence{'\n'}<Text style={{ fontStyle: 'italic' }}>pulse.</Text></Text>
+        </View>
 
-        <SectionHead label="This week" dark />
-
-        {ARTICLES.map((article, i) => (
-          <Animated.View
-            key={i}
-            entering={FadeInUp.delay(i * 80).duration(320)}
-            style={styles.articleCard}
-          >
-            <View style={styles.articleMeta}>
-              <Text style={[
-                styles.ingredientEyebrow,
-                {
-                  color: article.tone === 'sage' ? Colors.sage
-                    : article.tone === 'alert' ? Colors.alert
-                    : Colors.sand,
-                },
-              ]}>
-                {article.ingredient}
+        <View style={{ paddingHorizontal: scale(24) }}>
+          {loading ? (
+            <ActivityIndicator color={Colors.sand} style={{ marginVertical: scale(32) }} />
+          ) : articles.length === 0 ? (
+            <Animated.View entering={FadeInUp.duration(300)}>
+              <Text style={styles.emptyText}>
+                Scan products to build your stack and unlock your evidence feed.
               </Text>
-              <EvidenceDots count={article.evidenceDots} tone={article.tone} />
-            </View>
+            </Animated.View>
+          ) : (
+            <>
+              <Animated.View entering={FadeInUp.duration(300)}>
+                <Text style={styles.subtitle}>
+                  {articles.length} signal{articles.length !== 1 ? 's' : ''} across ingredients in your stack.
+                </Text>
+                <View style={styles.subtitleDivider} />
+              </Animated.View>
 
-            <Text style={styles.headline}>{article.headline}</Text>
-
-            <View style={styles.excerpt}>
-              <Text style={styles.excerptText}>{article.excerpt}</Text>
-            </View>
-
-            <View style={styles.footer}>
-              <Text style={styles.journal}>{article.journal}</Text>
-              <Text style={styles.readLink}>Read brief →</Text>
-            </View>
-          </Animated.View>
-        ))}
+              {articles.map((article, i) => (
+                <Animated.View
+                  key={i}
+                  entering={FadeInUp.delay(i * 80 + 80).duration(320)}
+                  style={[styles.article, i < articles.length - 1 && styles.articleBorder]}
+                >
+                  <View style={styles.articleMeta}>
+                    <Text style={[styles.ingredientLabel, { color: toneColor(article.tone) }]}>
+                      {toneIcon(article.tone)} {article.ingredient}
+                    </Text>
+                    <EvidenceDots count={article.dots} tone={article.tone} />
+                  </View>
+                  <Text style={styles.headline}>{article.headline}</Text>
+                  <View style={styles.excerpt}>
+                    <Text style={styles.excerptText}>{article.excerpt}</Text>
+                  </View>
+                  <View style={styles.footer}>
+                    <Text style={styles.journal}>{article.journal}</Text>
+                    <Text style={styles.readLink}>Read brief →</Text>
+                  </View>
+                </Animated.View>
+              ))}
+            </>
+          )}
+        </View>
       </ScrollView>
-
-      <PremiumLock featureName="Evidence Pulse" />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: Colors.darkSurface,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: scale(24),
-    paddingBottom: scale(8),
-  },
-  backBtn: {
-    width: scale(36),
-    height: scale(36),
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerEyebrow: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 1.8,
-    color: 'rgba(241,237,228,0.4)',
-  },
-  scroll: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: scale(24),
-    paddingTop: scale(8),
-  },
-  title: {
-    fontFamily: Fonts.serifItalic,
-    fontSize: FontSizes.heading,
-    color: Colors.darkInk,
-    lineHeight: FontSizes.heading * 1.1,
-    marginBottom: scale(8),
-  },
-  subtitle: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: 'rgba(241,237,228,0.55)',
-    marginBottom: scale(24),
-  },
-  articleCard: {
-    marginBottom: scale(24),
-    paddingBottom: scale(24),
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(241,237,228,0.08)',
-    gap: scale(10),
-  },
-  articleMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  ingredientEyebrow: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 1.4,
-  },
-  headline: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.title,
-    color: Colors.darkInk,
-    lineHeight: FontSizes.title * 1.2,
-  },
-  excerpt: {
-    borderLeftWidth: 2,
-    borderLeftColor: 'rgba(241,237,228,0.2)',
-    paddingLeft: scale(12),
-  },
-  excerptText: {
-    fontFamily: Fonts.serifItalic,
-    fontSize: FontSizes.body,
-    color: 'rgba(241,237,228,0.65)',
-    lineHeight: FontSizes.body * 1.6,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  journal: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: 9,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    color: 'rgba(241,237,228,0.3)',
-    flex: 1,
-    marginRight: scale(8),
-  },
-  readLink: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.caption,
-    color: Colors.sand,
-  },
+  root: { flex: 1, backgroundColor: Colors.darkSurface },
+  scroll: {},
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: scale(24) },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  backText: { fontFamily: Fonts.sansSemiBold, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'rgba(241,237,228,0.6)' },
+  atelierBadge: { paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(241,237,228,0.22)', borderRadius: 999 },
+  atelierBadgeText: { fontFamily: Fonts.sansSemiBold, fontSize: 9, letterSpacing: 1.8, textTransform: 'uppercase', color: Colors.sand },
+  eyebrow: { fontFamily: Fonts.sansSemiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, color: 'rgba(241,237,228,0.45)', marginBottom: scale(10) },
+  title: { fontFamily: Fonts.serif, fontSize: scale(38), lineHeight: scale(40), color: Colors.darkInk, letterSpacing: -0.5 },
+  subtitle: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, lineHeight: FontSizes.subtitle * 1.5, color: 'rgba(241,237,228,0.75)', paddingBottom: scale(20) },
+  subtitleDivider: { height: 1, backgroundColor: 'rgba(241,237,228,0.12)', marginBottom: scale(24) },
+  article: { paddingVertical: scale(20), gap: scale(12) },
+  articleBorder: { borderBottomWidth: 1, borderBottomColor: 'rgba(241,237,228,0.1)' },
+  articleMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  ingredientLabel: { fontFamily: Fonts.sansSemiBold, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1.6, fontWeight: '600' },
+  headline: { fontFamily: Fonts.serif, fontSize: scale(22), lineHeight: scale(27), color: Colors.darkInk },
+  excerpt: { borderLeftWidth: 1, borderLeftColor: 'rgba(241,237,228,0.2)', paddingLeft: scale(14) },
+  excerptText: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, color: 'rgba(241,237,228,0.6)', lineHeight: FontSizes.subtitle * 1.5 },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  journal: { fontFamily: Fonts.sansSemiBold, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1.2, color: 'rgba(241,237,228,0.4)', flex: 1, marginRight: scale(8) },
+  readLink: { fontFamily: Fonts.sansSemiBold, fontSize: FontSizes.caption, color: Colors.sand },
+  emptyText: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, color: 'rgba(241,237,228,0.5)', lineHeight: FontSizes.subtitle * 1.5 },
 });

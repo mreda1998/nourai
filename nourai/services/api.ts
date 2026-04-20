@@ -325,6 +325,19 @@ export interface ConflictMapResponse {
   notes: ConflictNote[];
 }
 
+export interface EvidenceArticle {
+  ingredient: string;
+  tone: string;
+  dots: number;
+  headline: string;
+  excerpt: string;
+  journal: string;
+}
+
+export interface EvidencePulseResponse {
+  articles: EvidenceArticle[];
+}
+
 // ─── Meal Analysis ───────────────────────────────────────────────────────────
 
 export interface RecognizedFood {
@@ -792,6 +805,13 @@ class APIService {
     return this.fetch<CircadianResponse>('/atelier/circadian', {
       headers: { Authorization: `Bearer ${authToken}` },
     });
+  }
+
+  async getEvidencePulse(authToken: string, limit = 10): Promise<EvidencePulseResponse> {
+    return this.fetch<EvidencePulseResponse>(
+      `/atelier/evidence-pulse?limit=${limit}`,
+      { headers: { Authorization: `Bearer ${authToken}` } },
+    );
   }
 
   async getConflictMap(authToken: string): Promise<ConflictMapResponse> {
