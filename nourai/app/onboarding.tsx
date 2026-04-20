@@ -143,11 +143,11 @@ function AhaCard({
       contentContainerStyle={{ flexGrow: 1 }}
       showsVerticalScrollIndicator={false}
     >
-      <Image
-        source={image}
-        style={{ width: '100%', height: scale(280) }}
-        resizeMode="cover"
-      />
+      {image ? (
+        <Image source={image} style={{ width: '100%', height: scale(280) }} resizeMode="cover" />
+      ) : (
+        <View style={{ width: '100%', height: scale(280), backgroundColor: Colors.surfaceCard }} />
+      )}
       <View style={{ paddingHorizontal: 24, paddingTop: 28, paddingBottom: 60 }}>
         <Text
           style={{
@@ -323,21 +323,117 @@ function StepNoiseProblem({ onNext }: { onNext: () => void }) {
   );
 }
 
+// ─── Goal options ────────────────────────────────────────────────────────────
+
+const GOAL_OPTIONS = [
+  { key: 'gut',   title: 'Gut health',  sub: 'Microbiome, digestion, bloating' },
+  { key: 'sleep', title: 'Sleep',       sub: 'Circadian rhythm & recovery' },
+  { key: 'long',  title: 'Longevity',   sub: 'Cellular resilience, oxidative load' },
+  { key: 'skin',  title: 'Dermal care', sub: 'Barrier, hydration, sun response' },
+  { key: 'meta',  title: 'Metabolic',   sub: 'Glucose, insulin, energy' },
+  { key: 'mind',  title: 'Cognitive',   sub: 'Focus, mood, stress response' },
+];
+
+// ─── Step 3: Focus / Goals ────────────────────────────────────────────────────
+
+function StepFocus({
+  selected,
+  onToggle,
+  onNext,
+}: {
+  selected: string[];
+  onToggle: (key: string) => void;
+  onNext: () => void;
+}) {
+  return (
+    <ScrollView
+      contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 60 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text
+        style={{
+          fontFamily: Fonts.serifItalic,
+          fontSize: scale(32),
+          lineHeight: scale(38),
+          color: Colors.ink,
+          marginBottom: 8,
+        }}
+      >
+        What matters{'\n'}to you?
+      </Text>
+      <Text
+        style={{
+          fontFamily: Fonts.sans,
+          fontSize: FontSizes.body,
+          color: Colors.inkSecondary,
+          lineHeight: FontSizes.body * 1.5,
+          marginBottom: 24,
+        }}
+      >
+        Select all that apply. Your analysis will be tuned to these domains.
+      </Text>
+      <View style={{ gap: 10, marginBottom: 32 }}>
+        {GOAL_OPTIONS.map((opt) => (
+          <OptionPill
+            key={opt.key}
+            label={opt.title}
+            hint={opt.sub}
+            selected={selected.includes(opt.key)}
+            onPress={() => onToggle(opt.key)}
+          />
+        ))}
+      </View>
+      <Pressable
+        style={[s.pillBtn, selected.length === 0 && s.pillBtnDisabled]}
+        onPress={onNext}
+      >
+        <Text style={s.pillBtnText}>
+          {selected.length === 0 ? 'Select at least one' : `Continue · ${selected.length} selected`}
+        </Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+// ─── Step 4: AHA #1 — Dose Myth ───────────────────────────────────────────────
+
+function StepAha1({ onNext }: { onNext: () => void }) {
+  return (
+    <AhaCard
+      image={null}
+      headline="Most supplements contain 5× the dose your body can actually absorb."
+      body="Vitamin C absorption drops sharply above 200mg — yet most supplements contain 500–1000mg. The excess is excreted within hours. Dose timing and form matter more than the number on the label."
+      source="Levine et al., NEJM 1996 · Padayatty et al., Annals of Internal Medicine 2004"
+      cta="Interesting →"
+      onNext={onNext}
+    />
+  );
+}
+
 // ─── Onboarding Screen ────────────────────────────────────────────────────────
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const { completeOnboarding } = useAuth();
   const [step, setStep] = useState(0);
+  const [focusAreas, setFocusAreas] = useState<string[]>([]);
 
   const next = () => setStep((s) => s + 1);
+
+  const toggleFocus = (key: string) => {
+    setFocusAreas((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
 
   return (
     <SafeAreaView style={s.screen}>
       <ProgressBar step={step} total={13} />
       {step === 0 && <StepWelcome onNext={next} />}
       {step === 1 && <StepNoiseProblem onNext={next} />}
-      {step >= 2 && <Text style={{ padding: 24 }}>Steps 3–13 coming soon</Text>}
+      {step === 2 && <StepFocus selected={focusAreas} onToggle={toggleFocus} onNext={next} />}
+      {step === 3 && <StepAha1 onNext={next} />}
+      {step >= 4 && <Text style={{ padding: 24 }}>Steps 5–13 coming soon</Text>}
     </SafeAreaView>
   );
 }
