@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -32,9 +32,10 @@ export default function AuthScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { signIn, signUp, signInWithApple } = useAuth();
+  const { name: prefillName } = useLocalSearchParams<{ name?: string }>();
 
   const [mode, setMode] = useState<AuthMode>('signin');
-  const [name, setName] = useState('');
+  const [name, setName] = useState(prefillName ?? '');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
