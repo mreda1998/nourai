@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Colors, Fonts, Radius, scale, FontSizes, Spacing } from '@/constants/theme';
+import { Colors, Fonts, Radius, scale, FontSizes } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import type { OnboardingProfile } from '@/services/api';
 
