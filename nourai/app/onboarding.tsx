@@ -1,59 +1,51 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
+  Image,
   Pressable,
-  ScrollView,
   SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Colors, Fonts, Radius, scale, FontSizes } from '@/constants/theme';
-import { Eyebrow, SerifH, AlertNote } from '@/components/elory';
+import { Colors, Fonts, Radius, scale, FontSizes, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
-
-// ─── Goal options ─────────────────────────────────────────────────────────────
-
-const GOAL_OPTIONS = [
-  { key: 'gut',   title: 'Gut health',   sub: 'Microbiome, digestion, bloating' },
-  { key: 'sleep', title: 'Sleep',        sub: 'Circadian rhythm & recovery' },
-  { key: 'long',  title: 'Longevity',    sub: 'Cellular resilience, oxidative load' },
-  { key: 'skin',  title: 'Dermal care',  sub: 'Barrier, hydration, sun response' },
-  { key: 'meta',  title: 'Metabolic',    sub: 'Glucose, insulin, energy' },
-  { key: 'mind',  title: 'Cognitive',    sub: 'Focus, mood, stress response' },
-];
-
-const PROFILE_OPTIONS = [
-  { key: 'preg', title: 'Pregnant / nursing' },
-  { key: 'veg',  title: 'Plant-based' },
-  { key: 'sens', title: 'Sensitive skin' },
-  { key: 'rx',   title: 'On prescription meds' },
-  { key: 'none', title: 'None of the above' },
-];
+import type { OnboardingProfile } from '@/services/api';
 
 // ─── Shared button styles ─────────────────────────────────────────────────────
 
-const pillBtn = {
-  width: '100%' as const,
-  paddingVertical: 16,
-  paddingHorizontal: 24,
-  backgroundColor: Colors.ink,
-  borderRadius: Radius.pill,
-  alignItems: 'center' as const,
-};
-
-const pillBtnText = {
-  fontFamily: Fonts.sansSemiBold,
-  fontSize: 11,
-  textTransform: 'uppercase' as const,
-  letterSpacing: 2.0,
-  color: Colors.surface,
-};
+const s = StyleSheet.create({
+  pillBtn: {
+    width: '100%',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    backgroundColor: Colors.ink,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+  },
+  pillBtnText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 2.0,
+    color: Colors.surface,
+  },
+  pillBtnDisabled: {
+    opacity: 0.35,
+  },
+  screen: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+  },
+});
 
 // ─── Progress bar ─────────────────────────────────────────────────────────────
 
 function ProgressBar({ step, total }: { step: number; total: number }) {
   return (
-    <View style={{ flexDirection: 'row', gap: 4, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 }}>
+    <View style={{ flexDirection: 'row', gap: 3, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 }}>
       {Array.from({ length: total }).map((_, i) => (
         <View
           key={i}
@@ -69,324 +61,157 @@ function ProgressBar({ step, total }: { step: number; total: number }) {
   );
 }
 
-// ─── Step 0: Welcome ──────────────────────────────────────────────────────────
+// ─── Option pill (single/multi select) ───────────────────────────────────────
 
-function StepWelcome({ onNext }: { onNext: () => void }) {
+function OptionPill({
+  label,
+  hint,
+  selected,
+  onPress,
+}: {
+  label: string;
+  hint?: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
   return (
-    <ScrollView
-      contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 40, paddingBottom: 60 }}
-      showsVerticalScrollIndicator={false}
+    <Pressable
+      onPress={onPress}
+      style={{
+        backgroundColor: selected ? Colors.ink : Colors.surfaceCard,
+        borderWidth: 1,
+        borderColor: selected ? Colors.ink : Colors.borderHairline,
+        borderRadius: Radius.md,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}
     >
-      <Text
-        style={{
-          fontFamily: Fonts.serifItalic,
-          fontSize: scale(38),
-          lineHeight: scale(44),
-          color: Colors.ink,
-          marginBottom: 16,
-        }}
-      >
-        {'A knowledgeable\nfriend, in your\npocket.'}
-      </Text>
-
-      <Text
-        style={{
-          fontFamily: Fonts.serifItalic,
-          fontSize: FontSizes.bodyLarge,
-          color: Colors.inkSecondary,
-          lineHeight: FontSizes.bodyLarge * 1.6,
-          marginBottom: 32,
-        }}
-      >
-        Elory reads ingredient lists the way a trained biochemist would — and tells you what actually matters for your body.
-      </Text>
-
-      {/* "What Elory is not" card */}
-      <View
-        style={{
-          backgroundColor: Colors.surfaceCard,
-          borderWidth: 1,
-          borderColor: Colors.borderHairline,
-          borderRadius: Radius.lg,
-          padding: 20,
-          marginBottom: 40,
-        }}
-      >
-        <Eyebrow style={{ marginBottom: 14 }}>What Elory is not</Eyebrow>
-        {[
-          'A replacement for your doctor or pharmacist.',
-          'A fear-driven list of "toxins" to avoid.',
-          'A marketing tool for any brand or product.',
-        ].map((item, i) => (
+      <View style={{ flex: 1 }}>
+        <Text
+          style={{
+            fontFamily: Fonts.sansSemiBold,
+            fontSize: FontSizes.body,
+            color: selected ? Colors.accentInk : Colors.ink,
+          }}
+        >
+          {label}
+        </Text>
+        {hint ? (
           <Text
-            key={i}
             style={{
-              fontFamily: Fonts.serifItalic,
-              fontSize: FontSizes.bodyLarge,
-              color: Colors.inkSecondary,
-              lineHeight: FontSizes.bodyLarge * 1.55,
-              marginBottom: i < 2 ? 10 : 0,
+              fontFamily: Fonts.sans,
+              fontSize: FontSizes.caption,
+              color: selected ? 'rgba(241,237,228,0.6)' : Colors.inkSecondary,
+              marginTop: 2,
             }}
           >
-            {'— '}{item}
+            {hint}
           </Text>
-        ))}
+        ) : null}
       </View>
-
-      <Pressable style={pillBtn} onPress={onNext}>
-        <Text style={pillBtnText}>Begin</Text>
-      </Pressable>
-    </ScrollView>
+      {selected && (
+        <Text style={{ fontFamily: Fonts.sansSemiBold, fontSize: 14, color: Colors.accentInk }}>
+          ✓
+        </Text>
+      )}
+    </Pressable>
   );
 }
 
-// ─── Step 1: Focus ────────────────────────────────────────────────────────────
+// ─── AhaCard ─────────────────────────────────────────────────────────────────
 
-function StepFocus({
-  selected,
-  onToggle,
+function AhaCard({
+  image,
+  headline,
+  body,
+  source,
+  cta,
   onNext,
 }: {
-  selected: string[];
-  onToggle: (key: string) => void;
+  image: any;
+  headline: string;
+  body: string;
+  source: string;
+  cta: string;
   onNext: () => void;
 }) {
   return (
     <ScrollView
-      contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 40, paddingBottom: 60 }}
+      contentContainerStyle={{ flexGrow: 1 }}
       showsVerticalScrollIndicator={false}
     >
-      <SerifH size={38} style={{ marginBottom: 8 }}>
-        {"What matters\nto you?"}
-      </SerifH>
-      <Text
-        style={{
-          fontFamily: Fonts.sans,
-          fontSize: FontSizes.bodyLarge,
-          color: Colors.inkSecondary,
-          lineHeight: FontSizes.bodyLarge * 1.5,
-          marginBottom: 28,
-        }}
-      >
-        Select all that apply. Your analysis will be tuned to these domains.
-      </Text>
-
-      <View style={{ gap: 10, marginBottom: 36 }}>
-        {GOAL_OPTIONS.map((opt) => {
-          const active = selected.includes(opt.key);
-          return (
-            <Pressable
-              key={opt.key}
-              onPress={() => onToggle(opt.key)}
-              style={{
-                backgroundColor: active ? Colors.ink : Colors.surfaceCard,
-                borderWidth: 1,
-                borderColor: active ? Colors.ink : Colors.borderHairline,
-                borderRadius: Radius.md,
-                padding: 16,
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: Fonts.serifMedium,
-                  fontSize: FontSizes.title,
-                  color: active ? Colors.accentInk : Colors.ink,
-                  marginBottom: 2,
-                }}
-              >
-                {opt.title}
-              </Text>
-              <Text
-                style={{
-                  fontFamily: Fonts.sans,
-                  fontSize: FontSizes.caption,
-                  color: active ? 'rgba(241,237,228,0.6)' : Colors.inkSecondary,
-                  lineHeight: FontSizes.caption * 1.4,
-                }}
-              >
-                {opt.sub}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <Pressable
-        style={[pillBtn, selected.length === 0 && { opacity: 0.4 }]}
-        onPress={onNext}
-      >
-        <Text style={pillBtnText}>
-          {selected.length === 0
-            ? 'Continue · 0 selected'
-            : `Continue · ${selected.length} selected`}
+      <Image
+        source={image}
+        style={{ width: '100%', height: scale(280) }}
+        resizeMode="cover"
+      />
+      <View style={{ paddingHorizontal: 24, paddingTop: 28, paddingBottom: 60 }}>
+        <Text
+          style={{
+            fontFamily: Fonts.sansSemiBold,
+            fontSize: 9,
+            textTransform: 'uppercase',
+            letterSpacing: 2,
+            color: Colors.inkSecondary,
+            marginBottom: 14,
+          }}
+        >
+          ◆ Evidence Brief
         </Text>
-      </Pressable>
+        <Text
+          style={{
+            fontFamily: Fonts.serifItalic,
+            fontSize: scale(28),
+            lineHeight: scale(34),
+            color: Colors.ink,
+            marginBottom: 20,
+          }}
+        >
+          {headline}
+        </Text>
+        <Text
+          style={{
+            fontFamily: Fonts.sans,
+            fontSize: FontSizes.body,
+            color: Colors.inkSecondary,
+            lineHeight: FontSizes.body * 1.6,
+            marginBottom: 16,
+          }}
+        >
+          {body}
+        </Text>
+        <Text
+          style={{
+            fontFamily: Fonts.sans,
+            fontSize: FontSizes.caption,
+            color: Colors.inkTertiary,
+            lineHeight: FontSizes.caption * 1.5,
+            marginBottom: 36,
+          }}
+        >
+          {source}
+        </Text>
+        <Pressable style={s.pillBtn} onPress={onNext}>
+          <Text style={s.pillBtnText}>{cta}</Text>
+        </Pressable>
+      </View>
     </ScrollView>
   );
 }
 
-// ─── Step 2: Context ──────────────────────────────────────────────────────────
-
-function StepContext({
-  selected,
-  onToggle,
-  onFinish,
-}: {
-  selected: string[];
-  onToggle: (key: string) => void;
-  onFinish: () => void;
-}) {
-  return (
-    <ScrollView
-      contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 40, paddingBottom: 60 }}
-      showsVerticalScrollIndicator={false}
-    >
-      <SerifH size={38} style={{ marginBottom: 8 }}>
-        {"Anything we\nshould know?"}
-      </SerifH>
-      <Text
-        style={{
-          fontFamily: Fonts.sans,
-          fontSize: FontSizes.bodyLarge,
-          color: Colors.inkSecondary,
-          lineHeight: FontSizes.bodyLarge * 1.5,
-          marginBottom: 28,
-        }}
-      >
-        These flags unlock the highest-sensitivity ingredient filters.
-      </Text>
-
-      <View
-        style={{
-          borderWidth: 1,
-          borderColor: Colors.borderHairline,
-          borderRadius: Radius.md,
-          overflow: 'hidden',
-          marginBottom: 24,
-        }}
-      >
-        {PROFILE_OPTIONS.map((opt, i) => {
-          const active = selected.includes(opt.key);
-          return (
-            <Pressable
-              key={opt.key}
-              onPress={() => onToggle(opt.key)}
-              style={[
-                {
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 16,
-                  paddingVertical: 16,
-                  backgroundColor: Colors.surfaceCard,
-                  gap: 14,
-                },
-                i > 0 && {
-                  borderTopWidth: 1,
-                  borderTopColor: Colors.borderHairline,
-                },
-              ]}
-            >
-              {/* Checkbox square */}
-              <View
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 4,
-                  backgroundColor: active ? Colors.ink : 'transparent',
-                  borderWidth: 1,
-                  borderColor: active ? Colors.ink : Colors.borderHairline,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                {active && (
-                  <Text
-                    style={{
-                      fontFamily: Fonts.sansSemiBold,
-                      fontSize: 13,
-                      color: Colors.surface,
-                      lineHeight: 16,
-                    }}
-                  >
-                    ✓
-                  </Text>
-                )}
-              </View>
-              <Text
-                style={{
-                  fontFamily: Fonts.sans,
-                  fontSize: FontSizes.subtitle,
-                  color: Colors.ink,
-                  flex: 1,
-                }}
-              >
-                {opt.title}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <View style={{ marginBottom: 32 }}>
-        <AlertNote tone="accent" title="Your privacy">
-          Context flags are stored only on this device. They are never shared with third parties or used for advertising.
-        </AlertNote>
-      </View>
-
-      <Pressable style={pillBtn} onPress={onFinish}>
-        <Text style={pillBtnText}>Enter Elory</Text>
-      </Pressable>
-    </ScrollView>
-  );
-}
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ─── Placeholder OnboardingScreen (will be replaced in Task 9) ───────────────
 
 export default function OnboardingScreen() {
-  const router = useRouter();
-  const { completeOnboarding } = useAuth();
-
-  const [step, setStep] = useState(0);
-  const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
-  const [selectedProfile, setSelectedProfile] = useState<string[]>([]);
-
-  const toggleGoal = (key: string) => {
-    setSelectedGoals((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-    );
-  };
-
-  const toggleProfile = (key: string) => {
-    setSelectedProfile((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-    );
-  };
-
-  const handleFinish = async () => {
-    await completeOnboarding();
-    router.replace('/auth');
-  };
-
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.surface }}>
-      <ProgressBar step={step} total={3} />
-
-      {step === 0 && <StepWelcome onNext={() => setStep(1)} />}
-      {step === 1 && (
-        <StepFocus
-          selected={selectedGoals}
-          onToggle={toggleGoal}
-          onNext={() => setStep(2)}
-        />
-      )}
-      {step === 2 && (
-        <StepContext
-          selected={selectedProfile}
-          onToggle={toggleProfile}
-          onFinish={handleFinish}
-        />
-      )}
+    <SafeAreaView style={s.screen}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ fontFamily: Fonts.serif, fontSize: 20, color: Colors.ink }}>
+          Onboarding coming soon
+        </Text>
+      </View>
     </SafeAreaView>
   );
 }
