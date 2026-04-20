@@ -411,6 +411,237 @@ function StepAha1({ onNext }: { onNext: () => void }) {
   );
 }
 
+// ─── Step 5: Name ─────────────────────────────────────────────────────────────
+
+function StepName({
+  value,
+  onChange,
+  onNext,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onNext: () => void;
+}) {
+  return (
+    <ScrollView
+      contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 60 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text
+        style={{
+          fontFamily: Fonts.serifItalic,
+          fontSize: scale(32),
+          lineHeight: scale(38),
+          color: Colors.ink,
+          marginBottom: 8,
+        }}
+      >
+        What should{'\n'}we call you?
+      </Text>
+      <Text
+        style={{
+          fontFamily: Fonts.sans,
+          fontSize: FontSizes.body,
+          color: Colors.inkSecondary,
+          lineHeight: FontSizes.body * 1.5,
+          marginBottom: 28,
+        }}
+      >
+        Used to personalise your experience.
+      </Text>
+      <TextInput
+        style={{
+          backgroundColor: Colors.surfaceCard,
+          borderWidth: 1,
+          borderColor: Colors.borderHairline,
+          borderRadius: Radius.md,
+          paddingHorizontal: 18,
+          paddingVertical: 16,
+          fontFamily: Fonts.sans,
+          fontSize: FontSizes.subtitle,
+          color: Colors.ink,
+          marginBottom: 32,
+        }}
+        placeholder="Your first name"
+        placeholderTextColor={Colors.inkTertiary}
+        value={value}
+        onChangeText={onChange}
+        autoCapitalize="words"
+        autoFocus
+        returnKeyType="next"
+        onSubmitEditing={() => value.trim() && onNext()}
+      />
+      <Pressable
+        style={[s.pillBtn, !value.trim() && s.pillBtnDisabled]}
+        onPress={onNext}
+        disabled={!value.trim()}
+      >
+        <Text style={s.pillBtnText}>Continue</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+// ─── Step 6: Age Range ────────────────────────────────────────────────────────
+
+const AGE_OPTIONS: { value: OnboardingProfile['ageRange']; label: string; hint: string }[] = [
+  { value: 'under_25', label: 'Under 25',  hint: 'Higher absorption rates, lower dosing thresholds' },
+  { value: '25_34',    label: '25 – 34',   hint: 'Peak metabolic window' },
+  { value: '35_44',    label: '35 – 44',   hint: 'Hormonal shifts begin affecting nutrient needs' },
+  { value: '45_54',    label: '45 – 54',   hint: 'Recovery and cellular resilience focus' },
+  { value: '55_plus',  label: '55 +',      hint: 'Absorption efficiency and micronutrient gaps' },
+];
+
+function StepAgeRange({
+  value,
+  onSelect,
+  onNext,
+}: {
+  value: OnboardingProfile['ageRange'];
+  onSelect: (v: OnboardingProfile['ageRange']) => void;
+  onNext: () => void;
+}) {
+  return (
+    <ScrollView
+      contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 60 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text
+        style={{
+          fontFamily: Fonts.serifItalic,
+          fontSize: scale(32),
+          lineHeight: scale(38),
+          color: Colors.ink,
+          marginBottom: 8,
+        }}
+      >
+        How old are you?
+      </Text>
+      <Text
+        style={{
+          fontFamily: Fonts.sans,
+          fontSize: FontSizes.body,
+          color: Colors.inkSecondary,
+          lineHeight: FontSizes.body * 1.5,
+          marginBottom: 24,
+        }}
+      >
+        Age affects absorption rates and recommended dose ranges.
+      </Text>
+      <View style={{ gap: 10, marginBottom: 32 }}>
+        {AGE_OPTIONS.map((opt) => (
+          <OptionPill
+            key={opt.value}
+            label={opt.label}
+            hint={opt.hint}
+            selected={value === opt.value}
+            onPress={() => onSelect(opt.value)}
+          />
+        ))}
+      </View>
+      <Pressable
+        style={[s.pillBtn, !value && s.pillBtnDisabled]}
+        onPress={onNext}
+        disabled={!value}
+      >
+        <Text style={s.pillBtnText}>Continue</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+// ─── Step 7: Biological Sex ───────────────────────────────────────────────────
+
+const SEX_OPTIONS: { value: OnboardingProfile['biologicalSex']; label: string; hint: string }[] = [
+  { value: 'male',          label: 'Male',              hint: 'Testosterone-related thresholds applied' },
+  { value: 'female',        label: 'Female',            hint: 'Oestrogen and iron context applied' },
+  { value: 'not_specified', label: 'Prefer not to say', hint: 'General population defaults used' },
+];
+
+function StepBiologicalSex({
+  value,
+  onSelect,
+  onNext,
+}: {
+  value: OnboardingProfile['biologicalSex'] | '';
+  onSelect: (v: OnboardingProfile['biologicalSex']) => void;
+  onNext: () => void;
+}) {
+  return (
+    <ScrollView
+      contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 60 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text
+        style={{
+          fontFamily: Fonts.serifItalic,
+          fontSize: scale(32),
+          lineHeight: scale(38),
+          color: Colors.ink,
+          marginBottom: 8,
+        }}
+      >
+        Biological sex
+      </Text>
+      <Text
+        style={{
+          fontFamily: Fonts.sans,
+          fontSize: FontSizes.body,
+          color: Colors.inkSecondary,
+          lineHeight: FontSizes.body * 1.5,
+          marginBottom: 24,
+        }}
+      >
+        Affects hormone-related ingredient flags and safety thresholds.
+      </Text>
+      <View style={{ gap: 10, marginBottom: 20 }}>
+        {SEX_OPTIONS.map((opt) => (
+          <OptionPill
+            key={opt.value}
+            label={opt.label}
+            hint={opt.hint}
+            selected={value === opt.value}
+            onPress={() => onSelect(opt.value)}
+          />
+        ))}
+      </View>
+      <Text
+        style={{
+          fontFamily: Fonts.sans,
+          fontSize: FontSizes.caption,
+          color: Colors.inkTertiary,
+          textAlign: 'center',
+          marginBottom: 24,
+        }}
+      >
+        Never shared. Used only for ingredient safety context.
+      </Text>
+      <Pressable
+        style={[s.pillBtn, !value && s.pillBtnDisabled]}
+        onPress={onNext}
+        disabled={!value}
+      >
+        <Text style={s.pillBtnText}>Continue</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+// ─── Step 8: AHA #2 — Omega-3 Myth ───────────────────────────────────────────
+
+function StepAha2({ onNext }: { onNext: () => void }) {
+  return (
+    <AhaCard
+      image={null}
+      headline="Omega-3 taken without fat shows 300% lower absorption."
+      body="EPA and DHA are fat-soluble. Taken on an empty stomach, bioavailability drops dramatically. The dose on the label assumes you took it with a fatty meal — most people don't."
+      source="Lawson & Hughes, JLRM 1988 · Schuchardt & Hahn, Nutrients 2013"
+      cta="Got it →"
+      onNext={onNext}
+    />
+  );
+}
+
 // ─── Onboarding Screen ────────────────────────────────────────────────────────
 
 export default function OnboardingScreen() {
@@ -418,6 +649,9 @@ export default function OnboardingScreen() {
   const { completeOnboarding } = useAuth();
   const [step, setStep] = useState(0);
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
+  const [name, setName] = useState('');
+  const [ageRange, setAgeRange] = useState<OnboardingProfile['ageRange']>('');
+  const [biologicalSex, setBiologicalSex] = useState<OnboardingProfile['biologicalSex'] | ''>('' );
 
   const next = () => setStep((s) => s + 1);
 
@@ -434,7 +668,11 @@ export default function OnboardingScreen() {
       {step === 1 && <StepNoiseProblem onNext={next} />}
       {step === 2 && <StepFocus selected={focusAreas} onToggle={toggleFocus} onNext={next} />}
       {step === 3 && <StepAha1 onNext={next} />}
-      {step >= 4 && <Text style={{ padding: 24 }}>Steps 5–13 coming soon</Text>}
+      {step === 4 && <StepName value={name} onChange={setName} onNext={next} />}
+      {step === 5 && <StepAgeRange value={ageRange} onSelect={setAgeRange} onNext={next} />}
+      {step === 6 && <StepBiologicalSex value={biologicalSex} onSelect={setBiologicalSex} onNext={next} />}
+      {step === 7 && <StepAha2 onNext={next} />}
+      {step >= 8 && <Text style={{ padding: 24 }}>Steps 9–13 coming soon</Text>}
     </SafeAreaView>
   );
 }
