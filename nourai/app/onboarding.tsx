@@ -386,6 +386,7 @@ function StepFocus({
       <Pressable
         style={[s.pillBtn, selected.length === 0 && s.pillBtnDisabled]}
         onPress={onNext}
+        disabled={selected.length === 0}
       >
         <Text style={s.pillBtnText}>
           {selected.length === 0 ? 'Select at least one' : `Continue · ${selected.length} selected`}
