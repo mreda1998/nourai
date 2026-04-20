@@ -651,7 +651,7 @@ export default function OnboardingScreen() {
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
   const [name, setName] = useState('');
   const [ageRange, setAgeRange] = useState<OnboardingProfile['ageRange']>('');
-  const [biologicalSex, setBiologicalSex] = useState<OnboardingProfile['biologicalSex'] | ''>('' );
+  const [biologicalSex, setBiologicalSex] = useState<OnboardingProfile['biologicalSex'] | ''>('');
 
   const next = () => setStep((s) => s + 1);
 
