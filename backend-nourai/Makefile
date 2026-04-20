@@ -4,7 +4,7 @@
 VENV = . venv/bin/activate &&
 PYTHON = $(VENV) python3
 
-.PHONY: help up down logs migrate seed images research dev reset test backfill-links backfill-usda seed-whole-foods seed-fragrance seed-luxury-perfumes fetch-sephora enrich-pubchem fetch-cosing start seed-golden-set seed-golden-set-dry suggest-new-ingredients suggest-new-ingredients-more
+.PHONY: help up down logs migrate seed images research dev reset test backfill-links backfill-usda seed-whole-foods seed-fragrance seed-luxury-perfumes fetch-sephora enrich-pubchem fetch-cosing start seed-golden-set seed-golden-set-dry suggest-new-ingredients suggest-new-ingredients-more research-atelier
 
 help:
 	@echo ""
@@ -26,6 +26,7 @@ help:
 	@echo "  make images            Upload product images → Supabase Storage"
 	@echo "  make research          Run research agent on pending ingredients (limit 5)"
 	@echo "  make research-all      Run research agent on ALL pending ingredients"
+	@echo "  make research-atelier  Enrich complete ingredients with timing + interactions"
 	@echo "  make dev               Start the API server (hot reload)"
 	@echo "  make reset             Full reset: wipe DB, re-migrate, re-seed"
 	@echo "  make logs              Tail PostgreSQL logs"
@@ -272,6 +273,9 @@ research-dry:
 
 research-retry:
 	$(PYTHON) scripts/research_agent.py --retry-failed
+
+research-atelier:
+	$(PYTHON) scripts/research_agent.py --atelier
 
 # ─── Dev server ───────────────────────────────────────────────────────────────
 

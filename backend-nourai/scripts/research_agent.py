@@ -54,6 +54,7 @@ from app.core.biodomains import (
 from app.models.ingredient import Ingredient, ResearchStatus
 from app.models.ingredient_evidence import IngredientEvidence, EvidenceDirection
 from app.models.ingredient_biodomain_score import IngredientBioDomainScore
+from app.models.ingredient_interaction import IngredientInteraction
 
 # ─── PubMed constants ─────────────────────────────────────────────────────────
 
@@ -1109,6 +1110,251 @@ async def research_one_ingredient(
             await session.commit()
 
 
+# ─── Atelier pipeline (--atelier flag) ───────────────────────────────────────
+
+ATELIER_TOOL: dict[str, Any] = {
+    "name": "record_atelier_data",
+    "description": (
+        "Record circadian timing and ingredient interaction data for an ingredient. "
+        "Called once per ingredient using existing synthesized evidence findings."
+    ),
+    "input_schema": {
+        "type": "object",
+        "required": ["optimal_times", "avoid_near_sleep"],
+        "properties": {
+            "optimal_times": {
+                "type": "array",
+                "description": "Best windows to take this ingredient. Include only windows with meaningful rationale.",
+                "items": {
+                    "type": "object",
+                    "required": ["window", "reason"],
+                    "properties": {
+                        "window": {
+                            "type": "string",
+                            "enum": ["morning", "afternoon", "evening", "night"],
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "One sentence: why this window is optimal (absorption, circadian alignment, etc.)",
+                        },
+                        "with_food": {
+                            "type": "boolean",
+                            "description": "True if absorption or tolerability requires food co-ingestion.",
+                        },
+                    },
+                },
+            },
+            "avoid_near_sleep": {
+                "type": "boolean",
+                "description": "True if taking within 3–4 hours of sleep would disrupt sleep quality.",
+            },
+            "circadian_notes": {
+                "type": "string",
+                "description": "Optional: 1–2 sentences on nuanced timing considerations not captured by optimal_times.",
+            },
+            "interactions": {
+                "type": "array",
+                "description": (
+                    "Pairwise interactions with OTHER well-known ingredients. "
+                    "Only include interactions with meaningful clinical or mechanistic evidence."
+                ),
+                "items": {
+                    "type": "object",
+                    "required": ["partner_name", "type", "mechanism", "confidence"],
+                    "properties": {
+                        "partner_name": {
+                            "type": "string",
+                            "description": "Canonical name of the interacting ingredient (e.g. 'Magnesium glycinate', 'Caffeine').",
+                        },
+                        "type": {
+                            "type": "string",
+                            "enum": ["synergy", "compete", "caution"],
+                            "description": "'synergy' = enhance each other, 'compete' = interfere with absorption/effect, 'caution' = combined use needs monitoring.",
+                        },
+                        "mechanism": {
+                            "type": "string",
+                            "description": "1–2 sentences on the biochemical mechanism.",
+                        },
+                        "confidence": {
+                            "type": "string",
+                            "enum": ["high", "moderate", "low"],
+                        },
+                    },
+                },
+            },
+        },
+    },
+}
+
+ATELIER_SYSTEM = (
+    "You are a clinical pharmacologist specializing in chronobiology and ingredient interactions. "
+    "Your job is to determine the optimal circadian timing for supplement/ingredient use "
+    "and identify meaningful pairwise interactions with other common ingredients. "
+    "Base timing on absorption pharmacokinetics, food-dependency, and circadian biology. "
+    "For interactions, only include those with genuine mechanistic or clinical evidence — "
+    "not speculative associations. Be conservative and accurate."
+)
+
+
+async def generate_atelier_data(
+    claude: anthropic.AsyncAnthropic,
+    ingredient_name: str,
+    category: str,
+    findings: list[str],
+    mechanism_summary: str | None,
+) -> dict[str, Any] | None:
+    if not findings:
+        return None
+
+    findings_block = "\n".join(f"• {f}" for f in findings[:20])
+    prompt = (
+        f"Ingredient: {ingredient_name} (category: {category})\n\n"
+        + (f"Mechanism of action: {mechanism_summary}\n\n" if mechanism_summary else "")
+        + f"Synthesized clinical findings:\n{findings_block}\n\n"
+        "Using the record_atelier_data tool, provide:\n"
+        "1. Optimal timing windows (morning/afternoon/evening/night) with reasoning\n"
+        "2. Whether it should be avoided near sleep\n"
+        "3. Any important interactions with other common supplements/ingredients\n"
+        "Only include interactions that have real mechanistic or clinical backing."
+    )
+
+    try:
+        message = await claude.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1500,
+            system=ATELIER_SYSTEM,
+            tools=[ATELIER_TOOL],
+            tool_choice={"type": "any"},
+            messages=[{"role": "user", "content": prompt}],
+        )
+        for block in message.content:
+            if block.type == "tool_use" and block.name == "record_atelier_data":
+                return block.input
+        return None
+    except anthropic.APIError as exc:
+        print(f"    [Claude/Sonnet/Atelier] Error for '{ingredient_name}': {exc}")
+        return None
+
+
+async def store_atelier_data(
+    session: AsyncSession,
+    ingredient: Ingredient,
+    data: dict[str, Any],
+    name_to_id: dict[str, uuid.UUID],
+) -> None:
+    """Write timing fields to ingredients; upsert interaction pairs."""
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    # Write timing fields
+    await session.execute(
+        update(Ingredient)
+        .where(Ingredient.id == ingredient.id)
+        .values(
+            optimal_times=data.get("optimal_times") or [],
+            avoid_near_sleep=bool(data.get("avoid_near_sleep", False)),
+            circadian_notes=data.get("circadian_notes"),
+        )
+    )
+
+    # Upsert interactions
+    for ix in data.get("interactions") or []:
+        partner_name = ix.get("partner_name", "").strip()
+        if not partner_name:
+            continue
+
+        # Fuzzy-match: try exact, then case-insensitive prefix
+        partner_id = name_to_id.get(partner_name)
+        if partner_id is None:
+            lower = partner_name.lower()
+            for k, v in name_to_id.items():
+                if k.lower() == lower:
+                    partner_id = v
+                    break
+
+        if partner_id is None:
+            print(f"        [atelier] Partner '{partner_name}' not found in DB — skipping")
+            continue
+
+        if partner_id == ingredient.id:
+            continue
+
+        # Canonical ordering: lower UUID in id_a
+        id_a, id_b = (
+            (ingredient.id, partner_id)
+            if str(ingredient.id) < str(partner_id)
+            else (partner_id, ingredient.id)
+        )
+
+        stmt = (
+            pg_insert(IngredientInteraction)
+            .values(
+                ingredient_id_a=id_a,
+                ingredient_id_b=id_b,
+                interaction_type=ix.get("type", "caution"),
+                mechanism=ix.get("mechanism", ""),
+                confidence=ix.get("confidence", "low"),
+            )
+            .on_conflict_do_update(
+                constraint="uq_interaction_pair",
+                set_={
+                    "interaction_type": ix.get("type", "caution"),
+                    "mechanism": ix.get("mechanism", ""),
+                    "confidence": ix.get("confidence", "low"),
+                },
+            )
+        )
+        await session.execute(stmt)
+        print(f"        [atelier] ↔ {partner_name} [{ix.get('type')}]")
+
+    await session.commit()
+
+
+async def research_atelier_one_ingredient(
+    ingredient: Ingredient,
+    claude: anthropic.AsyncAnthropic,
+    session_factory: async_sessionmaker[AsyncSession],
+    name_to_id: dict[str, uuid.UUID],
+    dry_run: bool = False,
+) -> None:
+    name = ingredient.canonical_name
+
+    print(f"\n  Atelier: {name}")
+
+    if dry_run:
+        print(f"  [dry-run] Would generate atelier data for '{name}'")
+        return
+
+    # Load existing evidence findings
+    async with session_factory() as session:
+        result = await session.execute(
+            select(IngredientEvidence.finding)
+            .where(IngredientEvidence.ingredient_id == ingredient.id)
+        )
+        findings = [r[0] for r in result.all() if r[0]]
+
+    if not findings:
+        print(f"  No evidence findings — skipping (run research pipeline first)")
+        return
+
+    data = await generate_atelier_data(
+        claude,
+        name,
+        str(ingredient.category),
+        findings,
+        ingredient.mechanism_summary,
+    )
+
+    if data is None:
+        print(f"  Sonnet returned nothing — skipping")
+        return
+
+    windows = [t.get("window") for t in (data.get("optimal_times") or [])]
+    print(f"  → timing: {windows} | avoid_near_sleep: {data.get('avoid_near_sleep')} | interactions: {len(data.get('interactions') or [])}")
+
+    async with session_factory() as session:
+        await store_atelier_data(session, ingredient, data, name_to_id)
+
+
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
 async def main(args: argparse.Namespace) -> None:
@@ -1119,6 +1365,65 @@ async def main(args: argparse.Namespace) -> None:
     engine = create_async_engine(settings.database_url, echo=False)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
+    # ── Atelier mode: process complete ingredients ─────────────────────────────
+    if args.atelier:
+        async with session_factory() as session:
+            if args.ingredient:
+                ingredients = []
+                for name in args.ingredient:
+                    result = await session.execute(
+                        select(Ingredient).where(Ingredient.canonical_name.ilike(name))
+                    )
+                    found = result.scalar_one_or_none()
+                    if found:
+                        ingredients.append(found)
+                    else:
+                        print(f"WARNING: Ingredient '{name}' not found in database")
+            else:
+                stmt = (
+                    select(Ingredient)
+                    .where(Ingredient.research_status == ResearchStatus.COMPLETE)
+                    .order_by(Ingredient.canonical_name)
+                )
+                if args.limit:
+                    stmt = stmt.limit(args.limit)
+                result = await session.execute(stmt)
+                ingredients = list(result.scalars().all())
+
+            # Build name→id map for interaction partner lookup
+            all_result = await session.execute(select(Ingredient.canonical_name, Ingredient.id))
+            name_to_id: dict[str, uuid.UUID] = {row[0]: row[1] for row in all_result.all()}
+
+        if not ingredients:
+            print("No complete ingredients to process. Run 'make research-all' first.")
+            await engine.dispose()
+            return
+
+        print(f"\nNourAI Research Agent — Atelier Mode")
+        print(f"{'='*60}")
+        print(f"  Mode:        {'DRY RUN' if args.dry_run else 'LIVE'}")
+        print(f"  Ingredients: {len(ingredients)} (research_status=complete)")
+        print(f"  Model:       Sonnet (timing + interactions)")
+        print(f"{'='*60}")
+
+        claude = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+
+        for ingredient in ingredients:
+            await research_atelier_one_ingredient(
+                ingredient=ingredient,
+                claude=claude,
+                session_factory=session_factory,
+                name_to_id=name_to_id,
+                dry_run=args.dry_run,
+            )
+
+        await engine.dispose()
+        print(f"\n{'='*60}")
+        print(f"  Atelier enrichment complete.")
+        print(f"{'='*60}\n")
+        return
+
+    # ── Standard research mode ─────────────────────────────────────────────────
     async with session_factory() as session:
         if args.ingredient:
             ingredients = []
@@ -1222,6 +1527,14 @@ def parse_args() -> argparse.Namespace:
         "--skip-images",
         action="store_true",
         help="Skip mechanism illustration generation (saves OpenAI cost)",
+    )
+    parser.add_argument(
+        "--atelier",
+        action="store_true",
+        help=(
+            "Atelier mode: generate circadian timing and interaction data for all "
+            "research_status=complete ingredients. No PubMed fetch — uses existing evidence."
+        ),
     )
     return parser.parse_args()
 
