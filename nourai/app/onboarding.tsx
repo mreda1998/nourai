@@ -202,16 +202,142 @@ function AhaCard({
   );
 }
 
-// ─── Placeholder OnboardingScreen (will be replaced in Task 9) ───────────────
+// ─── Step 1: Welcome ──────────────────────────────────────────────────────────
+
+function StepWelcome({ onNext }: { onNext: () => void }) {
+  return (
+    <ScrollView
+      contentContainerStyle={{ paddingBottom: 60 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={{ width: '100%', height: scale(320), backgroundColor: Colors.surfaceCard }} />
+      <View style={{ paddingHorizontal: 24, paddingTop: 28 }}>
+        <Text
+          style={{
+            fontFamily: Fonts.serifItalic,
+            fontSize: scale(34),
+            lineHeight: scale(40),
+            color: Colors.ink,
+            marginBottom: 16,
+          }}
+        >
+          {'A knowledgeable\nfriend, in your\npocket.'}
+        </Text>
+        <Text
+          style={{
+            fontFamily: Fonts.sans,
+            fontSize: FontSizes.bodyLarge,
+            color: Colors.inkSecondary,
+            lineHeight: FontSizes.bodyLarge * 1.6,
+            marginBottom: 28,
+          }}
+        >
+          Elory reads ingredient lists the way a trained biochemist would — and tells you what actually matters for your body.
+        </Text>
+        <View
+          style={{
+            backgroundColor: Colors.surfaceCard,
+            borderWidth: 1,
+            borderColor: Colors.borderHairline,
+            borderRadius: Radius.lg,
+            padding: 20,
+            marginBottom: 36,
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: Fonts.sansSemiBold,
+              fontSize: 9,
+              textTransform: 'uppercase',
+              letterSpacing: 1.6,
+              color: Colors.inkSecondary,
+              marginBottom: 14,
+            }}
+          >
+            What Elory is not
+          </Text>
+          {[
+            'A replacement for your doctor or pharmacist.',
+            'A fear-driven list of "toxins" to avoid.',
+            'A marketing tool for any brand or product.',
+          ].map((item, i) => (
+            <Text
+              key={i}
+              style={{
+                fontFamily: Fonts.serifItalic,
+                fontSize: FontSizes.body,
+                color: Colors.inkSecondary,
+                lineHeight: FontSizes.body * 1.55,
+                marginBottom: i < 2 ? 8 : 0,
+              }}
+            >
+              {'— '}{item}
+            </Text>
+          ))}
+        </View>
+        <Pressable style={s.pillBtn} onPress={onNext}>
+          <Text style={s.pillBtnText}>Begin</Text>
+        </Pressable>
+      </View>
+    </ScrollView>
+  );
+}
+
+// ─── Step 2: Noise Problem ────────────────────────────────────────────────────
+
+function StepNoiseProblem({ onNext }: { onNext: () => void }) {
+  return (
+    <ScrollView
+      contentContainerStyle={{ paddingBottom: 60 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={{ width: '100%', height: scale(280), backgroundColor: Colors.surfaceCard }} />
+      <View style={{ paddingHorizontal: 24, paddingTop: 28 }}>
+        <Text
+          style={{
+            fontFamily: Fonts.serifItalic,
+            fontSize: scale(32),
+            lineHeight: scale(38),
+            color: Colors.ink,
+            marginBottom: 20,
+          }}
+        >
+          {'Most wellness apps\nsell you certainty.'}
+        </Text>
+        <Text
+          style={{
+            fontFamily: Fonts.sans,
+            fontSize: FontSizes.bodyLarge,
+            color: Colors.inkSecondary,
+            lineHeight: FontSizes.bodyLarge * 1.6,
+            marginBottom: 36,
+          }}
+        >
+          Elory sells you evidence. Every insight is sourced from peer-reviewed studies. We show you what the science actually says — not what a brand wants you to believe.
+        </Text>
+        <Pressable style={s.pillBtn} onPress={onNext}>
+          <Text style={s.pillBtnText}>Continue →</Text>
+        </Pressable>
+      </View>
+    </ScrollView>
+  );
+}
+
+// ─── Onboarding Screen ────────────────────────────────────────────────────────
 
 export default function OnboardingScreen() {
+  const router = useRouter();
+  const { completeOnboarding } = useAuth();
+  const [step, setStep] = useState(0);
+
+  const next = () => setStep((s) => s + 1);
+
   return (
     <SafeAreaView style={s.screen}>
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ fontFamily: Fonts.serif, fontSize: 20, color: Colors.ink }}>
-          Onboarding coming soon
-        </Text>
-      </View>
+      <ProgressBar step={step} total={13} />
+      {step === 0 && <StepWelcome onNext={next} />}
+      {step === 1 && <StepNoiseProblem onNext={next} />}
+      {step >= 2 && <Text style={{ padding: 24 }}>Steps 3–13 coming soon</Text>}
     </SafeAreaView>
   );
 }
