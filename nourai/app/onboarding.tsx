@@ -1066,7 +1066,10 @@ function StepProfileSummary({
 export default function OnboardingScreen() {
   const router = useRouter();
   const { completeOnboarding } = useAuth();
+
   const [step, setStep] = useState(0);
+
+  // Collected state
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
   const [name, setName] = useState('');
   const [ageRange, setAgeRange] = useState<OnboardingProfile['ageRange']>('');
@@ -1077,6 +1080,11 @@ export default function OnboardingScreen() {
 
   const next = () => setStep((s) => s + 1);
 
+  const toggleFocus = (key: string) =>
+    setFocusAreas((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+
   const toggleFlag = (key: string) =>
     setProfileFlags((prev) => {
       if (key === 'none') return prev.includes('none') ? [] : ['none'];
@@ -1084,25 +1092,56 @@ export default function OnboardingScreen() {
       return without.includes(key) ? without.filter((k) => k !== key) : [...without, key];
     });
 
-  const toggleFocus = (key: string) => {
-    setFocusAreas((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-    );
+  const buildProfile = (): OnboardingProfile => {
+    const isPregnant = profileFlags.includes('preg');
+    const isBreastfeeding = profileFlags.includes('nurs');
+    const dietaryPattern = profileFlags.includes('veg') ? ['plant_based'] : [];
+    const healthConcerns: string[] = [];
+    if (profileFlags.includes('sens')) healthConcerns.push('sensitive_skin');
+    if (profileFlags.includes('rx')) healthConcerns.push('on_rx_meds');
+
+    return {
+      biologicalSex: (biologicalSex as OnboardingProfile['biologicalSex']) || 'not_specified',
+      ageRange,
+      isPregnant,
+      isBreastfeeding,
+      sleepQuality,
+      activityLevel,
+      dietaryPattern,
+      environment: '',
+      productCategories: [],
+      focusAreas,
+      healthConcerns,
+      goals: [],
+    };
+  };
+
+  const handleCreateAccount = async () => {
+    const profile = buildProfile();
+    await completeOnboarding(profile);
+    router.push(`/auth?name=${encodeURIComponent(name.trim())}`);
+  };
+
+  const handleContinueAsGuest = async () => {
+    const profile = buildProfile();
+    await completeOnboarding(profile);
+    router.replace('/(tabs)');
   };
 
   return (
     <SafeAreaView style={s.screen}>
       <ProgressBar step={step} total={13} />
-      {step === 0 && <StepWelcome onNext={next} />}
-      {step === 1 && <StepNoiseProblem onNext={next} />}
-      {step === 2 && <StepFocus selected={focusAreas} onToggle={toggleFocus} onNext={next} />}
-      {step === 3 && <StepAha1 onNext={next} />}
-      {step === 4 && <StepName value={name} onChange={setName} onNext={next} />}
-      {step === 5 && <StepAgeRange value={ageRange} onSelect={setAgeRange} onNext={next} />}
-      {step === 6 && <StepBiologicalSex value={biologicalSex} onSelect={setBiologicalSex} onNext={next} />}
-      {step === 7 && <StepAha2 onNext={next} />}
-      {step === 8 && <StepSleepQuality value={sleepQuality} onSelect={setSleepQuality} onNext={next} />}
-      {step === 9 && <StepActivityLevel value={activityLevel} onSelect={setActivityLevel} onNext={next} />}
+
+      {step === 0  && <StepWelcome onNext={next} />}
+      {step === 1  && <StepNoiseProblem onNext={next} />}
+      {step === 2  && <StepFocus selected={focusAreas} onToggle={toggleFocus} onNext={next} />}
+      {step === 3  && <StepAha1 onNext={next} />}
+      {step === 4  && <StepName value={name} onChange={setName} onNext={next} />}
+      {step === 5  && <StepAgeRange value={ageRange} onSelect={setAgeRange} onNext={next} />}
+      {step === 6  && <StepBiologicalSex value={biologicalSex} onSelect={setBiologicalSex} onNext={next} />}
+      {step === 7  && <StepAha2 onNext={next} />}
+      {step === 8  && <StepSleepQuality value={sleepQuality} onSelect={setSleepQuality} onNext={next} />}
+      {step === 9  && <StepActivityLevel value={activityLevel} onSelect={setActivityLevel} onNext={next} />}
       {step === 10 && <StepHealthContext selected={profileFlags} onToggle={toggleFlag} onNext={next} />}
       {step === 11 && <StepAha3 onNext={next} />}
       {step === 12 && (
@@ -1113,8 +1152,8 @@ export default function OnboardingScreen() {
           sleepQuality={sleepQuality}
           activityLevel={activityLevel}
           profileFlags={profileFlags}
-          onCreateAccount={() => {}}
-          onContinueAsGuest={() => {}}
+          onCreateAccount={handleCreateAccount}
+          onContinueAsGuest={handleContinueAsGuest}
         />
       )}
     </SafeAreaView>
