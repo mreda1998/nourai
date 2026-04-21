@@ -918,6 +918,149 @@ function StepAha3({ onNext }: { onNext: () => void }) {
   );
 }
 
+// ─── Step 13: Profile Summary + Convert ──────────────────────────────────────
+
+function StepProfileSummary({
+  name,
+  focusAreas,
+  ageRange,
+  sleepQuality,
+  activityLevel,
+  profileFlags,
+  onCreateAccount,
+  onContinueAsGuest,
+}: {
+  name: string;
+  focusAreas: string[];
+  ageRange: OnboardingProfile['ageRange'];
+  sleepQuality: OnboardingProfile['sleepQuality'];
+  activityLevel: OnboardingProfile['activityLevel'];
+  profileFlags: string[];
+  onCreateAccount: () => void;
+  onContinueAsGuest: () => void;
+}) {
+  const ageLabel: Record<string, string> = {
+    under_25: 'Under 25', '25_34': '25–34', '35_44': '35–44',
+    '45_54': '45–54', '55_plus': '55+',
+  };
+  const sleepLabel: Record<string, string> = {
+    excellent: 'Excellent sleep', good: 'Good sleep',
+    fair: 'Fair sleep', poor: 'Poor sleep',
+  };
+  const activityLabel: Record<string, string> = {
+    sedentary: 'Sedentary', light: 'Light activity', moderate: 'Moderate activity',
+    active: 'Active', athlete: 'Athlete',
+  };
+  const goalLabels: Record<string, string> = {
+    gut: 'Gut health', sleep: 'Sleep', long: 'Longevity',
+    skin: 'Dermal care', meta: 'Metabolic', mind: 'Cognitive',
+  };
+
+  const tags = [
+    ...focusAreas.map((k) => goalLabels[k] ?? k),
+    ageRange ? ageLabel[ageRange] : null,
+    sleepQuality ? sleepLabel[sleepQuality] : null,
+    activityLevel ? activityLabel[activityLevel] : null,
+  ].filter(Boolean) as string[];
+
+  return (
+    <ScrollView
+      contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 60 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text
+        style={{
+          fontFamily: Fonts.serifItalic,
+          fontSize: scale(34),
+          lineHeight: scale(40),
+          color: Colors.ink,
+          marginBottom: 8,
+        }}
+      >
+        {name ? `${name}'s\nElory profile.` : 'Your\nElory profile.'}
+      </Text>
+      <Text
+        style={{
+          fontFamily: Fonts.sans,
+          fontSize: FontSizes.body,
+          color: Colors.inkSecondary,
+          lineHeight: FontSizes.body * 1.5,
+          marginBottom: 28,
+        }}
+      >
+        Save your profile to sync across devices and unlock your full analysis.
+      </Text>
+
+      <View
+        style={{
+          backgroundColor: Colors.surfaceCard,
+          borderWidth: 1,
+          borderColor: Colors.borderHairline,
+          borderRadius: Radius.lg,
+          padding: 20,
+          marginBottom: 32,
+        }}
+      >
+        <Text
+          style={{
+            fontFamily: Fonts.sansSemiBold,
+            fontSize: 9,
+            textTransform: 'uppercase',
+            letterSpacing: 1.6,
+            color: Colors.inkSecondary,
+            marginBottom: 14,
+          }}
+        >
+          Profile built
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {tags.map((tag) => (
+            <View
+              key={tag}
+              style={{
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderWidth: 1,
+                borderColor: Colors.borderHairline,
+                borderRadius: Radius.pill,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: Fonts.sans,
+                  fontSize: FontSizes.caption,
+                  color: Colors.ink,
+                }}
+              >
+                {tag}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <Pressable style={s.pillBtn} onPress={onCreateAccount}>
+        <Text style={s.pillBtnText}>Create Account</Text>
+      </Pressable>
+
+      <Pressable
+        style={{ paddingVertical: 16, alignItems: 'center', marginTop: 8 }}
+        onPress={onContinueAsGuest}
+      >
+        <Text
+          style={{
+            fontFamily: Fonts.sans,
+            fontSize: FontSizes.body,
+            color: Colors.inkSecondary,
+          }}
+        >
+          Continue as Guest
+        </Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
 // ─── Onboarding Screen ────────────────────────────────────────────────────────
 
 export default function OnboardingScreen() {
@@ -962,7 +1105,18 @@ export default function OnboardingScreen() {
       {step === 9 && <StepActivityLevel value={activityLevel} onSelect={setActivityLevel} onNext={next} />}
       {step === 10 && <StepHealthContext selected={profileFlags} onToggle={toggleFlag} onNext={next} />}
       {step === 11 && <StepAha3 onNext={next} />}
-      {step >= 12 && <Text style={{ padding: 24 }}>Steps 13+ coming soon</Text>}
+      {step === 12 && (
+        <StepProfileSummary
+          name={name}
+          focusAreas={focusAreas}
+          ageRange={ageRange}
+          sleepQuality={sleepQuality}
+          activityLevel={activityLevel}
+          profileFlags={profileFlags}
+          onCreateAccount={() => {}}
+          onContinueAsGuest={() => {}}
+        />
+      )}
     </SafeAreaView>
   );
 }
