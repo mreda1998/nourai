@@ -34,7 +34,7 @@ export default function AuthScreen() {
   const { signIn, signUp, signInWithApple } = useAuth();
   const { name: prefillName } = useLocalSearchParams<{ name?: string }>();
 
-  const [mode, setMode] = useState<AuthMode>('signin');
+  const [mode, setMode] = useState<AuthMode>(prefillName ? 'signup' : 'signin');
   const [name, setName] = useState(prefillName ?? '');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

@@ -1117,14 +1117,24 @@ export default function OnboardingScreen() {
   };
 
   const handleCreateAccount = async () => {
-    const profile = buildProfile();
-    await completeOnboarding(profile);
-    router.push(`/auth?name=${encodeURIComponent(name.trim())}`);
+    try {
+      const profile = buildProfile();
+      await completeOnboarding(profile);
+      router.push(`/auth?name=${encodeURIComponent(name.trim())}`);
+    } catch {
+      // navigation is not blocked silently — completeOnboarding stores profile locally
+      // even if backend sync fails; proceed to auth screen
+      router.push(`/auth?name=${encodeURIComponent(name.trim())}`);
+    }
   };
 
   const handleContinueAsGuest = async () => {
-    const profile = buildProfile();
-    await completeOnboarding(profile);
+    try {
+      const profile = buildProfile();
+      await completeOnboarding(profile);
+    } catch {
+      // local onboarding completion may fail in edge cases; navigate anyway
+    }
     router.replace('/(tabs)');
   };
 
