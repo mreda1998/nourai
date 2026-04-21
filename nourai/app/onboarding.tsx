@@ -777,6 +777,147 @@ function StepActivityLevel({
   );
 }
 
+// ─── Step 11: Health Context ──────────────────────────────────────────────────
+
+const PROFILE_OPTIONS = [
+  { key: 'preg',  title: 'Pregnant' },
+  { key: 'nurs',  title: 'Breastfeeding / nursing' },
+  { key: 'veg',   title: 'Plant-based diet' },
+  { key: 'sens',  title: 'Sensitive skin' },
+  { key: 'rx',    title: 'On prescription medication' },
+  { key: 'none',  title: 'None of the above' },
+];
+
+function StepHealthContext({
+  selected,
+  onToggle,
+  onNext,
+}: {
+  selected: string[];
+  onToggle: (key: string) => void;
+  onNext: () => void;
+}) {
+  return (
+    <ScrollView
+      contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 60 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text
+        style={{
+          fontFamily: Fonts.serifItalic,
+          fontSize: scale(32),
+          lineHeight: scale(38),
+          color: Colors.ink,
+          marginBottom: 8,
+        }}
+      >
+        Anything we{'\n'}should know?
+      </Text>
+      <Text
+        style={{
+          fontFamily: Fonts.sans,
+          fontSize: FontSizes.body,
+          color: Colors.inkSecondary,
+          lineHeight: FontSizes.body * 1.5,
+          marginBottom: 24,
+        }}
+      >
+        These flags unlock the highest-sensitivity ingredient filters.
+      </Text>
+      <View
+        style={{
+          borderWidth: 1,
+          borderColor: Colors.borderHairline,
+          borderRadius: Radius.md,
+          overflow: 'hidden',
+          marginBottom: 20,
+        }}
+      >
+        {PROFILE_OPTIONS.map((opt, i) => {
+          const active = selected.includes(opt.key);
+          return (
+            <Pressable
+              key={opt.key}
+              onPress={() => onToggle(opt.key)}
+              style={[
+                {
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 16,
+                  paddingVertical: 16,
+                  backgroundColor: Colors.surfaceCard,
+                  gap: 14,
+                },
+                i > 0 && { borderTopWidth: 1, borderTopColor: Colors.borderHairline },
+              ]}
+            >
+              <View
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 4,
+                  backgroundColor: active ? Colors.ink : 'transparent',
+                  borderWidth: 1,
+                  borderColor: active ? Colors.ink : Colors.borderHairline,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                {active && (
+                  <Text style={{ fontFamily: Fonts.sansSemiBold, fontSize: 12, color: Colors.surface }}>
+                    ✓
+                  </Text>
+                )}
+              </View>
+              <Text
+                style={{
+                  fontFamily: Fonts.sans,
+                  fontSize: FontSizes.body,
+                  color: Colors.ink,
+                  flex: 1,
+                }}
+              >
+                {opt.title}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text
+        style={{
+          fontFamily: Fonts.sans,
+          fontSize: FontSizes.caption,
+          color: Colors.inkTertiary,
+          textAlign: 'center',
+          lineHeight: FontSizes.caption * 1.5,
+          marginBottom: 24,
+        }}
+      >
+        Context flags are stored only on this device. Never shared or used for advertising.
+      </Text>
+      <Pressable style={s.pillBtn} onPress={onNext}>
+        <Text style={s.pillBtnText}>Continue</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+// ─── Step 12: AHA #3 — Probiotic Myth ────────────────────────────────────────
+
+function StepAha3({ onNext }: { onNext: () => void }) {
+  return (
+    <AhaCard
+      image={null}
+      headline="Most probiotics don't survive your stomach acid."
+      body="The CFU count on the label is measured at manufacturing — not at consumption. Without enteric coating, the majority of bacteria are destroyed before reaching the gut. Strain selection and packaging matter far more than the headline number."
+      source="Govinden et al., Beneficial Microbes 2014 · Corcoran et al., Applied Microbiology 2008"
+      cta="One last step →"
+      onNext={onNext}
+    />
+  );
+}
+
 // ─── Onboarding Screen ────────────────────────────────────────────────────────
 
 export default function OnboardingScreen() {
@@ -789,8 +930,14 @@ export default function OnboardingScreen() {
   const [biologicalSex, setBiologicalSex] = useState<OnboardingProfile['biologicalSex'] | ''>('');
   const [sleepQuality, setSleepQuality] = useState<OnboardingProfile['sleepQuality']>('');
   const [activityLevel, setActivityLevel] = useState<OnboardingProfile['activityLevel']>('');
+  const [profileFlags, setProfileFlags] = useState<string[]>([]);
 
   const next = () => setStep((s) => s + 1);
+
+  const toggleFlag = (key: string) =>
+    setProfileFlags((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
 
   const toggleFocus = (key: string) => {
     setFocusAreas((prev) =>
@@ -811,7 +958,9 @@ export default function OnboardingScreen() {
       {step === 7 && <StepAha2 onNext={next} />}
       {step === 8 && <StepSleepQuality value={sleepQuality} onSelect={setSleepQuality} onNext={next} />}
       {step === 9 && <StepActivityLevel value={activityLevel} onSelect={setActivityLevel} onNext={next} />}
-      {step >= 10 && <Text style={{ padding: 24 }}>Steps 11–13 coming soon</Text>}
+      {step === 10 && <StepHealthContext selected={profileFlags} onToggle={toggleFlag} onNext={next} />}
+      {step === 11 && <StepAha3 onNext={next} />}
+      {step >= 12 && <Text style={{ padding: 24 }}>Steps 13+ coming soon</Text>}
     </SafeAreaView>
   );
 }
