@@ -935,9 +935,11 @@ export default function OnboardingScreen() {
   const next = () => setStep((s) => s + 1);
 
   const toggleFlag = (key: string) =>
-    setProfileFlags((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-    );
+    setProfileFlags((prev) => {
+      if (key === 'none') return prev.includes('none') ? [] : ['none'];
+      const without = prev.filter((k) => k !== 'none');
+      return without.includes(key) ? without.filter((k) => k !== key) : [...without, key];
+    });
 
   const toggleFocus = (key: string) => {
     setFocusAreas((prev) =>
