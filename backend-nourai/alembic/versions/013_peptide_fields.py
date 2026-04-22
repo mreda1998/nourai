@@ -20,7 +20,7 @@ def upgrade() -> None:
 
     op.add_column("ingredients", sa.Column("us_regulatory_status", sa.String(30), nullable=True))
     op.add_column("ingredients", sa.Column("wada_status", sa.String(30), nullable=True))
-    op.add_column("ingredients", sa.Column("admin_routes", postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    op.add_column("ingredients", sa.Column("admin_routes", postgresql.JSONB(), nullable=True))
     op.add_column("ingredients", sa.Column("admin_route_notes", sa.Text(), nullable=True))
     op.add_column("ingredients", sa.Column("cycle_length_weeks", sa.Integer(), nullable=True))
     op.add_column("ingredients", sa.Column("washout_weeks", sa.Integer(), nullable=True))
@@ -35,4 +35,3 @@ def downgrade() -> None:
     op.drop_column("ingredients", "admin_routes")
     op.drop_column("ingredients", "wada_status")
     op.drop_column("ingredients", "us_regulatory_status")
-    # Note: PostgreSQL does not support removing enum values; downgrade leaves 'peptide' in the type.
