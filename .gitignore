@@ -80,3 +80,4 @@ htmlcov/
 # ─── Assets — large binaries ─────────────────────────────────────────────────
 midjourney/
 moodboard/
+.worktrees/
