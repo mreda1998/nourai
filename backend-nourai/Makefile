@@ -4,7 +4,7 @@
 VENV = . venv/bin/activate &&
 PYTHON = $(VENV) python3
 
-.PHONY: help up down logs migrate seed images research dev reset test backfill-links backfill-usda seed-whole-foods seed-fragrance seed-luxury-perfumes fetch-sephora enrich-pubchem fetch-cosing start seed-golden-set seed-golden-set-dry suggest-new-ingredients suggest-new-ingredients-more research-atelier
+.PHONY: help up down logs migrate seed seed-peptides images research dev reset test backfill-links backfill-usda seed-whole-foods seed-fragrance seed-luxury-perfumes fetch-sephora enrich-pubchem fetch-cosing start seed-golden-set seed-golden-set-dry suggest-new-ingredients suggest-new-ingredients-more research-atelier
 
 help:
 	@echo ""
@@ -15,6 +15,7 @@ help:
 	@echo "  make down              Stop containers"
 	@echo "  make migrate           Run all pending migrations"
 	@echo "  make seed              Seed the golden set (products + ingredients)"
+	@echo "  make seed-peptides     Seed 20 curated peptides (run after migrate)"
 	@echo "  make fetch-products    Expand product catalogue from Open Food Facts + Beauty Facts"
 	@echo "  make seed-fragrance    Seed EU fragrance allergen ingredients (run before fetch-products)"
 	@echo "  make seed-luxury-perfumes  Seed ~70 curated luxury perfumes (Chanel, Dior, LV, Creed...)"
@@ -130,6 +131,11 @@ seed:
 	$(PYTHON) scripts/seed_golden_set.py
 	@echo ""
 	@echo "Golden set seeded. Run 'make research' to enrich with PubMed studies."
+
+seed-peptides:
+	$(PYTHON) scripts/seed_peptides.py
+	@echo ""
+	@echo "Peptides seeded. Run 'make research-all' to populate PubMed evidence."
 
 fetch-products:
 	$(PYTHON) scripts/fetch_popular_products.py

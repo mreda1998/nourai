@@ -51,6 +51,7 @@ make setup            # create venv, install deps, copy .env.example → .env
 make up               # start PostgreSQL on port 5432 (Docker)
 make migrate          # apply all Alembic migrations
 make seed             # load the golden set: 23 ingredients + 15 real products
+make seed-peptides    # load 20 curated peptides
 make fetch-products   # expand to ~4 500 products from Open Food Facts + Open Beauty Facts
 make research         # enrich first 5 ingredients with PubMed evidence (test run)
 make dev              # start API with hot reload → http://localhost:8001
@@ -69,6 +70,9 @@ make research-dry
 
 # Step 3 — enrich all ingredients (uses Anthropic API, ~$3–6 one-time)
 make research-all
+
+# Step 4 — enrich with timing + interaction data (Atelier features)
+make research-atelier
 ```
 
 After `make research-all` completes, every ingredient has:
@@ -81,6 +85,7 @@ After `make research-all` completes, every ingredient has:
 make dev              # start API (hot reload)
 make research         # enrich next 5 pending ingredients
 make research-retry   # retry any that previously failed
+make research-atelier # enrich complete ingredients with timing + interactions
 make fetch-products   # pull new products from OpenFoodFacts (idempotent)
 make migrate          # apply any new migrations after a git pull
 make reset            # full wipe → re-migrate → re-seed (destructive)
@@ -135,7 +140,7 @@ Copy `.env.example` to `.env` and fill in the values below.
 ## Project structure
 
 ```
-backend-elory/
+backend-nourai/
 ├── app/
 │   ├── api/v1/          # FastAPI route handlers
 │   ├── core/
@@ -145,7 +150,7 @@ backend-elory/
 │   │   ├── base.py      # Base model mixins (UUIDMixin, TimestampMixin)
 │   │   └── session.py   # Async engine + session factory
 │   ├── models/
-│   │   ├── ingredient.py          # Ingredient + ResearchStatus
+│   │   ├── ingredient.py          # Ingredient + IngredientCategory + ResearchStatus
 │   │   ├── ingredient_evidence.py # PubMed evidence records (per ingredient)
 │   │   ├── product.py             # Product + ProductIngredient
 │   │   └── claim.py               # Marketing claim evidence
@@ -153,9 +158,10 @@ backend-elory/
 │   ├── services/        # Business logic
 │   └── main.py          # FastAPI app entry point
 ├── alembic/
-│   └── versions/        # Migration files (001 → 003)
+│   └── versions/        # Migration files (001 → 013)
 ├── scripts/
 │   ├── seed_golden_set.py         # 23 curated ingredients + 15 real products (run first)
+│   ├── seed_peptides.py           # 20 curated peptides with regulatory + admin route data
 │   ├── fetch_popular_products.py  # Expands to ~4 500 products via OpenFoodFacts + OpenBeautyFacts
 │   ├── research_agent.py          # PubMed → Claude Haiku synthesis + Sonnet belief/reality summary
 │   └── upload_product_images.py   # Re-hosts images to Supabase Storage
@@ -198,6 +204,22 @@ Loads a curated set of 23 ingredients and 15 real products into the database. Id
 make seed
 ```
 
+### `scripts/seed_peptides.py`
+
+Seeds 20 curated peptides (BPC-157, TB-500, Semaglutide, etc.) into `ingredients` with `category = 'peptide'`. Each row includes hand-curated `us_regulatory_status`, `wada_status`, `admin_routes`, and cycle protocol fields. Idempotent — skips existing peptides by `canonical_name`.
+
+Run **after** `make migrate` (requires migration 013 columns):
+
+```bash
+make seed-peptides
+```
+
+After seeding, populate PubMed evidence with:
+
+```bash
+make research-all     # PubMed + belief/reality for all PENDING ingredients
+```
+
 ### `scripts/fetch_popular_products.py`
 
 Expands the golden set with real, popular products pulled from [Open Food Facts](https://world.openfoodfacts.org/) and [Open Beauty Facts](https://world.openbeautyfacts.org/). Products are sorted by `unique_scans_n` (real scan count) so the most widely used items are imported first.
@@ -229,9 +251,13 @@ make research           # enrich next 5 pending ingredients (good for testing)
 make research-all       # enrich all pending ingredients
 make research-dry       # preview without making any API calls
 make research-retry     # retry ingredients with status = failed
+make research-atelier   # enrich complete ingredients with timing + interactions (Atelier features)
 
 # Target a specific ingredient by name
 . venv/bin/activate && python scripts/research_agent.py --ingredient "Creatine"
+
+# Target all peptides
+. venv/bin/activate && python scripts/research_agent.py --category peptide
 ```
 
 **Cost estimate:** ~$0.012/ingredient (Haiku × abstracts + Sonnet × summary). Full 300-ingredient run ≈ $3–6 one-time.
@@ -274,7 +300,13 @@ GET  /api/v1/ingredients/search?q=          Search canonical ingredients by name
 GET  /api/v1/ingredients/{id}               Full ingredient deep dive:
                                               mechanism, common_belief, evidence_reality,
                                               dose/safety info, PubMed evidence records,
-                                              found-in products
+                                              found-in products, peptide fields when applicable
+
+# Peptides  (premium-gated)
+GET  /api/v1/peptides                       Browse all peptides
+                                              ?search=   name match (min 2 chars)
+                                              ?us_status= filter by us_regulatory_status
+                                              ?wada_safe=true  exclude prohibited statuses
 
 # Users
 POST /api/v1/users/me/profile               Save onboarding profile
@@ -296,37 +328,78 @@ POST /api/v1/webhooks/revenuecat            RevenueCat subscription webhook
 
 ## Deployment
 
-### Railway (recommended)
+Supabase provides the production PostgreSQL database, JWT auth, and Storage. The FastAPI application is deployed separately (Railway, Render, or Docker) and connects to Supabase via `DATABASE_URL`.
+
+### Supabase setup
+
+1. Create a project at [supabase.com](https://supabase.com)
+2. Get your `DATABASE_URL` from Project Settings → Database → Connection string → URI (use the **direct** connection, not the pooler, for Alembic migrations)
+3. Get `SUPABASE_URL` and `SUPABASE_JWT_SECRET` from Project Settings → API
+4. Create a Storage bucket named `product-images` (Storage → New Bucket → toggle **Public** ON)
+
+### Run migrations against Supabase
+
+Alembic runs against whichever `DATABASE_URL` is in your environment. Point it at Supabase and migrate:
+
+```bash
+# Using Railway CLI (if deployed on Railway)
+railway run alembic upgrade head
+
+# Or directly from your local machine (direct connection URL required)
+DATABASE_URL="postgresql+asyncpg://postgres:[PASSWORD]@db.[PROJECT].supabase.co:5432/postgres" \
+  . venv/bin/activate && alembic upgrade head
+```
+
+### Post-deploy data pipeline
+
+Run these once after the first deploy, in order:
+
+```bash
+# 1. Seed core ingredient + product data
+make seed               # 23 ingredients + 15 real products
+
+# 2. Seed peptides (requires migration 013)
+make seed-peptides      # 20 curated peptides
+
+# 3. Expand product catalogue (no API cost, ~10 min)
+make fetch-products
+
+# 4. Populate PubMed evidence for all ingredients (Anthropic API, ~$3–6)
+make research-all
+
+# 5. Enrich with timing + interaction data for Atelier features
+make research-atelier
+
+# 6. Re-host product images to Supabase Storage
+make images
+```
+
+Each step is idempotent — safe to re-run if interrupted.
+
+### Deploy the API: Railway (recommended)
 
 Railway auto-detects the `Dockerfile` and runs the service with zero config.
 
 1. Create a new project at [railway.app](https://railway.app)
-2. Connect your GitHub repository
-3. Add a **PostgreSQL** service (Railway provides managed Postgres)
-4. Set environment variables in the Railway dashboard (copy from `.env`, use Supabase's production `DATABASE_URL`)
-5. Railway deploys on every push to `main`
+2. Connect your GitHub repository, set `backend-nourai/` as the root directory
+3. Set all environment variables in the Railway dashboard (see the Environment variables section above)
+4. Railway deploys on every push to `main`
+5. After first deploy, run `railway run alembic upgrade head` then the data pipeline above
 
-After first deploy, run migrations once:
+### Deploy the API: Render
 
-```bash
-railway run alembic upgrade head
-```
-
-### Render
-
-1. New Web Service → connect repo → select `backend-elory/` as root directory
+1. New Web Service → connect repo → set `backend-nourai/` as root directory
 2. Build command: `pip install -r requirements.txt`
 3. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-4. Add a PostgreSQL database add-on
-5. Set environment variables
+4. Set environment variables
 
-### Docker (self-hosted)
+### Deploy the API: Docker (self-hosted)
 
 ```bash
 docker build -t elory-api .
 docker run -p 8000:8000 \
-  -e DATABASE_URL="postgresql+asyncpg://..." \
-  -e SUPABASE_URL="..." \
+  -e DATABASE_URL="postgresql+asyncpg://postgres:[PASSWORD]@db.[PROJECT].supabase.co:5432/postgres" \
+  -e SUPABASE_URL="https://[project].supabase.co" \
   -e SUPABASE_JWT_SECRET="..." \
   -e ANTHROPIC_API_KEY="..." \
   elory-api
@@ -335,9 +408,15 @@ docker run -p 8000:8000 \
 ### Production checklist
 
 - [ ] `ENVIRONMENT=production` and `DEBUG=false` in env vars
-- [ ] `DATABASE_URL` points to Supabase Postgres (not localhost)
-- [ ] Run `alembic upgrade head` after each deploy
-- [ ] `SUPABASE_SERVICE_ROLE_KEY` set (for image uploads)
-- [ ] `ANTHROPIC_API_KEY` set (for research agent)
+- [ ] `DATABASE_URL` points to Supabase Postgres direct connection string
+- [ ] `SUPABASE_URL` and `SUPABASE_JWT_SECRET` set
+- [ ] `alembic upgrade head` run after each deploy
+- [ ] `make seed` and `make seed-peptides` run (first deploy only)
+- [ ] `make fetch-products` run (first deploy only)
+- [ ] `make research-all` run to populate ingredient evidence
+- [ ] `make research-atelier` run to populate timing + interaction data
+- [ ] `SUPABASE_SERVICE_ROLE_KEY` set and `make images` run for product images
+- [ ] `ANTHROPIC_API_KEY` set
 - [ ] Supabase Storage bucket `product-images` created and set to **Public**
 - [ ] CORS origins updated in `app/main.py` to your production domain
+- [ ] `REVENUECAT_WEBHOOK_SECRET` set if payments are live
