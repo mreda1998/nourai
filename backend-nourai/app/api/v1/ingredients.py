@@ -101,6 +101,15 @@ class IngredientDetail(BaseModel):
     # Products in our DB that contain this ingredient
     found_in: list[FoundInProduct]
 
+    # Peptide-specific fields (null for non-peptide ingredients)
+    us_regulatory_status: str | None = None
+    wada_status: str | None = None
+    admin_routes: list[str] | None = None
+    admin_route_notes: str | None = None
+    cycle_length_weeks: int | None = None
+    washout_weeks: int | None = None
+    cycling_notes: str | None = None
+
 
 class IngredientListItem(BaseModel):
     id: str
@@ -301,4 +310,11 @@ async def get_ingredient(
             for ev in sorted_evidence
         ],
         found_in=found_in,
+        us_regulatory_status=ingredient.us_regulatory_status,
+        wada_status=ingredient.wada_status,
+        admin_routes=ingredient.admin_routes,
+        admin_route_notes=ingredient.admin_route_notes,
+        cycle_length_weeks=ingredient.cycle_length_weeks,
+        washout_weeks=ingredient.washout_weeks,
+        cycling_notes=ingredient.cycling_notes,
     )
