@@ -1,5 +1,4 @@
 """Ingredient Pydantic schemas."""
-from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -26,13 +25,13 @@ class IngredientResponse(BaseModel):
     drug_interactions: list[str] = []
     evidence_level: str | None = None
     # Peptide-specific fields (null for non-peptide ingredients)
-    us_regulatory_status: Optional[str] = None
-    wada_status: Optional[str] = None
-    admin_routes: Optional[list[str]] = None
-    admin_route_notes: Optional[str] = None
-    cycle_length_weeks: Optional[int] = None
-    washout_weeks: Optional[int] = None
-    cycling_notes: Optional[str] = None
+    us_regulatory_status: str | None = None
+    wada_status: str | None = None
+    admin_routes: list[str] | None = None
+    admin_route_notes: str | None = None
+    cycle_length_weeks: int | None = None
+    washout_weeks: int | None = None
+    cycling_notes: str | None = None
 
 
 class IngredientDetailResponse(BaseModel):
