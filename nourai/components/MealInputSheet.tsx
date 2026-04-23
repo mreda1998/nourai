@@ -1,8 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -30,6 +29,19 @@ export function MealInputSheet({ visible, onClose, onConfirm }: Props) {
   const [recognized, setRecognized] = useState<RecognizedFood[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => setKeyboardHeight(e.endCoordinates.height),
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardHeight(0),
+    );
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   const handleAnalyze = async () => {
     const trimmed = text.trim();
@@ -79,10 +91,7 @@ export function MealInputSheet({ visible, onClose, onConfirm }: Props) {
     >
       <Pressable style={styles.backdrop} onPress={handleClose} />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.sheetWrapper}
-      >
+      <View style={[styles.sheetWrapper, { bottom: keyboardHeight }]}>
         <View style={styles.sheet}>
           {/* Handle */}
           <View style={styles.handle} />
@@ -178,7 +187,7 @@ export function MealInputSheet({ visible, onClose, onConfirm }: Props) {
             </>
           )}
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }

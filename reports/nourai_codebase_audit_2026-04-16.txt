@@ -1,0 +1,144 @@
+NourAI Codebase Audit
+Generated on 2026-04-16 from the current workspace code only.
+README/spec/docs files were intentionally excluded from the analysis.
+
+Summary
+
+This repository already contains a substantial product implementation.
+It spans:
+- An Expo/React Native mobile app in nourai/
+- A FastAPI backend in backend-nourai/
+- A PostgreSQL/SQLAlchemy model layer with Alembic migrations
+- External data ingestion for OpenFoodFacts and USDA
+- A PubMed-backed ingredient research pipeline
+- User-facing intelligence surfaces: ingredient deep dives, domain analysis, scan history, stack chat, and meal analysis
+
+High-level conclusion:
+- The backend is the strongest part of the system.
+- The mobile app covers a broad surface area and has polished UI work.
+- The main weaknesses are contract mismatches between the mobile client and backend, plus a few still-mocked settings flows.
+
+Implemented Features
+
+Mobile app
+- Supabase auth with email/password, session restore, Apple sign-in, and guest continuation
+- 10-step onboarding capturing biology, sleep, activity, diet, environment, product categories, focus areas, health concerns, and goals
+- Home screen with daily composite score and log summary
+- Product discovery/search by category
+- USDA whole-food search merged into product search results
+- Barcode scanning flow
+- Meal photo analysis and free-text meal analysis
+- Product detail page with grade, bio-domain bars, ingredient list, nutrient deep-linking, personalization overlay, allergen warning, and stack actions
+- Ingredient deep dive page with mechanism, belief-vs-reality summary, dose/safety, biodomain scoring, and found-in products
+- Stack screen with radar chart, goal alignment, overlap detection, domain drill-down, AI chat, and meal log sheet
+- History screen with grouped timeline and trend analytics
+- Profile hub and settings screens for account, permissions, notifications, and subscription
+
+Backend API
+- Products: GET /products, /products/search, /products/{id}, /products/{id}/personalize, /products/barcode/{barcode}
+- Ingredients: GET /ingredients/search, GET /ingredients/{id}
+- Domains: GET /domains/{slug}/analyze
+- Users: GET/PUT /users/me, POST /users/me/onboarding, GET/POST /users/me/history, GET /users/me/subscription
+- Stack: GET/POST/DELETE /users/me/stack
+- Foods: GET /foods/search, GET /foods/{fdc_id}
+- Meals: POST /meals/analyze
+- Chat: POST /chat/message
+- RevenueCat webhook: POST /webhooks/revenuecat
+
+Data/research pipeline
+- Canonical ingredient records with synonyms, safety data, evidence status, and mechanism/belief fields
+- Structured IngredientEvidence rows for PubMed-derived findings
+- IngredientBioDomainScore rows for per-domain effect strength, confidence, and dose-response
+- Research agent script that searches PubMed, synthesizes studies with Claude, and stores structured evidence
+- Product ingestion via OpenFoodFacts, USDA nutrient fallback, and unmatched ingredient logging
+- Seeding and backfill scripts for products, ingredients, whole foods, fragrances, and enrichment
+
+Architecture
+
+Frontend runtime
+- Navigation is Expo Router with a root stack and tab group.
+- Auth is centered in context/auth-context.tsx.
+- API access is centralized in nourai/services/api.ts with automatic bearer token injection.
+- Fast local UI state lives in context/app-state.tsx.
+- Some intelligence surfaces are backend-backed, while others still use local heuristics.
+
+Backend runtime
+- FastAPI app with modular routers and dependency injection
+- Supabase JWT verification in app/core/security.py
+- Async SQLAlchemy session management in app/db/session.py
+- Service/repository split for products, personalization, stack, subscriptions, and USDA
+- Precomputed evidence and biodomain scoring instead of real-time LLM calls during request handling
+
+Data model pattern
+- Products drive scan/search/product-detail flows.
+- Canonical ingredients drive evidence, deep dives, and biodomain scoring.
+- User profiles store onboarding data, goals, concerns, stack entries, history, and subscriptions.
+- Scripts continuously enrich the structured database instead of leaving intelligence only in prompts.
+
+What Can Be Fixed First
+
+P0: Guest barcode scan auth mismatch
+- The mobile scan flow calls api.getProductByBarcode from nourai/app/(tabs)/scan.tsx:102-117.
+- The backend barcode route in backend-nourai/app/api/v1/products.py:158-175 depends on CurrentUser.
+- Result: guest users can reach the scanner, but fresh barcode lookups can fail with 401.
+
+P0: Product biodomain label mismatch
+- The product detail page expects these backend names in nourai/app/product/[id].tsx:242-254:
+  Gut Health, Dermal, Metabolic, Exposure Load, Sleep Recovery, Cognition
+- The backend scorer emits names such as Skin & Appearance, Energy & Metabolism, Gut & Digestive, Cognitive & Mental, and Sleep & Recovery in backend-nourai/app/core/biodomains.py:28-98 and backend-nourai/app/schemas/product.py:319-325.
+- Result: correctly computed backend biodomain values can render as zero on the product page.
+
+P1: Stack persistence and contract mismatch
+- Mobile stack state is local/in-memory in nourai/context/app-state.tsx:50-77.
+- Product detail and stack screens remove entries by product id in nourai/app/product/[id].tsx:186-205 and nourai/app/(tabs)/stack.tsx:477-483.
+- The backend stack API is keyed by stack entry id and returns StackEntryResponse objects, not ProductListItem objects, in backend-nourai/app/api/v1/stack.py:15-70.
+- The API client also types getStack/removeFromStack around product ids in nourai/services/api.ts:583-611.
+- Result: signed-in users do not have a coherent persisted stack model yet.
+
+P1: Missing settings routes
+- Profile hub links to /settings/privacy and /settings/about in nourai/app/profile-hub.tsx:261-266.
+- Those screens do not exist under nourai/app/settings/.
+- Result: the menu exposes broken navigation targets.
+
+P1: Subscription contract drift and missing verify endpoint
+- Mobile type expects premium_monthly, premium_annual, family, cancelled, and billing_issue in nourai/services/api.ts:359-368.
+- Backend model uses only free/premium and active/expired/canceled/grace_period in backend-nourai/app/models/subscription.py:17-30.
+- Mobile client declares /users/me/subscription/verify in nourai/services/api.ts:537-545, but the backend does not expose it.
+- Result: premium UI logic and future billing integration are at risk of drift/failure.
+
+P2: Account and subscription settings are still mocked
+- Account save/delete flows are simulated in nourai/app/settings/account.tsx:38-55 and :76-99.
+- Subscription purchase/restore is simulated in nourai/app/settings/subscription.tsx:117-170.
+- Result: the UI advertises operational settings that are not fully real.
+
+P2: Onboarding goal coverage is incomplete
+- The onboarding goal picker in nourai/app/onboarding.tsx:162-174 ends at mental_focus.
+- Backend/domain/chat logic also supports reduce_stress, better_sleep, and recovery.
+- Result: personalization inputs are narrower than the backend capability.
+
+P2: Test suite infrastructure issue
+- pytest produced 17 passes and 3 errors.
+- The three errors came from backend-nourai/tests/api/test_foods.py:46-78 using @pytest.mark.anyio while trio is not installed, with fixture setup in backend-nourai/tests/conftest.py:7-14.
+- Result: test health is partially obscured by async test configuration/dependency drift.
+
+P3: Hardcoded dev API base URL
+- Mobile API base URL defaults to http://192.168.0.163:8081/api/v1 in nourai/services/api.ts:5-7.
+- Backend Makefile advertises the dev server on port 8001 in backend-nourai/Makefile:65-90.
+- Result: local development is brittle and environment-specific.
+
+Recommended Next Moves
+
+1. Unify biodomain naming between backend responses and product-page rendering.
+2. Decide on one stack model and wire the mobile app to the persisted backend stack.
+3. Make guest scan behavior intentional: either support anonymous barcode lookup or gate the scanner behind auth.
+4. Remove or finish mock account/subscription flows.
+5. Align subscription enums/contracts before RevenueCat client work continues.
+6. Fix the async test backend setup or add the missing trio dependency.
+7. Replace the hardcoded mobile API fallback with env-driven configuration.
+
+Validation note
+
+The backend test suite was executed during this audit.
+Observed result:
+- 17 tests passed
+- 3 tests errored because trio was not installed

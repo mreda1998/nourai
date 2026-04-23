@@ -10,6 +10,7 @@ import {
 
 import { Colors, Fonts, Radius, FontSizes, scale } from '@/constants/theme';
 import { useAppState } from '@/context/app-state';
+import { useAuth } from '@/context/auth-context';
 import {
   Eyebrow,
   SerifH,
@@ -35,23 +36,13 @@ const STACK_THUMB_COLORS: Array<'sand' | 'sage' | 'dark' | 'default'> = [
   'sand', 'sage', 'dark', 'default', 'sand',
 ];
 
-// ─── Placeholder ingredient cloud data ───────────────────────────────────────
-
-const KNOWN_INGREDIENTS = [
-  { key: 'magnesium', label: 'Magnesium glycinate', flagged: false },
-  { key: 'omega3',   label: 'Omega-3 EPA/DHA',     flagged: false },
-  { key: 'vitD',     label: 'Vitamin D₃',           flagged: false },
-  { key: 'ashwag',   label: 'Ashwagandha',           flagged: false },
-  { key: 'sodium-b', label: 'Sodium benzoate',       flagged: true  },
-  { key: 'creatine', label: 'Creatine monohydrate',  flagged: false },
-  { key: 'parabenm', label: 'Methylparaben',         flagged: true  },
-];
 
 // ─── Home Screen ──────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
   const router = useRouter();
   const { hasScannedBefore, stack, meals } = useAppState();
+  const { user } = useAuth();
 
   // Weight each item by its onset ramp so newly-added supplements don't
   // inflate the score before they've had time to accumulate in the body.
@@ -74,9 +65,26 @@ export default function HomeScreen() {
             }, 0)
         );
 
-  // Derive a user name initial from the stack (placeholder)
-  const userName = hasScannedBefore ? 'you' : 'you';
-  const userInitial = 'E';
+  const userName = user?.name?.split(' ')[0] ?? 'you';
+  const userInitial = (user?.name?.charAt(0) ?? 'E').toUpperCase();
+
+  // Build ingredient cloud from stack — flagged if any product containing it has grade D
+  const flaggedByGrade = new Set<string>(
+    [...stack, ...meals]
+      .filter((p) => p.grade === 'D')
+      .flatMap((p) => p.ingredients.map((n) => n.toLowerCase()))
+  );
+  const seenIngredients = new Set<string>();
+  const stackIngredients = [...stack, ...meals]
+    .flatMap((p) => p.ingredients)
+    .reduce<Array<{ key: string; label: string; flagged: boolean }>>((acc, name) => {
+      const lower = name.toLowerCase();
+      if (!seenIngredients.has(lower)) {
+        seenIngredients.add(lower);
+        acc.push({ key: lower, label: name, flagged: flaggedByGrade.has(lower) });
+      }
+      return acc;
+    }, []);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: Colors.surface }}>
@@ -131,58 +139,36 @@ export default function HomeScreen() {
           <View
             style={{
               backgroundColor: Colors.accent,
-              borderTopLeftRadius: 120,
-              borderTopRightRadius: 120,
-              borderBottomLeftRadius: Radius.lg,
-              borderBottomRightRadius: Radius.lg,
-              padding: 28,
-              paddingTop: 40,
+              borderRadius: Radius.lg,
+              paddingHorizontal: 24,
+              paddingTop: 28,
+              paddingBottom: 20,
               overflow: 'hidden',
             }}
           >
-            {/* Radial glow overlay */}
-            <View
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                opacity: 0.08,
-                backgroundColor: Colors.sand,
-                borderRadius: 999,
-              }}
-            />
-            <Eyebrow style={{ color: 'rgba(241,237,228,0.7)', marginBottom: 16 }}>
-              This evening
+            <Eyebrow style={{ color: 'rgba(241,237,228,0.55)', marginBottom: 10 }}>
+              This evening · 18:42
             </Eyebrow>
             <Text
               style={{
                 fontFamily: Fonts.serifItalic,
-                fontSize: 24,
-                lineHeight: 30,
+                fontSize: 26,
+                lineHeight: 32,
                 color: Colors.accentInk,
-                marginBottom: 20,
+                marginBottom: 14,
               }}
             >
               Your magnesium glycinate lands best about 90 minutes before you dim the lights.
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View
-                style={{
-                  width: 4,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: Colors.sand,
-                }}
-              />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+              <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.sand }} />
               <Text
                 style={{
                   fontFamily: Fonts.sansSemiBold,
-                  fontSize: 11,
-                  letterSpacing: 1.0,
+                  fontSize: 10,
+                  letterSpacing: 1.2,
                   textTransform: 'uppercase',
-                  color: 'rgba(241,237,228,0.65)',
+                  color: 'rgba(241,237,228,0.6)',
                 }}
               >
                 Based on 4 studies · Read brief
@@ -304,32 +290,46 @@ export default function HomeScreen() {
         <View style={{ paddingHorizontal: 24 }}>
           <SectionHead label="Known to you today" />
 
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {KNOWN_INGREDIENTS.map((ing) => (
-              <Pressable
-                key={ing.key}
-                style={{
-                  paddingVertical: 7,
-                  paddingHorizontal: 12,
-                  borderRadius: Radius.pill,
-                  borderLeftWidth: ing.flagged ? 2 : 1,
-                  borderWidth: 1,
-                  borderColor: ing.flagged ? Colors.alert : Colors.borderHairline,
-                  backgroundColor: Colors.surfaceCard,
-                }}
-              >
-                <Text
+          {stackIngredients.length === 0 ? (
+            <Text
+              style={{
+                fontFamily: Fonts.serifItalic,
+                fontSize: FontSizes.bodyLarge,
+                color: Colors.inkSecondary,
+                lineHeight: FontSizes.bodyLarge * 1.6,
+                paddingVertical: 12,
+              }}
+            >
+              Scan products to see your ingredient cloud.
+            </Text>
+          ) : (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {stackIngredients.map((ing) => (
+                <Pressable
+                  key={ing.key}
                   style={{
-                    fontFamily: Fonts.sans,
-                    fontSize: FontSizes.caption,
-                    color: ing.flagged ? Colors.alert : Colors.ink,
+                    paddingVertical: 7,
+                    paddingHorizontal: 12,
+                    borderRadius: Radius.pill,
+                    borderLeftWidth: ing.flagged ? 2 : 1,
+                    borderWidth: 1,
+                    borderColor: ing.flagged ? Colors.alert : Colors.borderHairline,
+                    backgroundColor: Colors.surfaceCard,
                   }}
                 >
-                  {ing.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+                  <Text
+                    style={{
+                      fontFamily: Fonts.sans,
+                      fontSize: FontSizes.caption,
+                      color: ing.flagged ? Colors.alert : Colors.ink,
+                    }}
+                  >
+                    {ing.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Colors, Fonts } from '@/constants/theme';
@@ -10,6 +10,19 @@ interface Props {
 
 export function PremiumLock({ featureName = 'This feature' }: Props) {
   const router = useRouter();
+  const [bypassed, setBypassed] = useState(false);
+
+  // In development builds, unlock immediately without requiring a subscription.
+  if (bypassed) return null;
+
+  const handleUnlock = () => {
+    if (__DEV__) {
+      setBypassed(true);
+    } else {
+      router.push('/settings/subscription');
+    }
+  };
+
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       <BlurView
@@ -24,11 +37,10 @@ export function PremiumLock({ featureName = 'This feature' }: Props) {
         <Text style={styles.sub}>
           Unlock circadian dosing, conflict maps, exposure tracking and more.
         </Text>
-        <Pressable
-          style={styles.cta}
-          onPress={() => router.push('/settings/subscription')}
-        >
-          <Text style={styles.ctaText}>Unlock Atelier</Text>
+        <Pressable style={styles.cta} onPress={handleUnlock}>
+          <Text style={styles.ctaText}>
+            {__DEV__ ? 'Unlock (Dev Mode)' : 'Unlock Atelier'}
+          </Text>
         </Pressable>
       </BlurView>
     </View>

@@ -577,7 +577,7 @@ export default function ProfileHubScreen() {
             <Text style={styles.atelierSubtitle}>Premium intelligence features</Text>
           </View>
           {[
-            { label: 'Ask Elory', sub: 'AI chat about your stack', route: '/chat' },
+            { label: 'Ask Elory', sub: 'AI chat about your stack', route: '/ask-elory' },
             { label: 'Circadian Protocol', sub: 'Optimal timing for your chronotype', route: '/circadian' },
             { label: 'Conflict Map', sub: 'Biochemical interaction graph', route: '/conflict-map' },
             { label: 'Exposure Ledger', sub: '14-day compound exposure tracking', route: '/exposure' },

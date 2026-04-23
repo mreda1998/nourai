@@ -10,9 +10,6 @@ import {
   Text,
   TextInput,
   View,
-  Dimensions,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -74,6 +71,19 @@ export default function ScanScreen() {
 
   // Type mode — meal analysis result
   const [mealAnalysis, setMealAnalysis] = useState<{ meal_summary: string; foods: { name: string; estimated_amount?: string }[] } | null>(null);
+
+  // Keyboard height (for lifting the absolutely-positioned bottom sheet)
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardWillShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hide = Keyboard.addListener('keyboardWillHide', () => {
+      setKeyboardHeight(0);
+    });
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   // Reanimated shared values
   const sweepY = useSharedValue(0);
@@ -214,10 +224,7 @@ export default function ScanScreen() {
   }));
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <View style={styles.screen}>
       {/* Camera fill (scan mode only) */}
       {mode === 'scan' && cameraPermission?.granted && Constants.isDevice && (
         <CameraView
@@ -336,11 +343,11 @@ export default function ScanScreen() {
 
       {/* ── Mode toggle ─────────────────────────────────────────────────── */}
       <View style={[styles.modeToggle, {
-        bottom: isDetected || hasMealResult || hasSearchResults
+        bottom: (isDetected || hasMealResult || hasSearchResults
           ? verticalScale(340)
           : mode === 'search'
           ? verticalScale(240)
-          : verticalScale(220),
+          : verticalScale(220)) + keyboardHeight,
       }]}>
         {(['scan', 'type', 'search'] as InputMode[]).map((m) => (
           <Pressable
@@ -386,7 +393,7 @@ export default function ScanScreen() {
       {/* ── Bottom sheet ────────────────────────────────────────────────── */}
       <View style={[
         styles.bottomSheet,
-        { paddingBottom: insets.bottom + scale(16) },
+        { paddingBottom: insets.bottom + scale(16), bottom: keyboardHeight },
         mode === 'search' && styles.bottomSheetSearch,
       ]}>
         {/* Search input — lives in the sheet when in search mode */}
@@ -521,7 +528,7 @@ export default function ScanScreen() {
           </Animated.View>
         )}
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

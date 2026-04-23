@@ -30,11 +30,12 @@ function StackIcon({ focused }: { focused: boolean }) {
   );
 }
 
-function ChatIcon({ focused }: { focused: boolean }) {
+function AtelierIcon({ focused }: { focused: boolean }) {
   const c = focused ? Colors.ink : Colors.inkTertiary;
   return (
     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.6}>
-      <Path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z" />
+      <Path d="M12 2 L22 12 L12 22 L2 12 Z" strokeLinejoin="round" />
+      <Path d="M12 7 L17 12 L12 17 L7 12 Z" strokeLinejoin="round" />
     </Svg>
   );
 }
@@ -61,7 +62,7 @@ function ScanIcon() {
 const TAB_CONFIG = [
   { name: 'index',   label: 'Home',    Icon: HomeIcon },
   { name: 'stack',   label: 'Stack',   Icon: StackIcon },
-  { name: 'chat',    label: 'Chat',    Icon: ChatIcon },
+  { name: 'chat',    label: 'Atelier', Icon: AtelierIcon },
   { name: 'profile', label: 'Profile', Icon: ProfileIcon },
 ];
 
@@ -192,7 +193,7 @@ export default function TabLayout() {
       <Tabs.Screen name="index"   options={{ title: 'Home' }} />
       <Tabs.Screen name="stack"   options={{ title: 'Stack' }} />
       <Tabs.Screen name="scan"    options={{ title: 'Scan' }} />
-      <Tabs.Screen name="chat"    options={{ title: 'Chat' }} />
+      <Tabs.Screen name="chat"    options={{ title: 'Atelier' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
       {/* Keep search/history registered but not in nav */}
       <Tabs.Screen name="search"  options={{ href: null }} />

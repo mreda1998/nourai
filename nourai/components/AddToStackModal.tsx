@@ -8,9 +8,11 @@
  *
  * Smart defaults are derived from the product category.
  */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  Keyboard,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -106,6 +108,19 @@ export function AddToStackModal({
   const [protocol, setProtocol] = useState<Protocol>(defaults.protocol);
   const [quantity, setQuantity] = useState('');
   const inputRef = useRef<TextInput>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => setKeyboardHeight(e.endCoordinates.height),
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardHeight(0),
+    );
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   const handleConfirm = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -138,7 +153,7 @@ export function AddToStackModal({
       <Pressable style={styles.backdrop} onPress={handleCancel} />
 
       {/* Sheet */}
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.md }]}>
+      <View style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.md, bottom: keyboardHeight }]}>
         {/* Handle */}
         <View style={styles.handle} />
 

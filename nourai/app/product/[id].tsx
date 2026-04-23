@@ -9,60 +9,52 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
-import Animated, { FadeInUp, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
 import {
   Colors,
   Fonts,
-  Spacing,
   Radius,
   FontSizes,
-  Layout,
   scale,
   verticalScale,
 } from '@/constants/theme';
 import { api, getProductWithFallback } from '@/services/api';
 import type { Product, ServerPersonalAnalysis } from '@/services/api';
 import { useAppState } from '@/context/app-state';
-import { AddToStackModal, type StackEntry } from '@/components/AddToStackModal';
 import { useAuth } from '@/context/auth-context';
+import { AddToStackModal, type StackEntry } from '@/components/AddToStackModal';
 import {
   analyzeIngredients,
   buildPersonalAnalysis,
-  displayConcern,
-  displayGoal,
 } from '@/utils/personalization';
+import {
+  Eyebrow,
+  SerifH,
+  EvidenceSpectrum,
+  SpectrumBar,
+  Tag,
+  AlertNote,
+  ProductThumb,
+  SectionHead,
+} from '@/components/elory';
 
-// ─── Icons ────────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function PlusIcon({ size = 18, color = Colors.bone }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.5}>
-      <Path d="M12 4v16m8-8H4" strokeLinecap="round" />
-    </Svg>
-  );
+function healthScoreToStrength(score: number | undefined): number {
+  if (!score) return 1;
+  if (score >= 80) return 4;
+  if (score >= 60) return 3;
+  if (score >= 40) return 2;
+  return 1;
 }
 
-function CheckIcon({ size = 18, color = Colors.bone }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.5}>
-      <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
-
-// ─── Grade helpers ────────────────────────────────────────────────────────────
-
-function getGradeStyle(grade: string): { bg: string; text: string; label: string } {
-  switch (grade) {
-    case 'A': return { bg: Colors.accentHill, text: Colors.bone, label: 'Excellent' };
-    case 'B': return { bg: Colors.ink, text: Colors.bone, label: 'Good' };
-    case 'C': return { bg: Colors.inkSecondary, text: Colors.bone, label: 'Average' };
-    case 'D': return { bg: Colors.accentAlert, text: Colors.bone, label: 'Below Average' };
-    default:  return { bg: Colors.boneDark, text: Colors.ink, label: 'Not Rated' };
-  }
+function categoryToThumbColor(
+  cat: string,
+): 'sand' | 'sage' | 'dark' | 'default' {
+  if (cat === 'supplement') return 'sand';
+  if (cat === 'cosmetic' || cat === 'topical') return 'sage';
+  return 'default';
 }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -80,37 +72,46 @@ export default function ProductDetailScreen() {
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [tappingNutrient, setTappingNutrient] = useState<string | null>(null);
 
-  // ── Server-side personalization ────────────────────────────────────────────
-  // Fires after the product loads. Server result is preferred; the client-side
-  // keyword engine runs immediately as a fallback while the request is in-flight
-  // or if the server is unreachable.
-  const [serverAnalysis, setServerAnalysis] = useState<ServerPersonalAnalysis | null>(null);
+  const [serverAnalysis, setServerAnalysis] =
+    useState<ServerPersonalAnalysis | null>(null);
 
   const isInStack = product ? stack.some((p) => p.id === product.id) : false;
 
-  // ── Client-side fallback (instant, keyword-based) ─────────────────────────
+  // ── Client-side fallback ──────────────────────────────────────────────────
   const clientPersonalAnalysis = useMemo(() => {
     if (!product || !onboardingProfile) return null;
-    const hasFilters = onboardingProfile.healthConcerns.length > 0 || onboardingProfile.goals.length > 0;
+    const hasFilters =
+      onboardingProfile.healthConcerns.length > 0 ||
+      onboardingProfile.goals.length > 0;
     if (!hasFilters) return null;
     return buildPersonalAnalysis(product.ingredients, onboardingProfile);
   }, [product, onboardingProfile]);
 
   const clientIngredientPersonalization = useMemo(() => {
     if (!product || !onboardingProfile) return null;
-    const hasFilters = onboardingProfile.healthConcerns.length > 0 || onboardingProfile.goals.length > 0;
+    const hasFilters =
+      onboardingProfile.healthConcerns.length > 0 ||
+      onboardingProfile.goals.length > 0;
     if (!hasFilters) return null;
     return analyzeIngredients(product.ingredients, onboardingProfile);
   }, [product, onboardingProfile]);
 
-  // ── Resolved: server wins when available, client is the fallback ──────────
   const personalAnalysis = serverAnalysis ?? clientPersonalAnalysis;
 
   const ingredientPersonalization = useMemo(() => {
     if (serverAnalysis) {
-      const map = new Map<string, { concernFlags: { concern: string; label: string }[]; goalSupports: { goal: string; label: string }[] }>();
+      const map = new Map<
+        string,
+        {
+          concernFlags: { concern: string; label: string }[];
+          goalSupports: { goal: string; label: string }[];
+        }
+      >();
       for (const [name, data] of Object.entries(serverAnalysis.perIngredient)) {
-        map.set(name, { concernFlags: data.concernFlags, goalSupports: data.goalSupports });
+        map.set(name, {
+          concernFlags: data.concernFlags,
+          goalSupports: data.goalSupports,
+        });
       }
       return map;
     }
@@ -131,43 +132,41 @@ export default function ProductDetailScreen() {
       const data = await getProductWithFallback(id);
       if (data) {
         setProduct(data);
-        // Record in history (fire-and-forget, only for signed-in users)
         if (isSignedIn) {
           api.addToScanHistory(data.id).catch(() => {});
         }
       } else {
         setError('Product not found');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to load product');
     } finally {
       setLoading(false);
     }
   };
 
-  // Fire personalization request once product is loaded and profile has tags.
   useEffect(() => {
     if (!product || !onboardingProfile) return;
     const { healthConcerns, goals } = onboardingProfile;
     if (healthConcerns.length === 0 && goals.length === 0) return;
-    // USDA products have a string ID ("usda-…") and no personalization endpoint.
     if (product.id.startsWith('usda-')) return;
 
-    api.personalizeProduct(product.id, healthConcerns, goals)
+    api
+      .personalizeProduct(product.id, healthConcerns, goals)
       .then(setServerAnalysis)
-      .catch(() => {
-        // Server unreachable — client fallback already showing, nothing to do.
-      });
+      .catch(() => {});
   }, [product?.id, onboardingProfile]);
 
-  // ── Nutrient tap → navigate to ingredient deep dive ───────────────────────
-  const handleNutrientTap = async (nutrient: { name: string; ingredient_id?: string | null }) => {
+  // ── Nutrient tap ──────────────────────────────────────────────────────────
+  const handleNutrientTap = async (nutrient: {
+    name: string;
+    ingredient_id?: string | null;
+  }) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (nutrient.ingredient_id) {
       router.push(`/ingredient/${nutrient.ingredient_id}`);
       return;
     }
-    // No FK — search canonical ingredient DB by name
     setTappingNutrient(nutrient.name);
     try {
       const result = await api.searchIngredients(nutrient.name, 1);
@@ -175,21 +174,19 @@ export default function ProductDetailScreen() {
         router.push(`/ingredient/${result.ingredients[0].id}`);
       }
     } catch {
-      // No match found — no navigation
+      // No match
     } finally {
       setTappingNutrient(null);
     }
   };
 
-  // ── Stack toggle ───────────────────────────────────────────────────────────
-
+  // ── Stack toggle ──────────────────────────────────────────────────────────
   const handleStackToggle = () => {
     if (!product) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (isInStack) {
       removeFromStack(product.id);
     } else {
-      // Open the add-to-stack modal so the user can choose time + protocol
       setAddModalVisible(true);
     }
   };
@@ -197,7 +194,7 @@ export default function ProductDetailScreen() {
   const handleAddConfirm = (entry: StackEntry) => {
     if (!product) return;
     const validGrades = ['A', 'B', 'C', 'D'] as const;
-    const grade = validGrades.includes(product.grade as any)
+    const grade = validGrades.includes(product.grade as 'A' | 'B' | 'C' | 'D')
       ? (product.grade as 'A' | 'B' | 'C' | 'D')
       : 'C';
     addToStack({
@@ -215,11 +212,15 @@ export default function ProductDetailScreen() {
     setAddModalVisible(false);
   };
 
-  // ── Loading / error states ─────────────────────────────────────────────────
-
+  // ── Loading / error ───────────────────────────────────────────────────────
   if (loading) {
     return (
-      <View className="flex-1 bg-bone justify-center items-center">
+      <View
+        style={[
+          styles.centered,
+          { backgroundColor: Colors.surface, paddingTop: insets.top },
+        ]}
+      >
         <ActivityIndicator size="large" color={Colors.ink} />
         <Text style={styles.loadingText}>Loading product...</Text>
       </View>
@@ -228,19 +229,28 @@ export default function ProductDetailScreen() {
 
   if (error || !product) {
     return (
-      <View className="flex-1 bg-bone justify-center items-center">
+      <View
+        style={[
+          styles.centered,
+          { backgroundColor: Colors.surface, paddingTop: insets.top },
+        ]}
+      >
         <Text style={styles.errorText}>{error || 'Product not found'}</Text>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
+        <Pressable style={styles.fallbackBackBtn} onPress={() => router.back()}>
+          <Text style={styles.fallbackBackBtnText}>Go Back</Text>
         </Pressable>
       </View>
     );
   }
 
-  const gradeStyle = getGradeStyle(product.grade);
+  // ── Data helpers ──────────────────────────────────────────────────────────
+  const thumbColor = categoryToThumbColor(product.category);
+  const thumbLetter = product.name?.[0]?.toUpperCase() ?? '?';
+  const evidenceStrength = healthScoreToStrength(undefined); // Product has no health_score field
 
-  // Names must match backend BioDomain.name exactly.
-  // Backend returns up to 10 domains; missing ones default to value: 0.
+  const nutrients = product.ingredients.filter((i) => i.is_nutrient);
+  const regularIngredients = product.ingredients.filter((i) => !i.is_nutrient);
+
   const BIO_DOMAIN_LABELS = [
     'Body Composition',
     'Energy & Metabolism',
@@ -253,26 +263,24 @@ export default function ProductDetailScreen() {
     'Hormonal & Endocrine',
     'Skin & Appearance',
   ];
+
   const bioDomains = BIO_DOMAIN_LABELS.map((label) => {
     const found = product.bio_domains.find((d) => d.name === label);
     return found ?? { name: label, value: 0, is_negative: false };
-  });
+  }).filter((d) => d.value > 0);
 
   const hasPersonalData =
-    personalAnalysis && (personalAnalysis.hasConcernFlags || personalAnalysis.hasGoalSupports);
-
-  // Split ingredients into nutrition facts vs. ingredient deep-dive rows
-  const nutrients = product.ingredients.filter((i) => i.is_nutrient);
-  const regularIngredients = product.ingredients.filter((i) => !i.is_nutrient);
+    personalAnalysis &&
+    (personalAnalysis.hasConcernFlags || personalAnalysis.hasGoalSupports);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <View className="flex-1 bg-bone">
+    <View style={{ flex: 1, backgroundColor: Colors.surface }}>
       <ScrollView
         contentContainerStyle={[
           styles.container,
-          { paddingTop: insets.top + Spacing.lg },
+          { paddingTop: insets.top + scale(16) },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -281,286 +289,247 @@ export default function ProductDetailScreen() {
           <Text style={styles.backBtnText}>← Back</Text>
         </Pressable>
 
-        {/* AI badge */}
-        {product.is_ai_generated && (
-          <View className="bg-accent-alert/8 border border-accent-alert/30 rounded-md p-md flex-row gap-md mb-lg">
-            <Text style={styles.aiBadgeIcon}>✦</Text>
-            <View style={styles.aiBadgeContent}>
-              <Text style={styles.aiBadgeLabel}>AI-Generated Analysis</Text>
-              <Text style={styles.aiBadgeText}>
-                This product was not found in our database. The analysis is AI-generated and should be verified.
+        {/* ── Product header ───────────────────────────────────────────── */}
+        <View style={styles.headerBlock}>
+          <Eyebrow style={{ marginBottom: 10 }}>
+            Clinical intelligence report
+          </Eyebrow>
+          <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', marginBottom: 12 }}>
+            <ProductThumb
+              color={thumbColor}
+              letter={thumbLetter}
+              size={72}
+            />
+            <View style={{ flex: 1 }}>
+              {product.brand ? (
+                <Eyebrow style={{ marginBottom: 4 }}>{product.brand}</Eyebrow>
+              ) : null}
+              <SerifH size={28} style={{ marginBottom: 4 }}>
+                {product.name}
+              </SerifH>
+              <Text style={styles.metaText}>
+                {product.category}
+                {product.subcategory ? ` · ${product.subcategory}` : ''}
               </Text>
             </View>
           </View>
-        )}
-
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.reportLabel}>Clinical Intelligence Report</Text>
-          <Text style={styles.productName}>{product.name}</Text>
-          {product.brand && <Text style={styles.brandName}>{product.brand}</Text>}
           <View style={styles.tagRow}>
-            {product.grade && (
-              <View style={styles.tag}>
-                <Text style={styles.tagText}>Grade {product.grade}</Text>
-              </View>
-            )}
-            <View style={styles.tag}>
-              <Text style={styles.tagText}>{product.category}</Text>
-            </View>
-            {product.tags?.map((tag, index) => (
-              <Animated.View key={tag} entering={FadeInUp.duration(300).delay(index * 60)}>
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>{tag}</Text>
-                </View>
-              </Animated.View>
+            <Tag tone="strong">{product.category}</Tag>
+            {product.tags?.map((tag) => (
+              <Tag key={tag}>{tag}</Tag>
             ))}
           </View>
         </View>
 
-        {/* Add to stack */}
-        <Pressable
-          className={`flex-row items-center justify-center gap-sm rounded-pill py-md mb-xl ${
-            isInStack ? 'bg-bone-card border border-ink' : 'bg-ink'
-          }`}
-          onPress={handleStackToggle}
-        >
-          {isInStack ? (
-            <>
-              <CheckIcon color={Colors.ink} />
-              <Text className="font-sans-semibold text-ink uppercase" style={{ fontSize: FontSizes.body, letterSpacing: 1 }}>
-                In Your Stack
-              </Text>
-            </>
+        {/* ── Verdict card ──────────────────────────────────────────────── */}
+        <View style={styles.verdictCard}>
+          <Eyebrow style={{ marginBottom: 10 }}>The short version</Eyebrow>
+          {product.description ? (
+            <Text style={styles.verdictText}>{product.description}</Text>
           ) : (
-            <>
-              <PlusIcon />
-              <Text className="font-sans-semibold text-bone uppercase" style={{ fontSize: FontSizes.body, letterSpacing: 1 }}>Add to Stack</Text>
-            </>
+            <Text style={styles.verdictText}>
+              {product.is_ai_generated
+                ? 'AI-generated analysis. Verify before use.'
+                : `${product.name} contains ${product.ingredients.length} ingredient${product.ingredients.length !== 1 ? 's' : ''}.`}
+            </Text>
           )}
-        </Pressable>
-
-        {/* Allergen warning */}
-        {product.has_allergen_warning && product.allergen_warning && (
-          <View style={styles.allergenAlert}>
-            <Text style={styles.allergenIcon}>⚠</Text>
-            <View style={styles.allergenContent}>
-              <Text style={styles.allergenLabel}>Allergen Warning</Text>
-              <Text style={styles.allergenText}>{product.allergen_warning}</Text>
+          <View style={styles.statRow}>
+            <View style={{ flex: 1 }}>
+              <Eyebrow style={{ fontSize: 9, marginBottom: 6 }}>Evidence</Eyebrow>
+              <EvidenceSpectrum strength={evidenceStrength} />
+            </View>
+            <View style={styles.statDivider} />
+            <View style={{ flex: 1, paddingHorizontal: 8 }}>
+              <Eyebrow style={{ fontSize: 9, marginBottom: 4 }}>Fit for you</Eyebrow>
+              <Text style={styles.statValue}>
+                {personalAnalysis?.hasConcernFlags ? 'Conditional' : 'General'}
+              </Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={{ flex: 1, paddingLeft: 8 }}>
+              <Eyebrow style={{ fontSize: 9, marginBottom: 4 }}>Category</Eyebrow>
+              <Text style={styles.statValue}>{product.category}</Text>
             </View>
           </View>
-        )}
+        </View>
 
-        {/* ── For You section ─────────────────────────────────────────────── */}
-        {hasPersonalData && (
-          <Animated.View entering={FadeIn.duration(500)} style={styles.forYouSection}>
-            <View style={styles.sectionDivider} />
-            <View style={styles.forYouHeader}>
-              <Text style={styles.sectionLabel}>For You</Text>
-              <View style={styles.forYouBadge}>
-                <Text style={styles.forYouBadgeText}>Personalized</Text>
-              </View>
-            </View>
+        {/* ── Allergen warning ──────────────────────────────────────────── */}
+        {product.has_allergen_warning && product.allergen_warning ? (
+          <View style={{ paddingHorizontal: scale(24), marginBottom: 20 }}>
+            <AlertNote title="Allergen warning" tone="alert">
+              {product.allergen_warning}
+            </AlertNote>
+          </View>
+        ) : null}
 
-            {/* Concern warnings */}
-            {personalAnalysis!.hasConcernFlags && (
-              <View className="bg-accent-alert/5 border border-accent-alert/30 rounded-md mb-sm" style={{ overflow: 'hidden' }}>
-                <View style={styles.forYouCardHeader}>
-                  <Text style={styles.forYouCardIcon}>⚠</Text>
-                  <Text style={styles.forYouCardTitle}>Personal Warnings</Text>
-                </View>
-                {personalAnalysis!.concerns.map((item, i) => (
+        {/* ── Personalization ───────────────────────────────────────────── */}
+        {hasPersonalData ? (
+          <View style={{ marginBottom: 24, paddingHorizontal: scale(24) }}>
+            {personalAnalysis!.hasConcernFlags ? (
+              <AlertNote title="For your profile" tone="alert">
+                {personalAnalysis!.concerns.map((item) =>
+                  `${item.ingredientName}: ${item.label}`
+                ).join(' · ')}
+              </AlertNote>
+            ) : null}
+            {personalAnalysis!.hasGoalSupports ? (
+              <AlertNote title="Supports your goals" tone="sage">
+                {personalAnalysis!.goals.map((item) =>
+                  `${item.ingredientName} → ${item.label}`
+                ).join(' · ')}
+              </AlertNote>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* ── Ingredients of note ───────────────────────────────────────── */}
+        {regularIngredients.length > 0 ? (
+          <View style={{ marginBottom: 28 }}>
+            <SectionHead
+              label="Ingredients"
+              right={`${regularIngredients.length} items`}
+            />
+            {regularIngredients.map((ingredient) => {
+              const personal = ingredientPersonalization?.get(ingredient.name);
+              const isFlagged = !!personal?.concernFlags.length;
+              const canDive = !!ingredient.ingredient_id;
+
+              const rowContent = (
+                <View
+                  style={[
+                    styles.ingredientRow,
+                    isFlagged && styles.ingredientRowFlagged,
+                  ]}
+                >
                   <View
-                    key={`${item.ingredientName}-${item.concern}`}
-                    style={[
-                      styles.forYouRow,
-                      i < personalAnalysis!.concerns.length - 1 && styles.forYouRowBorder,
-                    ]}
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      marginBottom: 4,
+                    }}
                   >
-                    <View style={styles.forYouRowLeft}>
-                      <Text style={styles.forYouIngredientName}>{item.ingredientName}</Text>
-                      <Text style={styles.forYouRowLabel}>{item.label}</Text>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={styles.ingredientName}>
+                        {ingredient.name}
+                        {ingredient.concentration
+                          ? `  ${ingredient.concentration}`
+                          : ''}
+                      </Text>
                     </View>
-                    <View style={styles.concernPill}>
-                      <Text style={styles.concernPillText}>{displayConcern(item.concern)}</Text>
-                    </View>
+                    <EvidenceSpectrum strength={isFlagged ? 1 : 3} />
                   </View>
-                ))}
-              </View>
-            )}
-
-            {/* Goal alignments */}
-            {personalAnalysis!.hasGoalSupports && (
-              <View className="bg-accent-moss/5 border border-accent-moss/30 rounded-md mb-sm" style={{ overflow: 'hidden' }}>
-                <View style={styles.forYouCardHeader}>
-                  <Text style={styles.goalCardIcon}>✓</Text>
-                  <Text style={[styles.forYouCardTitle, styles.goalCardTitle]}>Supports Your Goals</Text>
-                </View>
-                {personalAnalysis!.goals.map((item, i) => (
                   <View
-                    key={`${item.ingredientName}-${item.goal}`}
-                    style={[
-                      styles.forYouRow,
-                      i < personalAnalysis!.goals.length - 1 && styles.forYouRowBorder,
-                      styles.goalRowBorder,
-                    ]}
+                    style={{
+                      flexDirection: 'row',
+                      flexWrap: 'wrap',
+                      gap: 6,
+                      marginBottom: ingredient.description ? 6 : 0,
+                    }}
                   >
-                    <View style={styles.forYouRowLeft}>
-                      <Text style={styles.forYouIngredientName}>{item.ingredientName}</Text>
-                      <Text style={styles.forYouRowLabel}>{item.label}</Text>
-                    </View>
-                    <View style={styles.goalPill}>
-                      <Text style={styles.goalPillText}>{displayGoal(item.goal)}</Text>
-                    </View>
+                    {ingredient.tag ? (
+                      <Tag
+                        tone={
+                          ingredient.tag_type === 'warning' ? 'alert' : 'default'
+                        }
+                      >
+                        {ingredient.tag}
+                      </Tag>
+                    ) : null}
+                    {isFlagged ? <Tag tone="alert">Flagged</Tag> : null}
+                    {personal?.goalSupports.length ? (
+                      <Tag tone="sage">Supports goals</Tag>
+                    ) : null}
                   </View>
-                ))}
-              </View>
-            )}
-          </Animated.View>
-        )}
+                  {ingredient.description ? (
+                    <Text style={styles.ingredientDesc}>
+                      {ingredient.description}
+                    </Text>
+                  ) : null}
+                </View>
+              );
 
-        {/* Nutrition Facts — tappable rows; navigate to ingredient deep dive when matched */}
-        {nutrients.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionDivider} />
-            <Text style={styles.sectionLabel}>Nutrition Facts</Text>
+              return canDive ? (
+                <Pressable
+                  key={ingredient.name}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push(`/ingredient/${ingredient.ingredient_id}`);
+                  }}
+                >
+                  {rowContent}
+                </Pressable>
+              ) : (
+                <View key={ingredient.name}>{rowContent}</View>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {/* ── Nutrition facts ───────────────────────────────────────────── */}
+        {nutrients.length > 0 ? (
+          <View style={{ marginBottom: 28 }}>
+            <SectionHead
+              label="Nutrition Facts"
+              right={`${nutrients.length} items`}
+            />
             <View style={styles.nutrientCard}>
               {nutrients.map((n, i) => {
                 const isLoading = tappingNutrient === n.name;
                 return (
                   <Pressable
                     key={n.name}
-                    style={[styles.nutrientRow, i < nutrients.length - 1 && styles.nutrientRowBorder]}
+                    style={[
+                      styles.nutrientRow,
+                      i < nutrients.length - 1 && styles.nutrientRowBorder,
+                    ]}
                     onPress={() => handleNutrientTap(n)}
                   >
                     <Text style={styles.nutrientName}>{n.name}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
-                      <Text style={styles.nutrientValue}>{n.concentration}</Text>
-                      {isLoading ? (
-                        <Text style={styles.nutrientChevron}>…</Text>
-                      ) : (
-                        <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={Colors.inkTertiary} strokeWidth={2.5}>
-                          <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-                        </Svg>
-                      )}
-                    </View>
+                    <Text style={styles.nutrientValue}>
+                      {isLoading ? '…' : n.concentration}
+                    </Text>
                   </Pressable>
                 );
               })}
             </View>
           </View>
-        )}
+        ) : null}
 
-        {/* Ingredient Deep-Dive */}
-        {regularIngredients.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionDivider} />
-            <Text style={styles.sectionLabel}>Ingredient Deep-Dive</Text>
-
-            {regularIngredients.map((ingredient, index) => {
-              const personal = ingredientPersonalization?.get(ingredient.name);
-              const canDive = !!ingredient.ingredient_id;
-              const cardContent = (
-                <View style={[
-                  styles.ingredientCard,
-                  !!personal?.concernFlags.length && styles.ingredientCardFlagged,
-                  !personal?.concernFlags.length && !!personal?.goalSupports.length && styles.ingredientCardGoal,
-                ]}>
-                  <View style={styles.ingredientHeader}>
-                    <Text style={styles.ingredientName}>
-                      {ingredient.name}
-                      {ingredient.concentration && ` (${ingredient.concentration})`}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
-                      {ingredient.tag && (
-                        <View style={[
-                          styles.ingredientTag,
-                          ingredient.tag_type === 'warning' && styles.ingredientTagWarning,
-                        ]}>
-                          <Text style={[
-                            styles.ingredientTagText,
-                            ingredient.tag_type === 'warning' && styles.ingredientTagTextWarning,
-                          ]}>
-                            {ingredient.tag}
-                          </Text>
-                        </View>
-                      )}
-                      {/* Chevron indicates the ingredient has a deep dive page */}
-                      {canDive && (
-                        <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={Colors.inkTertiary} strokeWidth={2}>
-                          <Path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-                        </Svg>
-                      )}
-                    </View>
-                  </View>
-
-                  {ingredient.description && (
-                    <Text style={styles.ingredientDesc}>{ingredient.description}</Text>
-                  )}
-
-                  {/* Personal badges on this specific ingredient */}
-                  {personal && (
-                    <View style={styles.personalBadgeRow}>
-                      {personal.concernFlags.map(({ concern, label }) => (
-                        <View key={concern} style={styles.personalConcernBadge}>
-                          <Text style={styles.personalConcernBadgeText}>
-                            ⚠ {displayConcern(concern)}
-                          </Text>
-                        </View>
-                      ))}
-                      {personal.goalSupports.map(({ goal, label }) => (
-                        <View key={goal} style={styles.personalGoalBadge}>
-                          <Text style={styles.personalGoalBadgeText}>
-                            ✓ {displayGoal(goal)}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              );
-              return (
-                <Animated.View key={ingredient.name} entering={FadeInUp.duration(400).delay(index * 80)}>
-                  {canDive ? (
-                    <Pressable
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        router.push(`/ingredient/${ingredient.ingredient_id}`);
-                      }}
-                    >
-                      {cardContent}
-                    </Pressable>
-                  ) : cardContent}
-                </Animated.View>
-              );
-            })}
-          </View>
-        )}
-
-        {/* Bio-Domain Impact — always shown, 6 fixed domains */}
-        <View style={styles.section}>
-          <View style={styles.sectionDivider} />
-          <Text style={styles.sectionLabel}>Bio-Domain Impact</Text>
-
-          {bioDomains.map((domain) => (
-            <View key={domain.name} style={styles.chartRow}>
-              <Text style={styles.chartLabel}>{domain.name}</Text>
-              <View style={styles.chartBarContainer}>
-                {domain.value > 0 && (
-                  <View
-                    style={[
-                      styles.chartBarFill,
-                      { width: `${domain.value}%`, backgroundColor: domain.is_negative ? Colors.accentAlert : Colors.ink },
-                    ]}
-                  />
-                )}
+        {/* ── Bio-domain impact ─────────────────────────────────────────── */}
+        {bioDomains.length > 0 ? (
+          <View style={{ marginBottom: 28 }}>
+            <SectionHead label="Bio-domain impact" />
+            {bioDomains.map((domain) => (
+              <View key={domain.name} style={{ marginBottom: 12 }}>
+                <SpectrumBar
+                  label={domain.name}
+                  position={domain.value / 100}
+                  tone={domain.is_negative ? 'alert' : 'ink'}
+                  right={domain.is_negative ? 'negative' : 'positive'}
+                />
               </View>
-              <Text style={styles.chartValue}>
-                {domain.value === 0 ? '—' : `${domain.is_negative ? '-' : '+'}${Math.round(domain.value / 10)}`}
-              </Text>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        ) : null}
+
+        {/* ── Add to stack ──────────────────────────────────────────────── */}
+        <Pressable
+          style={[
+            styles.stackBtn,
+            isInStack && styles.stackBtnActive,
+          ]}
+          onPress={handleStackToggle}
+        >
+          <Text
+            style={[
+              styles.stackBtnText,
+              isInStack && styles.stackBtnTextActive,
+            ]}
+          >
+            {isInStack ? '✓ In Your Stack' : '+ Add to Stack'}
+          </Text>
+        </Pressable>
 
         <View style={{ height: verticalScale(40) }} />
       </ScrollView>
@@ -582,362 +551,192 @@ export default function ProductDetailScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: Layout.screenPaddingHorizontal,
+    paddingHorizontal: scale(24),
     paddingBottom: verticalScale(40),
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: scale(32),
   },
   loadingText: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
     color: Colors.inkSecondary,
-    marginTop: Spacing.md,
+    marginTop: scale(12),
   },
   errorText: {
-    fontFamily: Fonts.sans,
+    fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.bodyLarge,
-    color: Colors.accentAlert,
-    marginBottom: Spacing.lg,
+    color: Colors.alert,
+    marginBottom: scale(20),
+    textAlign: 'center',
   },
-  backButton: {
+  fallbackBackBtn: {
     backgroundColor: Colors.ink,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: scale(24),
+    paddingVertical: scale(12),
     borderRadius: Radius.pill,
   },
-  backButtonText: {
+  fallbackBackBtnText: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.body,
-    color: Colors.bone,
+    color: Colors.surface,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   backBtn: {
-    marginBottom: Spacing.lg,
+    marginBottom: scale(24),
   },
   backBtnText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: Colors.ink,
-  },
-  aiBadgeIcon: {
-    fontSize: FontSizes.title,
-    color: Colors.accentAlert,
-  },
-  aiBadgeContent: {
-    flex: 1,
-  },
-  aiBadgeLabel: {
     fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: Colors.accentAlert,
-    marginBottom: 4,
-  },
-  aiBadgeText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.inkSecondary,
-    lineHeight: FontSizes.body * 1.4,
-  },
-  header: {
-    marginBottom: Spacing.lg,
-  },
-  reportLabel: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.sm,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 1,
     color: Colors.inkSecondary,
-    marginBottom: Spacing.sm,
   },
-  productName: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.hero,
-    lineHeight: FontSizes.hero * 1.1,
-    color: Colors.ink,
-    marginBottom: 4,
+
+  // Header
+  headerBlock: {
+    paddingBottom: 20,
   },
-  brandName: {
+  metaText: {
     fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
+    fontSize: 12,
     color: Colors.inkSecondary,
-    marginBottom: Spacing.md,
   },
   tagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.sm,
+    gap: 6,
   },
-  tag: {
-    paddingVertical: scale(2),
-    paddingHorizontal: scale(8),
+
+  // Verdict card
+  verdictCard: {
+    backgroundColor: Colors.surfaceCard,
     borderWidth: 1,
     borderColor: Colors.borderHairline,
-    borderRadius: Radius.pill,
+    borderRadius: Radius.lg,
+    padding: 24,
+    marginBottom: 28,
   },
-  tagText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.xs,
+  verdictText: {
+    fontFamily: Fonts.serifItalic,
+    fontSize: 20,
+    lineHeight: 26,
+    marginBottom: 14,
     color: Colors.ink,
   },
-  allergenAlert: {
-    backgroundColor: Colors.alertBg,
-    borderWidth: 1,
-    borderColor: Colors.alertBorder,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
+  statRow: {
     flexDirection: 'row',
-    gap: Spacing.md,
-    marginBottom: Spacing.xl,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderHairline,
+    alignItems: 'center',
   },
-  allergenIcon: {
-    fontSize: FontSizes.title,
-    color: Colors.accentAlert,
+  statDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: Colors.borderHairline,
   },
-  allergenContent: {
-    flex: 1,
+  statValue: {
+    fontFamily: Fonts.serifItalic,
+    fontSize: 14,
+    color: Colors.ink,
+    textTransform: 'capitalize',
+  },
+
+  // Allergen
+  allergenCard: {
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.alert,
+    paddingLeft: 14,
+    paddingVertical: 10,
+    marginBottom: 24,
   },
   allergenLabel: {
     fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.sm,
+    fontSize: 10,
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: Colors.accentAlert,
+    letterSpacing: 1.4,
+    color: Colors.alert,
     marginBottom: 4,
   },
   allergenText: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
-    color: Colors.alertText,
+    color: Colors.ink,
     lineHeight: FontSizes.body * 1.5,
   },
 
-  // ── For You section ─────────────────────────────────────────────────────────
-  forYouSection: {
-    marginBottom: Spacing.lg,
+  // Personal
+  personalCard: {
+    borderRadius: Radius.md,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
   },
-  forYouHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
+  personalCardAlert: {
+    backgroundColor: 'rgba(196,101,74,0.05)',
+    borderColor: 'rgba(196,101,74,0.2)',
   },
-  forYouBadge: {
-    paddingVertical: scale(2),
-    paddingHorizontal: scale(8),
-    backgroundColor: Colors.ink,
-    borderRadius: Radius.pill,
+  personalCardGoal: {
+    backgroundColor: 'rgba(123,174,142,0.05)',
+    borderColor: 'rgba(123,174,142,0.25)',
   },
-  forYouBadgeText: {
+  personalCardTitle: {
     fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    color: Colors.bone,
+    fontSize: 10,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: 1.2,
+    marginBottom: 8,
   },
-  forYouCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingHorizontal: scale(14),
-    paddingVertical: scale(10),
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.alertBorder,
+  personalRow: {
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderHairline,
   },
-  forYouCardIcon: {
-    fontSize: FontSizes.body,
-    color: Colors.accentAlert,
-  },
-  goalCardIcon: {
-    fontSize: FontSizes.body,
-    color: Colors.accentMoss,
-  },
-  forYouCardTitle: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: Colors.accentAlert,
-  },
-  goalCardTitle: {
-    color: Colors.accentMoss,
-  },
-  forYouRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: scale(14),
-    paddingVertical: scale(10),
-    gap: scale(10),
-  },
-  forYouRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.alertBorder,
-  },
-  goalRowBorder: {
-    borderBottomColor: 'rgba(92, 110, 92, 0.15)',
-  },
-  forYouRowLeft: {
-    flex: 1,
-    gap: 2,
-  },
-  forYouIngredientName: {
+  personalIngredient: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.body,
     color: Colors.ink,
   },
-  forYouRowLabel: {
+  personalLabel: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.caption,
     color: Colors.inkSecondary,
-    lineHeight: FontSizes.caption * 1.4,
-  },
-  concernPill: {
-    paddingVertical: scale(3),
-    paddingHorizontal: scale(8),
-    backgroundColor: 'rgba(163, 78, 78, 0.15)',
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(163, 78, 78, 0.3)',
-    flexShrink: 0,
-  },
-  concernPillText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    color: Colors.accentAlert,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  goalPill: {
-    paddingVertical: scale(3),
-    paddingHorizontal: scale(8),
-    backgroundColor: 'rgba(92, 110, 92, 0.15)',
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(92, 110, 92, 0.3)',
-    flexShrink: 0,
-  },
-  goalPillText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    color: Colors.accentMoss,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    marginTop: 2,
   },
 
-  // ── Sections ────────────────────────────────────────────────────────────────
-  section: {
-    marginBottom: Spacing.lg,
+  // Ingredients
+  ingredientRow: {
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderHairline,
   },
-  sectionDivider: {
-    height: 1,
-    backgroundColor: Colors.borderStrong,
-    marginBottom: Spacing.md,
-  },
-  sectionLabel: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: Colors.inkSecondary,
-    marginBottom: Spacing.md,
-  },
-
-  // ── Ingredient cards ────────────────────────────────────────────────────────
-  ingredientCard: {
-    backgroundColor: 'rgba(28, 28, 28, 0.03)',
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  ingredientCardFlagged: {
-    backgroundColor: 'rgba(163, 78, 78, 0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(163, 78, 78, 0.18)',
-  },
-  ingredientCardGoal: {
-    backgroundColor: 'rgba(92, 110, 92, 0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(92, 110, 92, 0.18)',
-  },
-  ingredientHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 6,
+  ingredientRowFlagged: {
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.alert,
+    paddingLeft: 14,
+    marginLeft: -14,
   },
   ingredientName: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.bodyLarge,
+    fontFamily: Fonts.serif,
+    fontSize: 19,
     color: Colors.ink,
-    flex: 1,
-  },
-  ingredientTag: {
-    paddingVertical: scale(2),
-    paddingHorizontal: scale(8),
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderRadius: Radius.pill,
-  },
-  ingredientTagWarning: {
-    borderColor: Colors.accentAlert,
-    backgroundColor: 'rgba(163, 75, 75, 0.05)',
-  },
-  ingredientTagText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.xs,
-    color: Colors.ink,
-  },
-  ingredientTagTextWarning: {
-    color: Colors.accentAlert,
+    lineHeight: 24,
   },
   ingredientDesc: {
     fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
+    fontSize: 13,
     color: Colors.inkSecondary,
-    lineHeight: FontSizes.body * 1.5,
-  },
-  personalBadgeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: scale(6),
-    marginTop: Spacing.sm,
-  },
-  personalConcernBadge: {
-    paddingVertical: scale(3),
-    paddingHorizontal: scale(8),
-    backgroundColor: 'rgba(163, 78, 78, 0.12)',
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(163, 78, 78, 0.25)',
-  },
-  personalConcernBadgeText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    color: Colors.accentAlert,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  personalGoalBadge: {
-    paddingVertical: scale(3),
-    paddingHorizontal: scale(8),
-    backgroundColor: 'rgba(92, 110, 92, 0.12)',
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(92, 110, 92, 0.25)',
-  },
-  personalGoalBadgeText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    color: Colors.accentMoss,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    lineHeight: 18,
   },
 
-  // ── Nutrition Facts ──────────────────────────────────────────────────────────
+  // Nutrients
   nutrientCard: {
-    backgroundColor: Colors.boneCard,
+    backgroundColor: Colors.surfaceCard,
     borderWidth: 1,
     borderColor: Colors.borderHairline,
     borderRadius: Radius.md,
@@ -947,7 +746,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: scale(16),
     paddingVertical: scale(10),
   },
   nutrientRowBorder: {
@@ -958,53 +757,37 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
     color: Colors.ink,
+    flex: 1,
   },
   nutrientValue: {
-    fontFamily: Fonts.mono,
+    fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
     color: Colors.inkSecondary,
-    flexShrink: 1,
-    textAlign: 'right',
-    marginLeft: Spacing.sm,
-  },
-  nutrientChevron: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: Colors.inkTertiary,
+    marginLeft: scale(8),
   },
 
-  // ── Bio-domain bars ─────────────────────────────────────────────────────────
-  chartRow: {
-    flexDirection: 'row',
+  // Stack button
+  stackBtn: {
+    backgroundColor: Colors.ink,
+    borderRadius: Radius.pill,
+    paddingVertical: scale(14),
     alignItems: 'center',
-    gap: Spacing.md,
-    marginBottom: Spacing.md,
+    justifyContent: 'center',
+    marginBottom: scale(12),
   },
-  chartLabel: {
-    width: scale(100),
+  stackBtnActive: {
+    backgroundColor: Colors.surfaceCard,
+    borderWidth: 1,
+    borderColor: Colors.ink,
+  },
+  stackBtnText: {
     fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.caption,
+    fontSize: FontSizes.body,
+    color: Colors.surface,
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    letterSpacing: 1,
+  },
+  stackBtnTextActive: {
     color: Colors.ink,
   },
-  chartBarContainer: {
-    flex: 1,
-    height: scale(24),
-    backgroundColor: 'rgba(28, 28, 28, 0.05)',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  chartBarFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  chartValue: {
-    width: scale(30),
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.title,
-    color: Colors.ink,
-    textAlign: 'right',
-  },
-
 });

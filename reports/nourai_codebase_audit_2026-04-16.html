@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NourAI Codebase Audit - 2026-04-16</title>
+  <style>
+    :root {
+      --bg: #f4f0e8;
+      --paper: #fffdf8;
+      --ink: #1d1a16;
+      --muted: #635c54;
+      --line: #d9d0c4;
+      --accent: #8c6a3f;
+      --good: #335c46;
+      --warn: #9a5a2d;
+      --bad: #9b3d3d;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      line-height: 1.45;
+    }
+
+    .page {
+      width: 900px;
+      margin: 24px auto;
+      background: var(--paper);
+      padding: 44px 56px 56px;
+      border: 1px solid var(--line);
+    }
+
+    h1, h2, h3 { margin: 0 0 12px; }
+    h1 {
+      font-size: 32px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+    h2 {
+      margin-top: 34px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+      font-size: 18px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    h3 {
+      margin-top: 18px;
+      font-size: 16px;
+    }
+    p { margin: 0 0 12px; }
+    ul {
+      margin: 8px 0 14px 20px;
+      padding: 0;
+    }
+    li { margin: 0 0 6px; }
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 22px;
+    }
+    .lead {
+      font-size: 15px;
+      color: var(--ink);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 18px 0 8px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      padding: 14px 16px;
+      background: #fffaf1;
+    }
+    .card h3 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 18px;
+      font-size: 13px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #f7f1e7;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border: 1px solid var(--line);
+      margin-right: 6px;
+      margin-bottom: 4px;
+    }
+    .good { color: var(--good); border-color: rgba(51, 92, 70, 0.25); }
+    .warn { color: var(--warn); border-color: rgba(154, 90, 45, 0.25); }
+    .bad { color: var(--bad); border-color: rgba(155, 61, 61, 0.25); }
+    code {
+      font-family: Menlo, Monaco, Consolas, monospace;
+      font-size: 0.92em;
+      background: #f1ece3;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+    .small { font-size: 12px; color: var(--muted); }
+    .footer {
+      margin-top: 28px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    @media print {
+      body { background: #fff; }
+      .page {
+        width: auto;
+        margin: 0;
+        border: 0;
+        padding: 20px 28px 28px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>NourAI Codebase Audit</h1>
+    <div class="meta">Generated on 2026-04-16 from the current workspace code only. README/spec/docs files were intentionally excluded from the analysis.</div>
+
+    <p class="lead">
+      This repository already contains a meaningful product, not a stub. The implementation spans an Expo/React Native client, a FastAPI backend, a PostgreSQL/SQLAlchemy data layer, external product and food ingestion, a PubMed-backed ingredient research pipeline, and several user-facing intelligence surfaces such as ingredient deep dives, domain analysis, scan history, stack chat, and meal analysis.
+    </p>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Repo Shape</h3>
+        <p><code>nourai/</code>: Expo Router mobile app</p>
+        <p><code>backend-nourai/</code>: FastAPI API, models, migrations, scripts</p>
+        <p><code>backend-nourai/scripts/</code>: ingestion, research, enrichment, backfills</p>
+      </div>
+      <div class="card">
+        <h3>Audit Outcome</h3>
+        <p><span class="pill good">implemented</span> Core scanning, search, product detail, ingredient intelligence, domain intelligence, stack/history, onboarding, auth, subscriptions backend, and data pipeline</p>
+        <p><span class="pill warn">partial</span> Stack persistence on mobile, subscription UX wiring, account management, some route coverage</p>
+      </div>
+    </div>
+
+    <h2>Executive Summary</h2>
+    <ul>
+      <li>The backend is the strongest part of the system. It has clear modules, schema evolution through Alembic, typed Pydantic contracts, Supabase-authenticated user profiles, and real service logic for products, personalization, USDA foods, stack logs, subscriptions, domain analysis, and AI meal/chat features.</li>
+      <li>The mobile app has a broad surface area and polished UI work, but several high-value flows still depend on local in-memory state rather than the backend. That creates gaps between what the API can do and what the app persists.</li>
+      <li>The ingredient intelligence architecture is more advanced than a typical MVP. Product ingestion links raw product ingredients to canonical ingredients, the research agent synthesizes PubMed studies into structured evidence, and product/domain scoring uses those stored signals rather than live LLM calls.</li>
+      <li>The biggest fixes are contract mismatches: guest scan auth, stack persistence mismatches, missing settings routes, subscription model drift, and biodomain naming drift on the product detail screen.</li>
+    </ul>
+
+    <h2>Implemented Features</h2>
+    <h3>Mobile App</h3>
+    <ul>
+      <li>Authentication with Supabase email/password and Sign in with Apple, plus guest continuation.</li>
+      <li>10-step onboarding that captures biological sex, age range, pregnancy/breastfeeding, sleep, activity, diet, environment, product categories, focus areas, concerns, and goals.</li>
+      <li>Home screen with daily composite score, returning-user log summary, and scan CTA.</li>
+      <li>Product discovery/search by category, plus USDA food search merged into product search results.</li>
+      <li>Barcode scanning flow, meal photo analysis, and free-text meal analysis.</li>
+      <li>Product detail page with grade, bio-domain bars, ingredient list, nutrient deep-linking, personalization overlay, allergen callout, and add/remove stack actions.</li>
+      <li>Ingredient deep dive page with evidence summary, mechanism section, dose/safety, biodomain scoring, and found-in products.</li>
+      <li>Stack screen with radar chart, goal alignment, overlap detection, domain drill-down, AI chat modal, and meal log sheet.</li>
+      <li>History screen with grouped timeline and simple trend analytics.</li>
+      <li>Profile hub, health-profile summary, and settings pages for account, permissions, notifications, and subscription.</li>
+    </ul>
+
+    <h3>Backend API</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Area</th>
+          <th>Implemented Endpoints</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Products</td>
+          <td><code>GET /products</code>, <code>/search</code>, <code>/{id}</code>, <code>/{id}/personalize</code>, <code>/barcode/{barcode}</code></td>
+          <td>Supports local DB access plus OpenFoodFacts fetch-on-miss.</td>
+        </tr>
+        <tr>
+          <td>Ingredients</td>
+          <td><code>GET /ingredients/search</code>, <code>GET /ingredients/{id}</code></td>
+          <td>Deep dive includes evidence, biodomain scores, and containing products.</td>
+        </tr>
+        <tr>
+          <td>Domains</td>
+          <td><code>GET /domains/{slug}/analyze</code></td>
+          <td>Aggregates stack ingredients, evidence highlight, gaps, and goal coverage.</td>
+        </tr>
+        <tr>
+          <td>Users</td>
+          <td><code>GET/PUT /users/me</code>, <code>POST /users/me/onboarding</code>, history endpoints, subscription endpoint</td>
+          <td>User profile doubles as personalization profile store.</td>
+        </tr>
+        <tr>
+          <td>Stack</td>
+          <td><code>GET/POST/DELETE /users/me/stack</code></td>
+          <td>Daily user stack entries are stored separately from products.</td>
+        </tr>
+        <tr>
+          <td>Foods</td>
+          <td><code>GET /foods/search</code>, <code>GET /foods/{fdc_id}</code></td>
+          <td>USDA whole-food detail includes nutrient-to-ingredient linking and biodomain scoring.</td>
+        </tr>
+        <tr>
+          <td>Meals</td>
+          <td><code>POST /meals/analyze</code></td>
+          <td>Claude vision/text structured meal recognition.</td>
+        </tr>
+        <tr>
+          <td>Chat</td>
+          <td><code>POST /chat/message</code></td>
+          <td>Claude-backed assistant grounded in stack context.</td>
+        </tr>
+        <tr>
+          <td>Webhooks</td>
+          <td><code>POST /webhooks/revenuecat</code></td>
+          <td>Signature verification and subscription state updates.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Data and Research Pipeline</h3>
+    <ul>
+      <li>Canonical ingredient model with synonyms, safety fields, evidence status, belief-vs-reality summaries, and precomputed domain effects.</li>
+      <li>Structured evidence records per ingredient/study with tags for user concerns and goals.</li>
+      <li>Per-ingredient biodomain score table with magnitude, direction, confidence, and dose-response metadata.</li>
+      <li>Research agent that searches PubMed, synthesizes studies with Claude, writes evidence rows, and computes biodomain impacts.</li>
+      <li>OpenFoodFacts ingestion, USDA nutrition fallback, unmatched ingredient logging, and multiple seeding/backfill utilities.</li>
+    </ul>
+
+    <h2>Architecture</h2>
+    <h3>Frontend Runtime Architecture</h3>
+    <ul>
+      <li><strong>Navigation:</strong> Expo Router with a root stack and tab group.</li>
+      <li><strong>Auth layer:</strong> Supabase session restoration in <code>context/auth-context.tsx</code>. The auth context also hydrates and syncs onboarding profile data to the backend.</li>
+      <li><strong>App state:</strong> separate local <code>AppStateProvider</code> holding stack and meals in memory. This is fast for UI composition, but it is not the same as the persisted backend stack.</li>
+      <li><strong>Networking:</strong> a central <code>services/api.ts</code> client auto-injects the Supabase bearer token when present.</li>
+      <li><strong>Computation split:</strong> product/domain intelligence is mixed. Some screens use backend evidence-backed responses, while others compute local approximations from category/grade heuristics.</li>
+    </ul>
+
+    <h3>Backend Runtime Architecture</h3>
+    <ul>
+      <li><strong>Framework:</strong> FastAPI application in <code>app/main.py</code> with CORS, typed dependency injection, and modular routers.</li>
+      <li><strong>Auth:</strong> Supabase JWT verification via shared secret, with automatic user-profile creation on first authenticated request.</li>
+      <li><strong>Persistence:</strong> async SQLAlchemy engine/session and Alembic migrations.</li>
+      <li><strong>Layering:</strong> API routers call service classes, which rely on repositories for storage access. The separation is reasonably clean for an early-stage app.</li>
+      <li><strong>Scoring and personalization:</strong> product/domain scoring reads precomputed evidence tables rather than calling LLMs synchronously during request handling.</li>
+    </ul>
+
+    <h3>Data Model Pattern</h3>
+    <ul>
+      <li><strong>Product-centric:</strong> products and product ingredients hold the scan/search experience together.</li>
+      <li><strong>Canonical ingredient-centric:</strong> ingredient intelligence is normalized into reusable ingredient records.</li>
+      <li><strong>User-centric:</strong> user profiles store onboarding tags, stack entries, history, and subscription status.</li>
+      <li><strong>Pipeline-centric:</strong> research and ingestion scripts continuously enrich the structured database rather than leaving intelligence trapped in prompts.</li>
+    </ul>
+
+    <h2>What Should Be Fixed First</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Priority</th>
+          <th>Issue</th>
+          <th>Evidence</th>
+          <th>Impact</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>P0</td>
+          <td>Guest barcode scan is effectively blocked for products fetched through <code>/products/barcode/{barcode}</code>.</td>
+          <td>The mobile scan flow calls <code>api.getProductByBarcode</code> without requiring auth, while the backend barcode route depends on <code>CurrentUser</code>.</td>
+          <td>Guests can enter the app and open the scanner, but a fresh barcode lookup can fail with <code>401</code>. This undermines the core acquisition funnel.</td>
+        </tr>
+        <tr>
+          <td>P0</td>
+          <td>Product detail biodomain bars are using labels that do not match backend domain names.</td>
+          <td>The product page expects labels like <code>Dermal</code> and <code>Metabolic</code>, while backend biodomain names are things like <code>Skin &amp; Appearance</code> and <code>Energy &amp; Metabolism</code>.</td>
+          <td>Evidence-based biodomain values can silently collapse to zero on the product screen even when the backend computed them correctly.</td>
+        </tr>
+        <tr>
+          <td>P1</td>
+          <td>Stack persistence is split between local memory and the backend, and the contracts do not align.</td>
+          <td>The app stores stack items in local React state keyed by product id, but the backend stack API is keyed by stack-entry id and returns stack-entry objects, not product cards.</td>
+          <td>Signed-in users do not get a coherent cross-device or cross-session stack, and future backend wiring will be harder because current client assumptions are wrong.</td>
+        </tr>
+        <tr>
+          <td>P1</td>
+          <td>Profile hub links to missing routes.</td>
+          <td><code>/settings/privacy</code> and <code>/settings/about</code> are referenced, but those screens do not exist in <code>nourai/app/settings/</code>.</td>
+          <td>Tapping those menu items will route to nonexistent screens.</td>
+        </tr>
+        <tr>
+          <td>P1</td>
+          <td>Subscription types/statuses drift between mobile and backend, and one mobile endpoint is missing server support.</td>
+          <td>The mobile types expect <code>premium_monthly</code>, <code>premium_annual</code>, <code>cancelled</code>, and <code>billing_issue</code>, while the backend uses <code>premium</code>, <code>canceled</code>, and <code>grace_period</code>. The mobile client also defines <code>/users/me/subscription/verify</code>, which the backend does not expose.</td>
+          <td>Premium UI logic and any future RevenueCat verification work can break or misreport status.</td>
+        </tr>
+        <tr>
+          <td>P2</td>
+          <td>Account and subscription settings are still mock flows.</td>
+          <td>The account screen simulates save/delete, and the subscription screen simulates purchase/restore instead of calling a real billing layer.</td>
+          <td>The app presents operational settings that are not truly functional.</td>
+        </tr>
+        <tr>
+          <td>P2</td>
+          <td>Onboarding exposes fewer goals than the rest of the system supports.</td>
+          <td>The backend/domain/chat layers know about <code>reduce_stress</code>, <code>better_sleep</code>, and <code>recovery</code>, but the onboarding goal picker omits them.</td>
+          <td>Users cannot fully drive personalization despite backend support.</td>
+        </tr>
+        <tr>
+          <td>P2</td>
+          <td>Backend tests are partially red because the suite parametrizes <code>anyio</code> for trio, but trio is not installed.</td>
+          <td><code>pytest</code> produced 17 passing tests and 3 errors, all from missing <code>trio</code> during the <code>@pytest.mark.anyio</code> food tests.</td>
+          <td>CI reliability is weaker than it looks, and a basic dependency/config issue is masking test health.</td>
+        </tr>
+        <tr>
+          <td>P3</td>
+          <td>The dev mobile API base URL is hardcoded to a single LAN address and port.</td>
+          <td>The client defaults to <code>http://192.168.0.163:8081/api/v1</code>, while the backend Makefile advertises local startup on port <code>8001</code>.</td>
+          <td>Developer onboarding and environment portability are brittle.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Implementation References Used For The Findings</h2>
+    <ul>
+      <li>Guest barcode scan mismatch: <code>nourai/app/(tabs)/scan.tsx:102-117</code>, <code>backend-nourai/app/api/v1/products.py:158-175</code></li>
+      <li>Product biodomain label mismatch: <code>nourai/app/product/[id].tsx:242-254</code>, <code>backend-nourai/app/core/biodomains.py:28-98</code>, <code>backend-nourai/app/schemas/product.py:319-325</code></li>
+      <li>Stack mismatch and local-only persistence: <code>nourai/context/app-state.tsx:50-77</code>, <code>nourai/app/product/[id].tsx:186-205</code>, <code>nourai/app/(tabs)/stack.tsx:477-483</code>, <code>nourai/services/api.ts:583-611</code>, <code>backend-nourai/app/api/v1/stack.py:15-70</code></li>
+      <li>Missing settings routes: <code>nourai/app/profile-hub.tsx:261-266</code>, directory contents under <code>nourai/app/settings/</code></li>
+      <li>Subscription drift: <code>nourai/services/api.ts:359-368</code>, <code>nourai/services/api.ts:528-545</code>, <code>nourai/app/profile-hub.tsx:317-325</code>, <code>backend-nourai/app/models/subscription.py:17-30</code></li>
+      <li>Mock account/subscription flows: <code>nourai/app/settings/account.tsx:38-55</code>, <code>nourai/app/settings/account.tsx:76-99</code>, <code>nourai/app/settings/subscription.tsx:117-170</code></li>
+      <li>Onboarding goal omissions: <code>nourai/app/onboarding.tsx:162-174</code>, plus goal usage in domain/chat/backend code</li>
+      <li>Test issue: <code>backend-nourai/tests/api/test_foods.py:46-78</code>, <code>backend-nourai/tests/conftest.py:7-14</code></li>
+      <li>Hardcoded dev API URL vs backend startup: <code>nourai/services/api.ts:5-7</code>, <code>backend-nourai/Makefile:65-90</code></li>
+    </ul>
+
+    <h2>Recommended Next Moves</h2>
+    <ol>
+      <li>Unify domain naming and stack contracts before adding more features. Those are foundational inconsistencies.</li>
+      <li>Make scanning and stack behavior work equally for guests and signed-in users, with a clear persistence strategy.</li>
+      <li>Finish or hide mock settings flows so the UI only advertises capabilities that are operational.</li>
+      <li>Stabilize test execution by pinning the async backend strategy or adding the missing trio dependency.</li>
+      <li>Replace the hardcoded mobile API fallback with environment-driven configuration.</li>
+    </ol>
+
+    <div class="footer">
+      Validation note: the backend test suite was executed during this audit. Result: 17 tests passed, 3 errored due to missing trio support, not due to assertion failures in business logic.
+    </div>
+  </div>
+</body>
+</html>

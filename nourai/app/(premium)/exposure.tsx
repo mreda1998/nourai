@@ -1,3 +1,4 @@
+import React from 'react';
 import {
   Pressable,
   ScrollView,
@@ -9,62 +10,58 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import Svg, { Path, Rect } from 'react-native-svg';
+import { SectionHead } from '@/components/elory';
 import { Colors, Fonts, FontSizes, scale, Radius } from '@/constants/theme';
-import { PremiumLock, SectionHead } from '@/components/elory';
 
-const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S', 'M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
+// 14 days of stacked bar data: [alert, sand, muted]
 const CHART_DATA = [
-  [0.3, 0.4, 0.2],
-  [0.2, 0.5, 0.1],
-  [0.4, 0.3, 0.15],
-  [0.35, 0.45, 0.2],
-  [0.25, 0.5, 0.1],
-  [0.3, 0.4, 0.2],
-  [0.4, 0.35, 0.15],
-  [0.2, 0.5, 0.2],
-  [0.35, 0.4, 0.1],
-  [0.3, 0.45, 0.15],
-  [0.4, 0.35, 0.2],
-  [0.25, 0.5, 0.1],
-  [0.35, 0.4, 0.15],
-  [0.3, 0.45, 0.2],
+  [0.4, 0.55, 0.45],
+  [0.2, 0.55, 0.45],
+  [0.4, 0.30, 0.45],
+  [0.35, 0.45, 0.20],
+  [0.25, 0.50, 0.10],
+  [0.30, 0.40, 0.20],
+  [0.40, 0.35, 0.15],
+  [0.20, 0.50, 0.20],
+  [0.35, 0.40, 0.10],
+  [0.30, 0.45, 0.15],
+  [0.40, 0.35, 0.20],
+  [0.25, 0.50, 0.10],
+  [0.35, 0.40, 0.15],
+  [0.30, 0.45, 0.20],
 ];
 
 const CATEGORIES = [
-  { name: 'Synthetic preservatives', delta: '+12%', load: 0.72, high: true },
-  { name: 'Artificial sweeteners', delta: '+8%', load: 0.61, high: true },
-  { name: 'Processed seed oils', delta: '+5%', load: 0.54, high: false },
-  { name: 'Antioxidant vitamins', delta: '-6%', load: 0.38, high: false },
-  { name: 'Anti-inflammatory', delta: '-9%', load: 0.28, high: false },
+  { name: 'Microplastics',         load: 0.72, delta: '+8%',   items: 3, alert: true  },
+  { name: 'Synthetic fragrance',   load: 0.45, delta: '-12%',  items: 2, alert: false },
+  { name: 'Added caffeine',        load: 0.61, delta: '+4%',   items: 4, alert: true  },
+  { name: 'Seed oils',             load: 0.38, delta: '-5%',   items: 6, alert: false },
+  { name: 'Emulsifiers',           load: 0.52, delta: '+2%',   items: 5, alert: false },
+  { name: 'Added sugars',          load: 0.28, delta: '-18%',  items: 3, alert: false },
 ];
 
-function BackIcon() {
-  return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={Colors.darkInk} strokeWidth={2}>
-      <Path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
+const BAR_COLORS = [Colors.alert, Colors.sand, 'rgba(241,237,228,0.18)'];
 
-function BarChart() {
-  const W = 320;
-  const H = 120;
-  const padX = 8;
-  const padY = 8;
-  const barW = (W - padX * 2) / DAYS.length - 2;
-  const colors = [Colors.alert, Colors.sand, 'rgba(241,237,228,0.15)'];
+function StackedBarChart() {
+  const W = 300;
+  const H = 100;
+  const padX = 0;
+  const padY = 6;
+  const gap = 2;
+  const barW = (W - padX * 2 - gap * (CHART_DATA.length - 1)) / CHART_DATA.length;
+  const availH = H - padY * 2;
 
   return (
     <Svg width={W} height={H}>
       {CHART_DATA.map((segments, i) => {
-        let yOffset = padY;
-        const x = padX + i * ((W - padX * 2) / DAYS.length);
-        const totalH = H - padY * 2;
+        const x = padX + i * (barW + gap);
+        let stackY = H - padY;
+
         return segments.map((seg, j) => {
-          const segH = seg * totalH;
-          const y = H - padY - yOffset - segH + padY;
-          yOffset += segH;
+          const segH = Math.max(seg * availH * 0.7, 0);
+          stackY -= segH;
+          const y = stackY;
+          stackY -= 1; // small gap between layers
           return (
             <Rect
               key={`${i}-${j}`}
@@ -72,8 +69,9 @@ function BarChart() {
               y={y}
               width={barW}
               height={segH}
-              fill={colors[j] ?? 'transparent'}
+              fill={BAR_COLORS[j]}
               rx={1}
+              opacity={j === 2 ? 0.4 : j === 0 ? 0.55 : 1}
             />
           );
         });
@@ -88,188 +86,232 @@ export default function ExposureScreen() {
 
   return (
     <View style={styles.root}>
-      <View style={[styles.header, { paddingTop: insets.top + scale(8) }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
-          <BackIcon />
-        </Pressable>
-        <Text style={styles.headerEyebrow}>Atelier</Text>
-        <View style={{ width: scale(36) }} />
-      </View>
-
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + scale(48) }]}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + scale(48) }]}
       >
-        <Animated.View entering={FadeInUp.duration(300)}>
-          <Text style={styles.title}>Exposure ledger.</Text>
-          <Text style={styles.subtitle}>14-day compound exposure across your full diet + stack</Text>
-        </Animated.View>
-
-        {/* Bar chart */}
-        <Animated.View entering={FadeInUp.delay(80).duration(300)} style={styles.chartWrap}>
-          <BarChart />
-          <View style={styles.dayLabels}>
-            {DAYS.map((d, i) => (
-              <Text key={i} style={styles.dayLabel}>{d}</Text>
-            ))}
-          </View>
-          <View style={styles.legend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: Colors.alert }]} />
-              <Text style={styles.legendText}>High load</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: Colors.sand }]} />
-              <Text style={styles.legendText}>Moderate</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: 'rgba(241,237,228,0.25)' }]} />
-              <Text style={styles.legendText}>Low</Text>
+        {/* Editorial header */}
+        <View style={{ paddingTop: insets.top + scale(12), paddingHorizontal: scale(24), paddingBottom: scale(20) }}>
+          <View style={styles.headerRow}>
+            <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="rgba(241,237,228,0.6)" strokeWidth={2}>
+                <Path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+              <Text style={styles.backText}>Back</Text>
+            </Pressable>
+            <View style={styles.atelierBadge}>
+              <Text style={styles.atelierBadgeText}>◆ Atelier</Text>
             </View>
           </View>
-        </Animated.View>
+          <Text style={styles.eyebrow}>Premium · Cumulative Exposure</Text>
+          <Text style={styles.title}>Exposure{'\n'}<Text style={{ fontStyle: 'italic' }}>ledger.</Text></Text>
+        </View>
 
-        {/* Category breakdown */}
-        <SectionHead label="By category" dark />
-        {CATEGORIES.map((cat, i) => (
-          <Animated.View key={i} entering={FadeInUp.delay(i * 50).duration(280)} style={styles.catRow}>
-            <View style={styles.catInfo}>
-              <Text style={styles.catName}>{cat.name}</Text>
-              <Text style={[styles.catDelta, { color: cat.delta.startsWith('+') ? Colors.alert : Colors.sage }]}>
-                {cat.delta}
-              </Text>
+        <View style={{ paddingHorizontal: scale(24) }}>
+          {/* Subtitle */}
+          <Animated.View entering={FadeInUp.duration(300)}>
+            <Text style={styles.subtitle}>
+              Today's load is about{' '}
+              <Text style={{ color: Colors.sand }}>consistent</Text>
+              {' '}with your 14-day average.
+            </Text>
+            <View style={styles.subtitleDivider} />
+          </Animated.View>
+
+          {/* Chart */}
+          <Animated.View entering={FadeInUp.delay(80).duration(300)}>
+            <Text style={styles.sectionEyebrow}>Last 14 days</Text>
+            <View style={styles.chartCard}>
+              <StackedBarChart />
+              <View style={styles.chartBorder} />
             </View>
-            <View style={styles.catBarTrack}>
-              <View
-                style={[
-                  styles.catBarFill,
-                  {
-                    width: `${Math.round(cat.load * 100)}%`,
-                    backgroundColor: cat.high ? Colors.alert : Colors.sand,
-                  },
-                ]}
-              />
+
+            {/* Chart legend */}
+            <View style={styles.chartLegend}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: Colors.alert, opacity: 0.55 }]} />
+                <Text style={styles.legendText}>High load</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: Colors.sand }]} />
+                <Text style={styles.legendText}>Moderate</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: 'rgba(241,237,228,0.3)' }]} />
+                <Text style={styles.legendText}>Low</Text>
+              </View>
             </View>
           </Animated.View>
-        ))}
-      </ScrollView>
 
-      <PremiumLock featureName="Exposure Ledger" />
+          {/* Category breakdown */}
+          <SectionHead label="By category · today" dark />
+
+          {CATEGORIES.map((cat, i) => (
+            <Animated.View
+              key={i}
+              entering={FadeInUp.delay(i * 50 + 180).duration(280)}
+              style={[styles.catRow, i < CATEGORIES.length - 1 && styles.catRowBorder]}
+            >
+              <View style={styles.catHeader}>
+                <Text style={styles.catName}>{cat.name}</Text>
+                <View style={styles.catRight}>
+                  <Text style={styles.catItems}>{cat.items} sources</Text>
+                  <Text style={[styles.catDelta, {
+                    color: cat.delta.startsWith('+') ? Colors.alert : Colors.sage,
+                  }]}>
+                    {cat.delta}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.loadTrack}>
+                <View
+                  style={[
+                    styles.loadFill,
+                    {
+                      width: `${Math.round(cat.load * 100)}%` as any,
+                      backgroundColor: cat.alert ? Colors.alert : Colors.sand,
+                    },
+                  ]}
+                />
+              </View>
+            </Animated.View>
+          ))}
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: Colors.darkSurface,
-  },
-  header: {
+  root: { flex: 1, backgroundColor: Colors.darkSurface },
+  scroll: {},
+
+  headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: scale(24),
-    paddingBottom: scale(8),
-  },
-  backBtn: {
-    width: scale(36),
-    height: scale(36),
     alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: scale(24),
   },
-  headerEyebrow: {
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  backText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: 'rgba(241,237,228,0.6)',
+  },
+  atelierBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(241,237,228,0.22)',
+    borderRadius: 999,
+  },
+  atelierBadgeText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: 9,
+    letterSpacing: 1.8,
+    textTransform: 'uppercase',
+    color: Colors.sand,
+  },
+  eyebrow: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: 10,
     textTransform: 'uppercase',
-    letterSpacing: 1.8,
-    color: 'rgba(241,237,228,0.4)',
-  },
-  scroll: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: scale(24),
-    paddingTop: scale(8),
+    letterSpacing: 1.4,
+    color: 'rgba(241,237,228,0.45)',
+    marginBottom: scale(10),
   },
   title: {
-    fontFamily: Fonts.serifItalic,
-    fontSize: FontSizes.heading,
+    fontFamily: Fonts.serif,
+    fontSize: scale(38),
+    lineHeight: scale(40),
     color: Colors.darkInk,
-    lineHeight: FontSizes.heading * 1.1,
-    marginBottom: scale(8),
+    letterSpacing: -0.5,
   },
+
   subtitle: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: 'rgba(241,237,228,0.55)',
+    fontFamily: Fonts.serifItalic,
+    fontSize: FontSizes.subtitle,
+    lineHeight: FontSizes.subtitle * 1.5,
+    color: 'rgba(241,237,228,0.75)',
+    paddingBottom: scale(20),
+  },
+  subtitleDivider: {
+    height: 1,
+    backgroundColor: 'rgba(241,237,228,0.12)',
     marginBottom: scale(24),
   },
-  chartWrap: {
-    backgroundColor: 'rgba(241,237,228,0.03)',
-    borderRadius: scale(12),
-    padding: scale(16),
-    marginBottom: scale(28),
-    alignItems: 'center',
-  },
-  dayLabels: {
-    flexDirection: 'row',
-    width: '100%',
-    justifyContent: 'space-between',
-    marginTop: scale(4),
-  },
-  dayLabel: {
+
+  sectionEyebrow: {
     fontFamily: Fonts.sansSemiBold,
-    fontSize: 8,
-    color: 'rgba(241,237,228,0.25)',
-    width: scale(18),
-    textAlign: 'center',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
+    color: 'rgba(241,237,228,0.45)',
+    marginBottom: scale(12),
   },
-  legend: {
+  chartCard: {
+    alignItems: 'center',
+    paddingBottom: scale(8),
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(241,237,228,0.15)',
+    marginBottom: scale(12),
+  },
+  chartBorder: {},
+  chartLegend: {
     flexDirection: 'row',
     gap: scale(16),
-    marginTop: scale(10),
+    marginBottom: scale(28),
   },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scale(5),
-  },
-  legendDot: {
-    width: scale(6),
-    height: scale(6),
-    borderRadius: scale(3),
-  },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: scale(5) },
+  legendDot: { width: scale(6), height: scale(6), borderRadius: scale(3) },
   legendText: {
     fontFamily: Fonts.sans,
     fontSize: 9,
     color: 'rgba(241,237,228,0.4)',
   },
+
   catRow: {
-    paddingVertical: scale(12),
+    paddingVertical: scale(16),
+    gap: scale(10),
+  },
+  catRowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(241,237,228,0.08)',
-    gap: scale(8),
   },
-  catInfo: {
+  catHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'baseline',
   },
   catName: {
     fontFamily: Fonts.serif,
-    fontSize: FontSizes.body,
+    fontSize: FontSizes.title,
     color: Colors.darkInk,
   },
-  catDelta: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.caption,
+  catRight: {
+    flexDirection: 'row',
+    gap: scale(10),
+    alignItems: 'baseline',
   },
-  catBarTrack: {
+  catItems: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    color: 'rgba(241,237,228,0.4)',
+    letterSpacing: 0.8,
+  },
+  catDelta: {
+    fontFamily: Fonts.serifItalic,
+    fontSize: FontSizes.title,
+  },
+  loadTrack: {
     height: 2,
     backgroundColor: 'rgba(241,237,228,0.1)',
     borderRadius: 1,
     overflow: 'hidden',
   },
-  catBarFill: {
+  loadFill: {
     height: '100%',
     borderRadius: 1,
   },
