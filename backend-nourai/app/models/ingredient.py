@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, String, Text, func
+from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -30,6 +30,7 @@ class IngredientCategory(str, Enum):
     PRESERVATIVE = "preservative"
     SWEETENER = "sweetener"
     ADDITIVE = "additive"
+    PEPTIDE = "peptide"
     OTHER = "other"
 
 
@@ -97,6 +98,15 @@ class Ingredient(Base, UUIDMixin, TimestampMixin):
     optimal_times: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     avoid_near_sleep: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     circadian_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Peptide-specific fields — null for all non-peptide ingredients
+    us_regulatory_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    wada_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    admin_routes: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    admin_route_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cycle_length_weeks: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    washout_weeks: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cycling_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Research pipeline tracking
     research_status: Mapped[str] = mapped_column(
