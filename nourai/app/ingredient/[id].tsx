@@ -97,9 +97,140 @@ function categoryLabel(cat: string): string {
     preservative:'Preservative',
     sweetener:   'Sweetener',
     additive:    'Additive',
+    peptide:     'Peptide',
     other:       'Active Ingredient',
   };
   return map[cat] ?? cat;
+}
+
+// ─── Peptide Helpers ──────────────────────────────────────────────────────────
+
+const US_STATUS_LABEL: Record<string, string> = {
+  fda_approved: 'FDA Approved',
+  compounded: 'Compounded',
+  research_chemical: 'Research Chemical',
+  unapproved_drug: 'Unapproved Drug',
+};
+
+const US_STATUS_DESCRIPTION: Record<string, string> = {
+  fda_approved: 'FDA-approved drug for human use.',
+  compounded: 'Available via compounding pharmacy with a prescription.',
+  research_chemical: 'Not approved for human use in the US. Sold legally as a research compound.',
+  unapproved_drug: 'Marketed for human use but lacks FDA approval.',
+};
+
+const WADA_STATUS_LABEL: Record<string, string> = {
+  not_prohibited: 'Not Prohibited',
+  prohibited_in_competition: 'Prohibited In-Competition',
+  prohibited_all: 'Prohibited At All Times',
+  monitored: 'Monitored Programme',
+};
+
+const ADMIN_ROUTE_LABEL: Record<string, string> = {
+  subcutaneous: 'Subcutaneous Injection',
+  intramuscular: 'Intramuscular Injection',
+  intravenous: 'Intravenous',
+  oral: 'Oral',
+  intranasal: 'Intranasal',
+  topical: 'Topical',
+};
+
+const PEPTIDE_WADA_PROHIBITED = new Set(['prohibited_in_competition', 'prohibited_all']);
+
+function PeptideRegulatorySection({
+  usStatus,
+  wadaStatus,
+}: {
+  usStatus: string | null;
+  wadaStatus: string | null;
+}) {
+  if (!usStatus && !wadaStatus) return null;
+  const wadaSafe = wadaStatus ? !PEPTIDE_WADA_PROHIBITED.has(wadaStatus) : null;
+  const wadaColor =
+    wadaSafe === true ? Colors.sage : wadaSafe === false ? Colors.alert : Colors.inkTertiary;
+
+  return (
+    <Animated.View entering={FadeInUp.duration(300)} style={styles.peptideSection}>
+      <Eyebrow style={{ marginBottom: scale(12) }}>Regulatory Status</Eyebrow>
+      <View style={styles.peptideStatusRow}>
+        {usStatus && (
+          <View style={[styles.peptideStatusCard, { flex: 1 }]}>
+            <Text style={styles.peptideStatusFlag}>🇺🇸</Text>
+            <Text style={styles.peptideStatusLabel}>
+              {US_STATUS_LABEL[usStatus] ?? usStatus}
+            </Text>
+          </View>
+        )}
+        {wadaStatus && (
+          <View style={[styles.peptideStatusCard, { flex: 1, borderColor: wadaColor }]}>
+            <Text style={styles.peptideStatusFlag}>WADA</Text>
+            <Text style={[styles.peptideStatusLabel, { color: wadaColor }]}>
+              {wadaSafe ? 'Safe ✓' : 'Prohibited ✗'}
+            </Text>
+          </View>
+        )}
+      </View>
+      {usStatus && US_STATUS_DESCRIPTION[usStatus] && (
+        <Text style={styles.peptideNote}>{US_STATUS_DESCRIPTION[usStatus]}</Text>
+      )}
+      {wadaStatus && (
+        <Text style={styles.peptideNote}>{WADA_STATUS_LABEL[wadaStatus] ?? wadaStatus}</Text>
+      )}
+    </Animated.View>
+  );
+}
+
+function PeptideAdminRoutesSection({
+  routes,
+  notes,
+}: {
+  routes: string[] | null;
+  notes: string | null;
+}) {
+  if (!routes?.length && !notes) return null;
+  return (
+    <Animated.View entering={FadeInUp.duration(300)} style={styles.peptideSection}>
+      <Eyebrow style={{ marginBottom: scale(12) }}>Administration Routes</Eyebrow>
+      {(routes ?? []).map((route) => (
+        <View key={route} style={styles.peptideRouteRow}>
+          <Text style={styles.peptideRouteLabel}>
+            {ADMIN_ROUTE_LABEL[route] ?? route}
+          </Text>
+        </View>
+      ))}
+      {notes && <Text style={styles.peptideNote}>{notes}</Text>}
+    </Animated.View>
+  );
+}
+
+function PeptideCycleSection({
+  cycleLengthWeeks,
+  washoutWeeks,
+  cyclingNotes,
+}: {
+  cycleLengthWeeks: number | null;
+  washoutWeeks: number | null;
+  cyclingNotes: string | null;
+}) {
+  if (!cycleLengthWeeks && !cyclingNotes) return null;
+  return (
+    <Animated.View entering={FadeInUp.duration(300)} style={styles.peptideSection}>
+      <Eyebrow style={{ marginBottom: scale(12) }}>Cycle Protocol</Eyebrow>
+      {cycleLengthWeeks != null && (
+        <View style={styles.peptideCycleRow}>
+          <Text style={styles.peptideCycleLabel}>Typical cycle</Text>
+          <Text style={styles.peptideCycleValue}>{cycleLengthWeeks} weeks</Text>
+        </View>
+      )}
+      {washoutWeeks != null && (
+        <View style={styles.peptideCycleRow}>
+          <Text style={styles.peptideCycleLabel}>Washout period</Text>
+          <Text style={styles.peptideCycleValue}>{washoutWeeks} weeks</Text>
+        </View>
+      )}
+      {cyclingNotes && <Text style={styles.peptideNote}>{cyclingNotes}</Text>}
+    </Animated.View>
+  );
 }
 
 const STUDY_RANK: Record<string, number> = {
@@ -879,6 +1010,25 @@ export default function IngredientDetailScreen() {
           </>
         )}
 
+        {/* ── Peptide Sections ──────────────────────────────────────────── */}
+        {ingredient.category === 'peptide' && (
+          <>
+            <PeptideRegulatorySection
+              usStatus={ingredient.us_regulatory_status ?? null}
+              wadaStatus={ingredient.wada_status ?? null}
+            />
+            <PeptideAdminRoutesSection
+              routes={ingredient.admin_routes ?? null}
+              notes={ingredient.admin_route_notes ?? null}
+            />
+            <PeptideCycleSection
+              cycleLengthWeeks={ingredient.cycle_length_weeks ?? null}
+              washoutWeeks={ingredient.washout_weeks ?? null}
+              cyclingNotes={ingredient.cycling_notes ?? null}
+            />
+          </>
+        )}
+
         {/* ── Safety ─────────────────────────────────────────────────────── */}
         {(ingredient.side_effects.length > 0 ||
           ingredient.contraindications.length > 0 ||
@@ -1516,5 +1666,71 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.sansSemiBold,
     fontSize: scale(13),
     color: Colors.surface,
+  },
+
+  // ── Peptide sections ──────────────────────────────────────────────────────
+  peptideSection: {
+    marginVertical: scale(12),
+    padding: scale(16),
+    backgroundColor: Colors.boneCard,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.lg,
+  },
+  peptideStatusRow: {
+    flexDirection: 'row' as const,
+    gap: scale(10),
+    marginBottom: scale(10),
+  },
+  peptideStatusCard: {
+    padding: scale(12),
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.md,
+    alignItems: 'center' as const,
+    gap: scale(4),
+  },
+  peptideStatusFlag: {
+    fontSize: scale(20),
+  },
+  peptideStatusLabel: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
+    color: Colors.ink,
+    textAlign: 'center' as const,
+  },
+  peptideNote: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    color: Colors.inkSecondary,
+    lineHeight: FontSizes.caption * 1.55,
+    marginTop: scale(8),
+  },
+  peptideRouteRow: {
+    paddingVertical: scale(8),
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.borderHairline,
+  },
+  peptideRouteLabel: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+  },
+  peptideCycleRow: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    paddingVertical: scale(8),
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.borderHairline,
+  },
+  peptideCycleLabel: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.inkSecondary,
+  },
+  peptideCycleValue: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
   },
 });
