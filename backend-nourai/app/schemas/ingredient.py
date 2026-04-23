@@ -1,4 +1,5 @@
 """Ingredient Pydantic schemas."""
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -24,6 +25,14 @@ class IngredientResponse(BaseModel):
     contraindications: list[str] = []
     drug_interactions: list[str] = []
     evidence_level: str | None = None
+    # Peptide-specific fields (null for non-peptide ingredients)
+    us_regulatory_status: Optional[str] = None
+    wada_status: Optional[str] = None
+    admin_routes: Optional[list[str]] = None
+    admin_route_notes: Optional[str] = None
+    cycle_length_weeks: Optional[int] = None
+    washout_weeks: Optional[int] = None
+    cycling_notes: Optional[str] = None
 
 
 class IngredientDetailResponse(BaseModel):
@@ -34,3 +43,23 @@ class IngredientDetailResponse(BaseModel):
     name: str
     status: str | None = None
     note: str | None = None
+
+
+class PeptideListItem(BaseModel):
+    """Peptide row returned by GET /api/v1/peptides browse endpoint."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    canonical_name: str
+    mechanism_summary: str | None = None
+    evidence_level: str | None = None
+    us_regulatory_status: str | None = None
+    wada_status: str | None = None
+
+
+class PeptidesResponse(BaseModel):
+    """Paginated peptide browse response."""
+
+    peptides: list[PeptideListItem]
+    total: int
