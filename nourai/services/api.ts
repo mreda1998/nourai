@@ -175,6 +175,14 @@ export interface IngredientDetail {
   }> | null;
   evidence: IngredientEvidenceRecord[];
   found_in: IngredientFoundInProduct[];
+  // Peptide-specific fields (null for non-peptide ingredients)
+  us_regulatory_status: string | null;
+  wada_status: string | null;
+  admin_routes: string[] | null;
+  admin_route_notes: string | null;
+  cycle_length_weeks: number | null;
+  washout_weeks: number | null;
+  cycling_notes: string | null;
 }
 
 export interface IngredientListItem {
@@ -188,6 +196,20 @@ export interface IngredientListItem {
 
 export interface IngredientSearchResponse {
   ingredients: IngredientListItem[];
+  total: number;
+}
+
+export interface PeptideListItem {
+  id: string;
+  canonical_name: string;
+  mechanism_summary: string | null;
+  evidence_level: string | null;
+  us_regulatory_status: string | null;
+  wada_status: string | null;
+}
+
+export interface PeptidesResponse {
+  peptides: PeptideListItem[];
   total: number;
 }
 
@@ -750,6 +772,23 @@ class APIService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Get peptides list with optional filtering.
+   * Supports search by name, US regulatory status, and WADA safety.
+   */
+  async getPeptides(params?: {
+    search?: string;
+    us_status?: string;
+    wada_safe?: boolean;
+  }): Promise<PeptidesResponse> {
+    const query = new URLSearchParams();
+    if (params?.search) query.set('search', params.search);
+    if (params?.us_status) query.set('us_status', params.us_status);
+    if (params?.wada_safe) query.set('wada_safe', 'true');
+    const qs = query.toString();
+    return this.fetch<PeptidesResponse>(`/peptides${qs ? `?${qs}` : ''}`);
   }
 
   /**

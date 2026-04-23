@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Float, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -38,6 +38,7 @@ class IngredientBioDomainScore(Base, UUIDMixin, TimestampMixin):
 
     ingredient_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
+        ForeignKey("ingredients.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
