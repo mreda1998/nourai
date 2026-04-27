@@ -1,6 +1,10 @@
 import '../global.css';
 
 import { useEffect, useCallback, useRef } from 'react';
+import { configureRevenueCat } from '@/lib/revenue-cat';
+
+// Configure RevenueCat as early as possible — before any component mounts.
+configureRevenueCat();
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
@@ -21,6 +25,7 @@ import * as SplashScreen from 'expo-splash-screen';
 
 import { AppStateProvider, useAppState } from '@/context/app-state';
 import { AuthProvider, useAuth } from '@/context/auth-context';
+import { PurchasesProvider } from '@/context/purchases-context';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/services/api';
 
@@ -147,6 +152,13 @@ function RootLayoutNav() {
       />
 
       {/* Health Profiles */}
+      <Stack.Screen
+        name="health/skin"
+        options={{
+          presentation: 'card',
+          animation: 'slide_from_right',
+        }}
+      />
       <Stack.Screen
         name="health/gut"
         options={{
@@ -292,10 +304,12 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        <AppStateProvider>
-          <StatusBar style="dark" />
-          <RootLayoutNav />
-        </AppStateProvider>
+        <PurchasesProvider>
+          <AppStateProvider>
+            <StatusBar style="dark" />
+            <RootLayoutNav />
+          </AppStateProvider>
+        </PurchasesProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );

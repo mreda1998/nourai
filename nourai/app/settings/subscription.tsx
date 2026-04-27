@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
-  Linking,
+  ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -11,267 +12,305 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
+import type { PurchasesPackage } from 'react-native-purchases';
 
 import {
   Colors,
   Fonts,
-  Spacing,
-  Radius,
   FontSizes,
   Layout,
+  Radius,
   scale,
+  Spacing,
   verticalScale,
 } from '@/constants/theme';
-import { useAuth } from '@/context/auth-context';
+import { usePurchases } from '@/context/purchases-context';
 
-// Subscription types — mirrors backend SubscriptionTier enum
-type SubscriptionTier = 'free' | 'premium';
+// ─── Icons ────────────────────────────────────────────────────────────────────
 
-interface SubscriptionPlan {
-  id: string;
-  productId: string;
-  tier: SubscriptionTier;
-  name: string;
-  price: string;
-  pricePerMonth: string;
-  billing: string;
-  features: string[];
-  popular?: boolean;
-  savings?: string;
-}
-
-// Available plans
-const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
-  {
-    id: 'premium_monthly',
-    productId: 'elory_premium_monthly',
-    tier: 'premium',
-    name: 'Premium',
-    price: '$9.99',
-    pricePerMonth: '$9.99',
-    billing: 'per month',
-    features: [
-      'AI Chat — ask your stack anything',
-      'Stack Synergy Engine',
-      'Chrono-Stack Protocols',
-      'Exposure Load Tracking',
-      'Unlimited stack',
-      'Goal-based filtering',
-      'Export & share reports',
-      'Full scan history & comparison',
-    ],
-    popular: true,
-  },
-  {
-    id: 'premium_annual',
-    productId: 'elory_premium_annual',
-    tier: 'premium',
-    name: 'Premium Annual',
-    price: '$63.99',
-    pricePerMonth: '$5.33',
-    billing: 'per year',
-    features: [
-      'Everything in Premium',
-      'Early access to new features',
-    ],
-    savings: 'Save $56/year',
-  },
-];
-
-// Icons
-function CrownIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
+function CheckIcon({ color = Colors.accentHill }: { color?: string }) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2}>
-      <Path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
-
-function CheckIcon({ size = 16, color = Colors.accentHill }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.5}>
+    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.5}>
       <Path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
 }
 
-function openSubscriptionManagement() {
-  if (Platform.OS === 'ios') {
-    Linking.openURL('https://apps.apple.com/account/subscriptions');
-  } else {
-    Linking.openURL('https://play.google.com/store/account/subscriptions');
-  }
+// ─── Free-tier features ───────────────────────────────────────────────────────
+
+const FREE_FEATURES = [
+  'Unlimited barcode scans',
+  'Full ingredient intelligence',
+  'Domain health signals (read-only)',
+  'Stack up to 10 products',
+  'Scan history',
+];
+
+const PRO_FEATURES = [
+  'Ask Elory AI — chat your stack',
+  'Circadian dosing protocols',
+  'Ingredient conflict map',
+  'Exposure load ledger',
+  'Evidence Pulse — live research feed',
+  'Peptides knowledge base',
+  'Unlimited stack',
+  'Priority support',
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function packagePeriodLabel(pkg: PurchasesPackage): string {
+  const id = pkg.packageType?.toLowerCase() ?? '';
+  if (id.includes('annual') || id.includes('yearly')) return 'per year';
+  if (id.includes('weekly')) return 'per week';
+  return 'per month';
 }
+
+function packageSavingsLabel(pkg: PurchasesPackage, monthlyPkg: PurchasesPackage | null): string | null {
+  if (!monthlyPkg) return null;
+  const type = pkg.packageType?.toLowerCase() ?? '';
+  if (!type.includes('annual') && !type.includes('yearly')) return null;
+
+  const annual = pkg.product.price;
+  const monthly = monthlyPkg.product.price;
+  if (!annual || !monthly || monthly === 0) return null;
+
+  const saving = Math.round(((monthly * 12 - annual) / (monthly * 12)) * 100);
+  return saving > 0 ? `Save ${saving}%` : null;
+}
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function SubscriptionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isSignedIn } = useAuth();
 
-  const [selectedPlan, setSelectedPlan] = useState<string>('premium_monthly');
+  const {
+    isPremium,
+    isLoading,
+    offerings,
+    customerInfo,
+    purchasePackage,
+    restorePurchases,
+    presentPaywall,
+    presentCustomerCenter,
+  } = usePurchases();
 
-  // Mock current subscription tier — replace with RevenueCat when available
-  const currentTier: SubscriptionTier = 'free';
-  const isPremium = currentTier !== 'free';
+  const [purchasing, setPurchasing] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(false);
 
-  const handleManageSubscription = () => {
-    const url =
-      Platform.OS === 'ios'
-        ? 'https://apps.apple.com/account/subscriptions'
-        : 'https://play.google.com/store/account/subscriptions';
-    Linking.openURL(url);
+  // Ordered packages from the current offering
+  const packages: PurchasesPackage[] = offerings?.current?.availablePackages ?? [];
+  const monthlyPkg = packages.find((p) => p.packageType?.toLowerCase().includes('monthly')) ?? null;
+
+  // Active entitlement expiry
+  const activeEntitlement = customerInfo?.entitlements.active['Elory Pro'];
+  const expiresAt = activeEntitlement?.expirationDate
+    ? new Date(activeEntitlement.expirationDate).toLocaleDateString()
+    : null;
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
+  const handlePurchase = async (pkg: PurchasesPackage) => {
+    setPurchasing(pkg.identifier);
+    try {
+      const succeeded = await purchasePackage(pkg);
+      if (succeeded) router.back();
+    } catch (e: any) {
+      Alert.alert('Purchase failed', e?.message ?? 'Something went wrong. Please try again.');
+    } finally {
+      setPurchasing(null);
+    }
   };
+
+  const handleRestore = async () => {
+    setRestoring(true);
+    try {
+      const restored = await restorePurchases();
+      if (restored) {
+        Alert.alert('Restored', 'Your Elory Pro subscription has been restored.');
+        router.back();
+      } else {
+        Alert.alert('Nothing to restore', 'No active subscription found for this Apple ID.');
+      }
+    } catch {
+      Alert.alert('Restore failed', 'Please try again later.');
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  const handleShowPaywall = async () => {
+    await presentPaywall();
+  };
+
+  // ── Loading ───────────────────────────────────────────────────────────────
+
+  if (isLoading) {
+    return (
+      <View style={[styles.screen, styles.centered]}>
+        <ActivityIndicator color={Colors.ink} />
+      </View>
+    );
+  }
+
+  // ── Premium — show current plan + Customer Center ─────────────────────────
+
+  if (isPremium) {
+    return (
+      <View style={styles.screen}>
+        <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
+          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+            <Text style={styles.backBtnText}>‹</Text>
+          </Pressable>
+          <Text style={styles.pageTitle}>Subscription</Text>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+          {/* Active badge */}
+          <View style={styles.premiumBadge}>
+            <Text style={styles.premiumBadgeEyebrow}>◆ ACTIVE</Text>
+            <Text style={styles.premiumBadgeTitle}>Elory Pro</Text>
+            {expiresAt && (
+              <Text style={styles.premiumBadgeExpiry}>Renews {expiresAt}</Text>
+            )}
+          </View>
+
+          {/* Pro features list */}
+          <View style={styles.featureCard}>
+            <Text style={styles.featureCardLabel}>What's included</Text>
+            {PRO_FEATURES.map((f) => (
+              <View key={f} style={styles.featureRow}>
+                <CheckIcon />
+                <Text style={styles.featureText}>{f}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Customer Center — lets user manage/cancel their sub in-app */}
+          <Pressable style={styles.managePrimaryBtn} onPress={() => presentCustomerCenter()}>
+            <Text style={styles.managePrimaryBtnText}>Manage Subscription</Text>
+          </Pressable>
+
+          <Text style={styles.manageHint}>
+            Change plan, cancel, or contact support — all from one place.
+          </Text>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ── Free — show upgrade UI ────────────────────────────────────────────────
 
   return (
     <View style={styles.screen}>
-      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnIcon}>‹</Text>
+          <Text style={styles.backBtnText}>‹</Text>
         </Pressable>
-        <Text style={styles.pageTitle}>Subscription</Text>
+        <Text style={styles.pageTitle}>Upgrade</Text>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Hero Section */}
-        <View style={styles.heroSection}>
-          <View style={styles.heroIconContainer}>
-            <CrownIcon size={32} color={Colors.ink} />
-          </View>
-          <Text style={styles.heroTitle}>Your Health Intelligence</Text>
-          <Text style={styles.heroSubtitle}>
-            AI Chat, Stack Synergy Engine, and clinical evidence — all in one place
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        {/* Hero */}
+        <View style={styles.hero}>
+          <Text style={styles.heroEyebrow}>◆ ELORY PRO</Text>
+          <Text style={styles.heroTitle}>Your health,{'\n'}analysed deeply.</Text>
+          <Text style={styles.heroSub}>
+            AI chat, circadian dosing, conflict maps, and clinical evidence — built for people who take this seriously.
           </Text>
         </View>
 
-        {/* Free tier summary */}
-        <View style={styles.freeSummary}>
-          <Text style={styles.freeSummaryLabel}>Free — always included</Text>
-          <Text style={styles.freeSummaryText}>Unlimited scans · Full ingredient data · Domain signals (read-only) · Stack up to 10 items · Basic flagging</Text>
+        {/* Free vs Pro comparison */}
+        <View style={styles.comparisonRow}>
+          <View style={[styles.comparisonCol, styles.comparisonColFree]}>
+            <Text style={styles.comparisonColLabel}>Free</Text>
+            {FREE_FEATURES.map((f) => (
+              <View key={f} style={styles.featureRow}>
+                <CheckIcon color={Colors.inkTertiary} />
+                <Text style={[styles.featureText, { color: Colors.inkSecondary }]}>{f}</Text>
+              </View>
+            ))}
+          </View>
+          <View style={[styles.comparisonCol, styles.comparisonColPro]}>
+            <Text style={styles.comparisonColLabel}>Pro</Text>
+            {PRO_FEATURES.map((f) => (
+              <View key={f} style={styles.featureRow}>
+                <CheckIcon color={Colors.accentHill} />
+                <Text style={styles.featureText}>{f}</Text>
+              </View>
+            ))}
+          </View>
         </View>
 
-        {/* Plans */}
-        <View style={styles.plansSection}>
-          <Text style={styles.sectionLabel}>Unlock Premium</Text>
-
-          {SUBSCRIPTION_PLANS.map((plan) => (
-            <Pressable
-              key={plan.id}
-              style={[
-                styles.planCard,
-                selectedPlan === plan.id && styles.planCardSelected,
-                plan.popular && styles.planCardPopular,
-              ]}
-              onPress={() => setSelectedPlan(plan.id)}
-            >
-              {plan.popular && (
-                <View style={styles.popularBadge}>
-                  <Text style={styles.popularBadgeText}>Most Popular</Text>
-                </View>
-              )}
-              {plan.savings && (
-                <View style={styles.savingsBadge}>
-                  <Text style={styles.savingsBadgeText}>{plan.savings}</Text>
-                </View>
-              )}
-
-              <View style={styles.planHeader}>
-                <View style={styles.planRadio}>
-                  {selectedPlan === plan.id && <View style={styles.planRadioInner} />}
-                </View>
-                <View style={styles.planInfo}>
-                  <Text style={styles.planName}>{plan.name}</Text>
-                  <Text style={styles.planBilling}>{plan.billing}</Text>
-                </View>
-                <View style={styles.planPricing}>
-                  <Text style={styles.planPrice}>{plan.price}</Text>
-                  {plan.pricePerMonth !== plan.price && (
-                    <Text style={styles.planPricePerMonth}>
-                      {plan.pricePerMonth}/mo
-                    </Text>
-                  )}
-                </View>
-              </View>
-
-              <View style={styles.planFeatures}>
-                {plan.features.map((feature, index) => (
-                  <View key={index} style={styles.featureRow}>
-                    <CheckIcon />
-                    <Text style={styles.featureText}>{feature}</Text>
+        {/* Packages from RC offering */}
+        {packages.length > 0 ? (
+          <View style={styles.packagesSection}>
+            <Text style={styles.sectionLabel}>Choose a plan</Text>
+            {packages.map((pkg) => {
+              const savings = packageSavingsLabel(pkg, monthlyPkg);
+              const isBuying = purchasing === pkg.identifier;
+              return (
+                <Pressable
+                  key={pkg.identifier}
+                  style={styles.packageCard}
+                  onPress={() => handlePurchase(pkg)}
+                  disabled={!!purchasing || restoring}
+                >
+                  <View style={styles.packageCardLeft}>
+                    <Text style={styles.packagePeriod}>{packagePeriodLabel(pkg)}</Text>
+                    <Text style={styles.packagePrice}>{pkg.product.priceString}</Text>
+                    {savings && <Text style={styles.packageSavings}>{savings}</Text>}
                   </View>
-                ))}
-              </View>
-            </Pressable>
-          ))}
-        </View>
-
-        {/* Store subscription management */}
-        <View style={styles.storeSection}>
-          <Text style={styles.storeSectionText}>
-            Manage your NourAI subscription directly in the{' '}
-            {Platform.OS === 'ios' ? 'App Store' : 'Google Play Store'}.
-          </Text>
-          <Pressable style={styles.storeBtn} onPress={handleManageSubscription}>
-            <Text style={styles.storeBtnText}>
-              Open {Platform.OS === 'ios' ? 'App Store' : 'Play Store'}
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Current Subscription (if premium) */}
-        {isPremium && (
-          <View style={styles.currentPlanSection}>
-            <Text style={styles.sectionLabel}>Current Plan</Text>
-            <View style={styles.currentPlanCard}>
-              <View style={styles.currentPlanHeader}>
-                <CrownIcon size={20} color={Colors.accentHill} />
-                <Text style={styles.currentPlanName}>
-                  {SUBSCRIPTION_PLANS.find(p => p.tier === currentTier)?.name || 'Premium'}
-                </Text>
-              </View>
-              <Text style={styles.currentPlanStatus}>Active</Text>
-              <Pressable
-                style={styles.managePlanBtn}
-                onPress={openSubscriptionManagement}
-              >
-                <Text style={styles.managePlanBtnText}>
-                  Manage Subscription
-                </Text>
-              </Pressable>
-            </View>
+                  {isBuying ? (
+                    <ActivityIndicator color={Colors.bone} size="small" />
+                  ) : (
+                    <Text style={styles.packageCta}>Subscribe</Text>
+                  )}
+                </Pressable>
+              );
+            })}
           </View>
+        ) : (
+          // Fallback: launch the RC-configured paywall if no packages loaded
+          <Pressable style={styles.paywallBtn} onPress={handleShowPaywall}>
+            <Text style={styles.paywallBtnText}>View Plans →</Text>
+          </Pressable>
         )}
 
-        {/* Terms & Conditions */}
-        <View style={styles.termsSection}>
-          <Text style={styles.termsText}>
-            Payment will be charged to your {Platform.OS === 'ios' ? 'Apple ID' : 'Google Play'} account
-            at confirmation of purchase. Subscription automatically renews unless auto-renew is
-            turned off at least 24 hours before the end of the current period. Your account will
-            be charged for renewal within 24 hours prior to the end of the current period.
-          </Text>
-          <View style={styles.termsLinks}>
-            <Pressable>
-              <Text style={styles.termsLink}>Terms of Service</Text>
-            </Pressable>
-            <Text style={styles.termsSeparator}>•</Text>
-            <Pressable>
-              <Text style={styles.termsLink}>Privacy Policy</Text>
-            </Pressable>
-          </View>
-        </View>
+        {/* Restore */}
+        <Pressable
+          style={styles.restoreBtn}
+          onPress={handleRestore}
+          disabled={restoring || !!purchasing}
+        >
+          {restoring
+            ? <ActivityIndicator color={Colors.inkSecondary} size="small" />
+            : <Text style={styles.restoreBtnText}>Restore Purchases</Text>
+          }
+        </Pressable>
+
+        {/* Legal */}
+        <Text style={styles.legal}>
+          Payment charged to your {Platform.OS === 'ios' ? 'Apple ID' : 'Google Play'} account
+          at purchase confirmation. Subscription auto-renews unless cancelled at least 24 hours
+          before the end of the current period.
+        </Text>
       </ScrollView>
     </View>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: Colors.bone,
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     paddingHorizontal: Layout.screenPaddingHorizontal,
@@ -289,291 +328,229 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  backBtnIcon: {
+  backBtnText: {
     fontSize: FontSizes.heading,
     color: Colors.ink,
     marginTop: -2,
   },
   pageTitle: {
-    fontFamily: Fonts.serif,
+    fontFamily: Fonts.serifMedium,
     fontSize: FontSizes.display,
-    fontWeight: '500',
     color: Colors.ink,
   },
   container: {
     paddingHorizontal: Layout.screenPaddingHorizontal,
-    paddingBottom: verticalScale(40),
+    paddingBottom: verticalScale(48),
   },
-  heroSection: {
+  // ── Premium view ──
+  premiumBadge: {
+    backgroundColor: Colors.ink,
+    borderRadius: Radius.lg,
+    padding: scale(24),
     alignItems: 'center',
-    paddingVertical: Spacing.xl,
-    marginBottom: Spacing.lg,
-  },
-  heroIconContainer: {
-    width: scale(72),
-    height: scale(72),
-    borderRadius: scale(36),
-    backgroundColor: Colors.boneDark,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  heroTitle: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.display,
-    color: Colors.ink,
-    marginBottom: Spacing.sm,
-    textAlign: 'center',
-  },
-  heroSubtitle: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.bodyLarge,
-    color: Colors.inkSecondary,
-    textAlign: 'center',
-    lineHeight: FontSizes.bodyLarge * 1.5,
-    maxWidth: scale(300),
-  },
-  freeSummary: {
-    backgroundColor: Colors.boneCard,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  freeSummaryLabel: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: Colors.inkTertiary,
-    marginBottom: 4,
-  },
-  freeSummaryText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.inkSecondary,
-    lineHeight: FontSizes.body * 1.5,
-  },
-  plansSection: {
     marginBottom: Spacing.xl,
   },
-  sectionLabel: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.sm,
+  premiumBadgeEyebrow: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: 10,
+    letterSpacing: 1.8,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    fontWeight: '600',
-    color: Colors.inkSecondary,
-    marginBottom: Spacing.md,
+    color: Colors.sand,
+    marginBottom: scale(8),
   },
-  planCard: {
+  premiumBadgeTitle: {
+    fontFamily: Fonts.serifItalic,
+    fontSize: scale(32),
+    color: Colors.bone,
+    marginBottom: scale(6),
+  },
+  premiumBadgeExpiry: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    color: 'rgba(241,237,228,0.55)',
+  },
+  featureCard: {
     backgroundColor: Colors.boneCard,
     borderWidth: 1,
     borderColor: Colors.borderHairline,
     borderRadius: Radius.md,
     padding: Spacing.lg,
-    marginBottom: Spacing.md,
-    position: 'relative',
-    overflow: 'hidden',
+    gap: Spacing.sm,
+    marginBottom: Spacing.xl,
   },
-  planCardSelected: {
-    borderColor: Colors.ink,
-    borderWidth: 2,
-  },
-  planCardPopular: {
-    backgroundColor: Colors.boneCard,
-  },
-  popularBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    backgroundColor: Colors.ink,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderBottomLeftRadius: Radius.md,
-  },
-  popularBadgeText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.xs,
-    fontWeight: '600',
-    color: Colors.bone,
+  featureCardLabel: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: 10,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  savingsBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    backgroundColor: Colors.accentHill,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderBottomLeftRadius: Radius.md,
-  },
-  savingsBadgeText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.xs,
-    fontWeight: '600',
-    color: Colors.bone,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  planHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  planRadio: {
-    width: scale(22),
-    height: scale(22),
-    borderRadius: scale(11),
-    borderWidth: 2,
-    borderColor: Colors.ink,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: Spacing.md,
-  },
-  planRadioInner: {
-    width: scale(12),
-    height: scale(12),
-    borderRadius: scale(6),
-    backgroundColor: Colors.ink,
-  },
-  planInfo: {
-    flex: 1,
-  },
-  planName: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.title,
-    color: Colors.ink,
-    marginBottom: 2,
-  },
-  planBilling: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.inkSecondary,
-  },
-  planPricing: {
-    alignItems: 'flex-end',
-  },
-  planPrice: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.heading,
-    color: Colors.ink,
-  },
-  planPricePerMonth: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: Colors.inkSecondary,
-  },
-  planFeatures: {
-    paddingLeft: scale(34),
-    gap: Spacing.xs,
+    letterSpacing: 1.4,
+    color: Colors.inkTertiary,
+    marginBottom: scale(4),
   },
   featureRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
+    alignItems: 'flex-start',
+    gap: scale(8),
   },
   featureText: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
-    color: Colors.inkSecondary,
-  },
-  storeSection: {
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.xl,
-    padding: Spacing.lg,
-    backgroundColor: Colors.boneDark,
-    borderRadius: Radius.md,
-    gap: Spacing.md,
-  },
-  storeSectionText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.inkSecondary,
-    lineHeight: FontSizes.body * 1.5,
-    textAlign: 'center',
-  },
-  storeBtn: {
-    paddingVertical: Spacing.md,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.ink,
-    alignItems: 'center',
-  },
-  storeBtnText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.bodyLarge,
-    color: Colors.bone,
-  },
-  currentPlanSection: {
-    marginBottom: Spacing.xl,
-  },
-  currentPlanCard: {
-    backgroundColor: Colors.boneCard,
-    borderWidth: 1,
-    borderColor: Colors.accentHill,
-    borderRadius: Radius.md,
-    padding: Spacing.lg,
-  },
-  currentPlanHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginBottom: Spacing.xs,
-  },
-  currentPlanName: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.title,
     color: Colors.ink,
+    flex: 1,
+    lineHeight: FontSizes.body * 1.4,
   },
-  currentPlanStatus: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.accentHill,
+  managePrimaryBtn: {
+    backgroundColor: Colors.ink,
+    borderRadius: Radius.pill,
+    paddingVertical: verticalScale(16),
+    alignItems: 'center',
     marginBottom: Spacing.md,
   },
-  managePlanBtn: {
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.pill,
-    alignItems: 'center',
-  },
-  managePlanBtnText: {
-    fontFamily: Fonts.sans,
+  managePrimaryBtnText: {
+    fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.body,
-    fontWeight: '500',
-    color: Colors.ink,
+    color: Colors.bone,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
-  termsSection: {
-    paddingTop: Spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: Colors.borderHairline,
-  },
-  termsText: {
+  manageHint: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.caption,
     color: Colors.inkTertiary,
-    lineHeight: FontSizes.caption * 1.5,
     textAlign: 'center',
+    lineHeight: FontSizes.caption * 1.5,
+  },
+  // ── Free upgrade view ──
+  hero: {
+    paddingVertical: Spacing.xl,
+    marginBottom: Spacing.lg,
+  },
+  heroEyebrow: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: 10,
+    letterSpacing: 1.8,
+    textTransform: 'uppercase',
+    color: Colors.inkTertiary,
+    marginBottom: scale(10),
+  },
+  heroTitle: {
+    fontFamily: Fonts.serifItalic,
+    fontSize: scale(36),
+    color: Colors.ink,
+    lineHeight: scale(40),
+    marginBottom: scale(12),
+  },
+  heroSub: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.bodyLarge,
+    color: Colors.inkSecondary,
+    lineHeight: FontSizes.bodyLarge * 1.55,
+  },
+  comparisonRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.xl,
+  },
+  comparisonCol: {
+    flex: 1,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    gap: Spacing.xs,
+  },
+  comparisonColFree: {
+    backgroundColor: Colors.boneCard,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+  },
+  comparisonColPro: {
+    backgroundColor: Colors.ink,
+  },
+  comparisonColLabel: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
+    color: Colors.sand,
+    marginBottom: scale(6),
+  },
+  // ── Packages ──
+  packagesSection: {
+    marginBottom: Spacing.lg,
+  },
+  sectionLabel: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
+    color: Colors.inkTertiary,
     marginBottom: Spacing.md,
   },
-  termsLinks: {
+  packageCard: {
+    backgroundColor: Colors.ink,
+    borderRadius: Radius.md,
+    padding: Spacing.lg,
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    gap: Spacing.sm,
+    justifyContent: 'space-between',
+    marginBottom: Spacing.sm,
   },
-  termsLink: {
+  packageCardLeft: {
+    gap: 2,
+  },
+  packagePeriod: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.caption,
+    color: 'rgba(241,237,228,0.55)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  packagePrice: {
+    fontFamily: Fonts.serifMedium,
+    fontSize: scale(22),
+    color: Colors.bone,
+  },
+  packageSavings: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
+    color: Colors.sand,
+    letterSpacing: 0.4,
+  },
+  packageCta: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.body,
+    color: Colors.bone,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  paywallBtn: {
+    backgroundColor: Colors.ink,
+    borderRadius: Radius.pill,
+    paddingVertical: verticalScale(16),
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  paywallBtnText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.body,
+    color: Colors.bone,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  restoreBtn: {
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
+  restoreBtnText: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
     color: Colors.inkSecondary,
     textDecorationLine: 'underline',
   },
-  termsSeparator: {
+  legal: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.caption,
     color: Colors.inkTertiary,
+    textAlign: 'center',
+    lineHeight: FontSizes.caption * 1.5,
   },
 });
