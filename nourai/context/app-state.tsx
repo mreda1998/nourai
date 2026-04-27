@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import type { StackEntry } from '@/services/api';
 
 // Types
 export interface Product {
@@ -41,6 +42,7 @@ interface AppState {
   addToStack: (product: Product) => void;
   removeFromStack: (id: string) => void;
   clearStack: () => void;
+  hydrateFromServer: (entries: StackEntry[]) => void;
   addMeal: (product: Product) => void;
   clearMeals: () => void;
 }
@@ -65,6 +67,25 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setStack([]);
   }, []);
 
+  const hydrateFromServer = useCallback((entries: StackEntry[]) => {
+    if (entries.length === 0) return;
+    setStack((prev) => {
+      if (prev.length > 0) return prev; // already has local data, don't overwrite
+      return entries.map((e) => ({
+        id: e.product_id,
+        name: e.product_name,
+        brand: e.product_brand ?? '',
+        category: e.product_category,
+        grade: (e.product_grade as Product['grade']) ?? 'C',
+        ingredients: [],
+        scannedAt: new Date(e.logged_at ?? e.created_at),
+        timeOfDay: e.time_of_day ?? undefined,
+        quantity: e.unit ? `${e.quantity}${e.unit}` : undefined,
+      }));
+    });
+    setHasScannedBefore(true);
+  }, []);
+
   const addMeal = useCallback((product: Product) => {
     setMeals((prev) => [product, ...prev]);
   }, []);
@@ -86,6 +107,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         addToStack,
         removeFromStack,
         clearStack,
+        hydrateFromServer,
         addMeal,
         clearMeals,
       }}

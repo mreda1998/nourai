@@ -25,8 +25,10 @@ import {
 import {
   DOMAINS,
   DOMAIN_SLUGS,
+  DOMAIN_SHORT_LABELS,
   GOAL_LABELS,
   computeRadarScores,
+  domainScoreLabel,
   type Domain,
 } from '@/constants/domains';
 import { useAppState, type Product } from '@/context/app-state';
@@ -42,6 +44,7 @@ import {
   EvidenceSpectrum,
   SectionHead,
   ProductThumb,
+  SpectrumBar,
   Tag,
 } from '@/components/elory';
 
@@ -127,7 +130,7 @@ function StackProductRow({
 export default function StackScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { stack, meals, removeFromStack, addMeal } = useAppState();
+  const { stack, meals, removeFromStack, addMeal, hydrateFromServer } = useAppState();
   const { isSignedIn, onboardingProfile } = useAuth();
 
   const [chatVisible, setChatVisible] = useState(false);
@@ -149,6 +152,7 @@ export default function StackScreen() {
           if (cancelled) return;
           setServerEntries(entries);
           setEntryIdMap(Object.fromEntries(entries.map((e) => [e.product_id, e.id])));
+          hydrateFromServer(entries);
         })
         .catch(() => {});
     };
@@ -323,6 +327,34 @@ export default function StackScreen() {
             </View>
             <Text style={styles.synergyChevron}>›</Text>
           </Pressable>
+        </Animated.View>
+
+        {/* ── Health Domains ───────────────────────────────────────────────── */}
+        <Animated.View entering={FadeInUp.duration(400).delay(40)} style={styles.section}>
+          <SectionHead label="Health domains" />
+          <View style={styles.domainCard}>
+            {DOMAINS.map((domain, i) => {
+              const score = radarScores[i] ?? 50;
+              const slug = DOMAIN_SLUGS[domain];
+              const short = DOMAIN_SHORT_LABELS[domain];
+              const label = domainScoreLabel(domain, score);
+              const isAlert = domain === 'Inflammation & Immune' && score < 45;
+              return (
+                <Pressable
+                  key={domain}
+                  onPress={() => router.push(`/domain/${slug}` as any)}
+                  style={[styles.domainRow, i < DOMAINS.length - 1 && styles.domainRowBorder]}
+                >
+                  <SpectrumBar
+                    label={short}
+                    position={score / 100}
+                    right={label}
+                    tone={isAlert ? 'alert' : 'ink'}
+                  />
+                </Pressable>
+              );
+            })}
+          </View>
         </Animated.View>
 
         {/* ── Filter chips ─────────────────────────────────────────────────── */}
@@ -557,6 +589,23 @@ const styles = StyleSheet.create({
   },
   filterChipTextActive: {
     color: Colors.surface,
+  },
+
+  // Domain bars
+  domainCard: {
+    backgroundColor: Colors.boneCard,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.md,
+    paddingHorizontal: scale(16),
+    paddingVertical: scale(4),
+  },
+  domainRow: {
+    paddingVertical: scale(12),
+  },
+  domainRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.borderHairline,
   },
 
   // Section / groups

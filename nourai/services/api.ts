@@ -4,7 +4,7 @@
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ??
-  (__DEV__ ? 'http://localhost:8000/api/v1' : '');
+  (__DEV__ ? 'http://localhost:8000/api/v1' : 'https://api.elory.app/api/v1');
 
 export interface Ingredient {
   name: string;
@@ -460,6 +460,10 @@ export interface StackEntry {
   /** Entry UUID — used as path param for DELETE /users/me/stack/{id} */
   id: string;
   product_id: string;
+  product_name: string;
+  product_brand?: string | null;
+  product_grade: string;
+  product_category: string;
   logged_at: string;
   time_of_day?: 'morning' | 'afternoon' | 'evening' | 'night' | null;
   quantity: number;
