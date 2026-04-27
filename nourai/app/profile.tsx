@@ -53,8 +53,7 @@ function InsightCard({ title, fact }: { title: string; fact: string }) {
   return (
     <View style={insightStyles.card}>
       <View style={insightStyles.header}>
-        <Text style={insightStyles.icon}>🔬</Text>
-        <Text style={insightStyles.label}>HIDDEN INSIGHT</Text>
+        <Text style={insightStyles.label}>◆ HIDDEN INSIGHT</Text>
       </View>
       <Text style={insightStyles.title}>{title}</Text>
       <Text style={insightStyles.fact}>{fact}</Text>
@@ -64,9 +63,9 @@ function InsightCard({ title, fact }: { title: string; fact: string }) {
 
 const insightStyles = StyleSheet.create({
   card: {
-    backgroundColor: 'rgba(194, 147, 85, 0.12)',
+    backgroundColor: 'rgba(241,237,228,0.06)',
     borderLeftWidth: 2,
-    borderLeftColor: '#C29355',
+    borderLeftColor: Colors.sand,
     borderRadius: Radius.md,
     padding: scale(14),
     marginBottom: Spacing.xl,
@@ -77,26 +76,23 @@ const insightStyles = StyleSheet.create({
     gap: scale(6),
     marginBottom: scale(6),
   },
-  icon: {
-    fontSize: scale(13),
-  },
   label: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.xs,
     textTransform: 'uppercase',
     letterSpacing: 1.3,
-    color: '#C29355',
+    color: Colors.sand,
   },
   title: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.caption,
-    color: Colors.ink,
+    color: Colors.darkInk,
     marginBottom: scale(4),
   },
   fact: {
     fontFamily: Fonts.serifItalic,
     fontSize: FontSizes.body,
-    color: Colors.ink,
+    color: 'rgba(241,237,228,0.65)',
     lineHeight: FontSizes.body * 1.5,
   },
 });
@@ -169,7 +165,7 @@ export default function ProfileScreen() {
       {/* Header - matching moodboard */}
       <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnIcon}>‹</Text>
+          <Text style={styles.backBtnIcon}>← Back</Text>
         </Pressable>
         <Text style={styles.pageTitle}>Skin Profile</Text>
       </View>
@@ -293,7 +289,7 @@ export default function ProfileScreen() {
       <View style={[styles.saveBar, { paddingBottom: insets.bottom + Spacing.lg }]}>
         <Pressable style={[styles.saveButton, isSaving && { opacity: 0.6 }]} onPress={handleSave} disabled={isSaving}>
           {isSaving
-            ? <ActivityIndicator color={Colors.bone} />
+            ? <ActivityIndicator color={Colors.darkInk} />
             : <Text style={styles.saveButtonText}>Update Profile</Text>
           }
         </Pressable>
@@ -305,7 +301,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.bone,
+    backgroundColor: Colors.darkSurface,
   },
   header: {
     paddingHorizontal: Layout.screenPaddingHorizontal,
@@ -315,24 +311,19 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   backBtn: {
-    width: scale(40),
-    height: scale(40),
-    borderRadius: scale(20),
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    justifyContent: 'center',
-    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginBottom: scale(4),
   },
   backBtnIcon: {
-    fontSize: FontSizes.heading,
-    color: Colors.ink,
-    marginTop: -2,
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: 'rgba(241,237,228,0.55)',
   },
   pageTitle: {
-    fontFamily: Fonts.serif,
+    fontFamily: Fonts.serifItalic,
     fontSize: FontSizes.display,
     fontWeight: '500',
-    color: Colors.ink,
+    color: Colors.darkInk,
   },
   container: {
     paddingHorizontal: Layout.screenPaddingHorizontal,
@@ -351,9 +342,9 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.sans,
     fontSize: FontSizes.sm,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    letterSpacing: 1.8,
     fontWeight: '600',
-    color: Colors.inkSecondary,
+    color: 'rgba(241,237,228,0.45)',
     marginBottom: Spacing.md,
   },
   sectionAction: {
@@ -361,7 +352,7 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.sm,
     textTransform: 'uppercase',
     letterSpacing: 1,
-    color: Colors.inkSecondary,
+    color: 'rgba(241,237,228,0.45)',
     textDecorationLine: 'underline',
     marginBottom: Spacing.md,
   },
@@ -369,9 +360,9 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   selectionCard: {
-    backgroundColor: 'rgba(255,255,255,0.4)',
+    backgroundColor: 'rgba(241,237,228,0.06)',
     borderWidth: 1,
-    borderColor: Colors.borderHairline,
+    borderColor: 'rgba(241,237,228,0.1)',
     borderRadius: Radius.md,
     padding: Spacing.md,
     flexDirection: 'row',
@@ -379,8 +370,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   selectionCardActive: {
-    backgroundColor: Colors.ink,
-    borderColor: Colors.ink,
+    backgroundColor: 'rgba(241,237,228,0.14)',
+    borderColor: Colors.sand,
   },
   cardInfo: {
     flex: 1,
@@ -389,19 +380,19 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.serif,
     fontSize: FontSizes.title,
     fontWeight: '500',
-    color: Colors.ink,
+    color: Colors.darkInk,
   },
   cardTitleActive: {
-    color: Colors.bone,
+    color: Colors.darkInk,
   },
   cardDescription: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.caption,
-    color: Colors.inkSecondary,
+    color: 'rgba(241,237,228,0.65)',
     marginTop: 2,
   },
   cardDescriptionActive: {
-    color: 'rgba(233, 230, 223, 0.6)',
+    color: 'rgba(241,237,228,0.65)',
   },
   toggleSwitch: {
     width: scale(36),
@@ -428,8 +419,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(16),
     borderRadius: Radius.pill,
     borderWidth: 1,
-    borderColor: '#D28E8E',
-    backgroundColor: 'rgba(210, 142, 142, 0.1)',
+    borderColor: 'rgba(232,213,176,0.3)',
+    backgroundColor: 'rgba(232,213,176,0.15)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -437,33 +428,33 @@ const styles = StyleSheet.create({
   alertTagText: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
-    color: '#8E3A3A',
+    color: Colors.sand,
   },
   alertTagClose: {
     fontSize: FontSizes.sm,
-    color: '#8E3A3A',
+    color: Colors.sand,
   },
   addTag: {
     paddingVertical: scale(8),
     paddingHorizontal: scale(16),
     borderRadius: Radius.pill,
     borderWidth: 1,
-    borderColor: Colors.borderHairline,
+    borderColor: 'rgba(241,237,228,0.25)',
     borderStyle: 'dashed',
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'transparent',
   },
   addTagText: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
-    color: Colors.inkSecondary,
+    color: 'rgba(241,237,228,0.4)',
   },
   analysisNote: {
     marginTop: Spacing.lg,
     padding: scale(20),
     borderWidth: 1,
-    borderColor: Colors.borderHairline,
+    borderColor: 'rgba(241,237,228,0.1)',
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(0,0,0,0.02)',
+    backgroundColor: 'rgba(241,237,228,0.04)',
   },
   analysisNoteLabel: {
     fontFamily: Fonts.sans,
@@ -471,14 +462,14 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1.2,
     fontWeight: '600',
-    color: Colors.inkSecondary,
+    color: 'rgba(241,237,228,0.45)',
     marginBottom: Spacing.sm,
   },
   analysisNoteText: {
     fontFamily: Fonts.serif,
     fontSize: FontSizes.subtitle,
     fontStyle: 'italic',
-    color: Colors.inkTertiary,
+    color: 'rgba(241,237,228,0.65)',
     lineHeight: FontSizes.subtitle * 1.5,
   },
   saveBar: {
@@ -488,10 +479,10 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: Layout.screenPaddingHorizontal,
     paddingTop: Spacing.lg,
-    backgroundColor: Colors.bone,
+    backgroundColor: Colors.darkSurface,
   },
   saveButton: {
-    backgroundColor: Colors.ink,
+    backgroundColor: Colors.darkInk,
     paddingVertical: scale(16),
     borderRadius: Radius.pill,
     alignItems: 'center',
@@ -502,6 +493,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 1.5,
-    color: Colors.bone,
+    color: Colors.darkSurface,
   },
 });
