@@ -140,7 +140,7 @@ function InfoIcon({ size = 20, color = Colors.ink }: { size?: number; color?: st
 // ─── Data ────────────────────────────────────────────────────────────────────
 
 const HEALTH_DOMAIN_ROWS: { name: string; description: string; route: string }[] = [
-  { name: 'Skin Health',        description: 'Skin type, sensitivity & watchlist',         route: '/profile' },
+  { name: 'Skin Health',        description: 'Skin type, sensitivity & watchlist',         route: '/health/skin' },
   { name: 'Gut Health',         description: 'Digestive sensitivities & diet prefs',        route: '/health/gut' },
   { name: 'Fitness & Recovery', description: 'Activity level & recovery goals',             route: '/health/fitness' },
   { name: 'Hair & Scalp',       description: 'Hair type & ingredient sensitivities',         route: '/health/hair' },
