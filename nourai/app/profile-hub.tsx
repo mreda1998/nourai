@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path, Circle, Polyline } from 'react-native-svg';
+import Svg, { Path, Circle } from 'react-native-svg';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 
 import {
@@ -92,59 +92,6 @@ function CheckIcon({ size = 16, color = Colors.accentHill }: { size?: number; co
   );
 }
 
-// Health Profile Icons
-function SkinIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
-      <Circle cx="12" cy="8" r="4" strokeLinecap="round" strokeLinejoin="round" />
-      <Path d="M6 20v-1a6 6 0 0112 0v1" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
-
-function GutIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
-      <Path d="M12 3c2 0 4 1.5 4 3.5S13 10 13 12s3 2.5 3 4.5-2 3-4 3-4-1-4-3 3-2.5 3-4.5S8 6.5 8 4.5C8 2.5 10 3 12 3z" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
-
-function FitnessIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
-      <Polyline points="22 12 18 12 15 21 9 3 6 12 2 12" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
-
-function HairIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
-      <Path d="M12 2c-2 0-4 1-4 4 0 2 1 3 1 5s-2 3-2 5c0 3 2 5 5 6" strokeLinecap="round" strokeLinejoin="round" />
-      <Path d="M12 2c2 0 4 1 4 4 0 2-1 3-1 5s2 3 2 5c0 3-2 5-5 6" strokeLinecap="round" strokeLinejoin="round" />
-      <Path d="M12 2v20" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
-
-function HormonalIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
-      <Circle cx="12" cy="12" r="9" strokeLinecap="round" strokeLinejoin="round" />
-      <Path d="M12 7v5l3 3" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
-
-function SleepIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5}>
-      <Path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
-
 // Settings Icons
 function AccountIcon({ size = 20, color = Colors.ink }: { size?: number; color?: string }) {
   return (
@@ -192,64 +139,13 @@ function InfoIcon({ size = 20, color = Colors.ink }: { size?: number; color?: st
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
-type IconProps = { size?: number; color?: string };
-
-const HEALTH_PROFILES: {
-  id: string;
-  name: string;
-  Icon: (props: IconProps) => JSX.Element;
-  description: string;
-  route: string;
-  color: string;
-}[] = [
-  {
-    id: 'skin',
-    name: 'Skin Health',
-    Icon: SkinIcon,
-    description: 'Skin type, sensitivity, and ingredient watchlist',
-    route: '/profile',
-    color: '#D4A574',
-  },
-  {
-    id: 'gut',
-    name: 'Gut Health',
-    Icon: GutIcon,
-    description: 'Digestive sensitivities and dietary preferences',
-    route: '/health/gut',
-    color: '#8C6A54',
-  },
-  {
-    id: 'fitness',
-    name: 'Fitness & Recovery',
-    Icon: FitnessIcon,
-    description: 'Activity level, recovery goals, and supplements',
-    route: '/health/fitness',
-    color: '#5C6E5C',
-  },
-  {
-    id: 'hair',
-    name: 'Hair & Scalp',
-    Icon: HairIcon,
-    description: 'Hair type, concerns, and ingredient sensitivities',
-    route: '/health/hair',
-    color: '#6B5B4F',
-  },
-  {
-    id: 'hormonal',
-    name: 'Hormonal Balance',
-    Icon: HormonalIcon,
-    description: 'Hormonal concerns and related sensitivities',
-    route: '/health/hormonal',
-    color: '#7A6B8A',
-  },
-  {
-    id: 'sleep',
-    name: 'Sleep & Recovery',
-    Icon: SleepIcon,
-    description: 'Sleep quality factors and aid preferences',
-    route: '/health/sleep',
-    color: '#4A5568',
-  },
+const HEALTH_DOMAIN_ROWS: { name: string; description: string; route: string }[] = [
+  { name: 'Skin Health',        description: 'Skin type, sensitivity & watchlist',         route: '/profile' },
+  { name: 'Gut Health',         description: 'Digestive sensitivities & diet prefs',        route: '/health/gut' },
+  { name: 'Fitness & Recovery', description: 'Activity level & recovery goals',             route: '/health/fitness' },
+  { name: 'Hair & Scalp',       description: 'Hair type & ingredient sensitivities',         route: '/health/hair' },
+  { name: 'Hormonal Balance',   description: 'Hormonal concerns & sensitivities',            route: '/health/hormonal' },
+  { name: 'Sleep & Recovery',   description: 'Sleep quality & aid preferences',              route: '/health/sleep' },
 ];
 
 const SETTINGS_ITEMS: {
@@ -419,12 +315,12 @@ export default function ProfileHubScreen() {
               <View style={styles.premiumFeatures}>
                 <Text style={styles.premiumFeaturesLabel}>Premium unlocks</Text>
                 {[
-                  'AI Chat — ask your stack anything',
-                  'Stack Synergy Engine',
-                  'Chrono-Stack Protocols',
-                  'Exposure Load Tracking',
-                  'Goal-based filtering',
-                  'Export & share reports',
+                  'Ask Elory — AI chat about your stack',
+                  'Circadian Protocol — optimal supplement timing',
+                  'Conflict Map — biochemical interaction graph',
+                  'Exposure Ledger — 14-day compound tracking',
+                  'Evidence Pulse — new research on your stack',
+                  'Peptides — research dossiers for the gray zone',
                 ].map((f) => (
                   <View key={f} style={styles.featureItem}>
                     <CheckIcon size={14} />
@@ -514,33 +410,23 @@ export default function ProfileHubScreen() {
         )}
 
         {/* Health Profiles Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionLabel}>Health Profiles</Text>
-            <Text style={styles.sectionSubtitle}>
-              Configure your health data for personalized insights
-            </Text>
+        <View style={styles.healthDomainCard}>
+          <View style={styles.healthDomainEyebrow}>
+            <Text style={styles.healthDomainEyebrowText}>◆ HEALTH PROFILES</Text>
           </View>
-
-          <View style={styles.profileGrid}>
-            {HEALTH_PROFILES.map((profile, index) => (
-              <Animated.View key={profile.id} entering={FadeInUp.duration(400).delay(index * 80)} style={{ width: '48.5%' }}>
-                <Pressable
-                  style={styles.profileCard}
-                  onPress={() => router.push(profile.route as any)}
-                >
-                  <View style={[styles.profileIconBg, { backgroundColor: profile.color + '20' }]}>
-                    <profile.Icon size={20} color={profile.color} />
-                  </View>
-                  <Text style={styles.profileName}>{profile.name}</Text>
-                  <Text style={styles.profileDescription} numberOfLines={2}>
-                    {profile.description}
-                  </Text>
-                  <Text style={styles.profileArrow}>→</Text>
-                </Pressable>
-              </Animated.View>
-            ))}
-          </View>
+          {HEALTH_DOMAIN_ROWS.map((row, index) => (
+            <Pressable
+              key={row.route}
+              style={[styles.healthDomainRow, index > 0 && styles.healthDomainRowBorder]}
+              onPress={() => router.push(row.route as any)}
+            >
+              <View style={styles.healthDomainRowContent}>
+                <Text style={styles.healthDomainRowName}>{row.name}</Text>
+                <Text style={styles.healthDomainRowDescription}>{row.description}</Text>
+              </View>
+              <Text style={styles.healthDomainChevron}>›</Text>
+            </Pressable>
+          ))}
         </View>
 
         {/* Settings Section */}
@@ -568,33 +454,6 @@ export default function ProfileHubScreen() {
               </Animated.View>
             ))}
           </View>
-        </View>
-
-        {/* Atelier Section */}
-        <View style={styles.atelierSection}>
-          <View style={styles.atelierHeader}>
-            <Text style={styles.atelierEyebrow}>◆ Atelier</Text>
-            <Text style={styles.atelierSubtitle}>Premium intelligence features</Text>
-          </View>
-          {[
-            { label: 'Ask Elory', sub: 'AI chat about your stack', route: '/ask-elory' },
-            { label: 'Circadian Protocol', sub: 'Optimal timing for your chronotype', route: '/circadian' },
-            { label: 'Conflict Map', sub: 'Biochemical interaction graph', route: '/conflict-map' },
-            { label: 'Exposure Ledger', sub: '14-day compound exposure tracking', route: '/exposure' },
-            { label: 'Evidence Pulse', sub: 'New research on your stack', route: '/pulse' },
-          ].map((item, i) => (
-            <Pressable
-              key={item.route}
-              style={[styles.atelierRow, i > 0 && styles.atelierRowBorder]}
-              onPress={() => router.push(item.route as any)}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={styles.atelierRowLabel}>{item.label}</Text>
-                <Text style={styles.atelierRowSub}>{item.sub}</Text>
-              </View>
-              <Text style={styles.atelierArrow}>›</Text>
-            </Pressable>
-          ))}
         </View>
 
         {/* Sign Out Button */}
@@ -882,46 +741,52 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.body,
     color: Colors.inkSecondary,
   },
-  profileGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
+  healthDomainCard: {
+    marginHorizontal: Layout.screenPaddingHorizontal,
+    marginBottom: Spacing.xl,
+    backgroundColor: Colors.darkSurface,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
   },
-  profileCard: {
-    backgroundColor: Colors.boneCard,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    minHeight: verticalScale(140),
+  healthDomainEyebrow: {
+    padding: scale(16),
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(241,237,228,0.1)',
   },
-  profileIconBg: {
-    width: scale(36),
-    height: scale(36),
-    borderRadius: scale(18),
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  profileName: {
+  healthDomainEyebrowText: {
     fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.bodyLarge,
-    color: Colors.ink,
-    marginBottom: 4,
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1.8,
+    color: Colors.sand,
   },
-  profileDescription: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: Colors.inkSecondary,
-    lineHeight: FontSizes.caption * 1.4,
+  healthDomainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: scale(16),
+    paddingVertical: scale(14),
+  },
+  healthDomainRowBorder: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(241,237,228,0.1)',
+  },
+  healthDomainRowContent: {
     flex: 1,
   },
-  profileArrow: {
+  healthDomainRowName: {
+    fontFamily: Fonts.sansMedium,
+    fontSize: FontSizes.subtitle,
+    color: Colors.darkInk,
+    marginBottom: 3,
+  },
+  healthDomainRowDescription: {
     fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.inkTertiary,
-    alignSelf: 'flex-end',
-    marginTop: Spacing.sm,
+    fontSize: FontSizes.caption,
+    color: 'rgba(241,237,228,0.45)',
+  },
+  healthDomainChevron: {
+    fontSize: FontSizes.heading,
+    color: 'rgba(241,237,228,0.3)',
   },
   settingsList: {
     backgroundColor: Colors.boneCard,
@@ -954,57 +819,6 @@ const styles = StyleSheet.create({
   settingsArrow: {
     fontSize: FontSizes.heading,
     color: Colors.inkTertiary,
-  },
-  atelierSection: {
-    marginHorizontal: Layout.screenPaddingHorizontal,
-    marginBottom: Spacing.xl,
-    backgroundColor: Colors.darkSurface,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-  },
-  atelierHeader: {
-    padding: scale(16),
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(241,237,228,0.1)',
-  },
-  atelierEyebrow: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 1.8,
-    color: Colors.sand,
-    marginBottom: scale(4),
-  },
-  atelierSubtitle: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: 'rgba(241,237,228,0.45)',
-  },
-  atelierRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: scale(16),
-    paddingVertical: scale(14),
-  },
-  atelierRowBorder: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(241,237,228,0.08)',
-  },
-  atelierRowLabel: {
-    fontFamily: Fonts.sansMedium,
-    fontSize: FontSizes.body,
-    color: Colors.darkInk,
-    marginBottom: scale(2),
-  },
-  atelierRowSub: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: 'rgba(241,237,228,0.4)',
-  },
-  atelierArrow: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.heading,
-    color: 'rgba(241,237,228,0.3)',
   },
   signOutBtn: {
     marginHorizontal: Layout.screenPaddingHorizontal,
