@@ -37,6 +37,8 @@ import {
   verticalScale,
 } from '@/constants/theme';
 import { useAppState } from '@/context/app-state';
+import { useAuth } from '@/context/auth-context';
+import { supabase } from '@/lib/supabase';
 import { api, type Product, type ProductListItem } from '@/services/api';
 
 type InputMode = 'scan' | 'type' | 'search';
@@ -45,6 +47,7 @@ export default function ScanScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { addToStack } = useAppState();
+  const { isSignedIn } = useAuth();
 
   // Camera
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -195,6 +198,7 @@ export default function ScanScreen() {
   const handleAddToStack = () => {
     if (!product) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const loggedAt = new Date();
     addToStack({
       id: product.id,
       name: product.name,
@@ -202,8 +206,15 @@ export default function ScanScreen() {
       category: product.category,
       grade: product.grade as 'A' | 'B' | 'C' | 'D',
       ingredients: product.ingredients.map((i) => i.name),
-      scannedAt: new Date(),
+      scannedAt: loggedAt,
     });
+    if (isSignedIn) {
+      (async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        await api.addToStack(session.access_token, product.id, undefined, { loggedAt });
+      })().catch(() => {});
+    }
     router.push(`/product/${product.id}`);
   };
 

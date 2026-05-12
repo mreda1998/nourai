@@ -1,16 +1,16 @@
 """Seed 20 curated peptide rows into the ingredients table.
 
 Run from the project root:
-    python scripts/seed_peptides.py
+    python3 backend-nourai/scripts/seed_peptides.py
 
 After seeding, run the research agent to populate evidence:
-    python backend-nourai/scripts/research_agent.py --category peptide
+    python3 backend-nourai/scripts/research_agent.py --category peptide
 """
 import asyncio
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "backend-nourai"))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine

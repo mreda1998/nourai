@@ -14,6 +14,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -41,6 +42,7 @@ export interface StackEntry {
   timeOfDay: TimeOfDay;
   protocol: Protocol;
   quantity?: string;  // free-form, e.g. "100g", "2 capsules", "1 cup"
+  loggedAt: Date;
 }
 
 // ─── Option definitions ───────────────────────────────────────────────────────
@@ -60,9 +62,17 @@ const PROTOCOL_OPTIONS: { value: Protocol; label: string; icon: string }[] = [
   { value: 'other',      label: 'Other',        icon: '○' },
 ];
 
+type DateMode = 'today' | 'yesterday' | 'custom';
+
+const DATE_OPTIONS: { value: DateMode; label: string }[] = [
+  { value: 'today', label: 'Today' },
+  { value: 'yesterday', label: 'Yesterday' },
+  { value: 'custom', label: 'Custom' },
+];
+
 // ─── Default derivation from product category ─────────────────────────────────
 
-function defaultsForCategory(category: string): StackEntry {
+function defaultsForCategory(category: string): Pick<StackEntry, 'timeOfDay' | 'protocol'> {
   switch (category) {
     case 'food':
       return { timeOfDay: 'morning', protocol: 'meal' };
@@ -87,6 +97,48 @@ function quantityPlaceholder(category: string): string {
   }
 }
 
+function toDateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function dateForMode(mode: DateMode): Date {
+  const date = new Date();
+  if (mode === 'yesterday') date.setDate(date.getDate() - 1);
+  return date;
+}
+
+function parseDateInput(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(year, month - 1, day);
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    return null;
+  }
+  return parsed;
+}
+
+function withTimeOfDay(date: Date, timeOfDay: TimeOfDay): Date {
+  const loggedAt = new Date(date);
+  const hourByTime: Record<TimeOfDay, number> = {
+    morning: 8,
+    afternoon: 13,
+    evening: 19,
+    night: 22,
+  };
+  loggedAt.setHours(hourByTime[timeOfDay], 0, 0, 0);
+  return loggedAt;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function AddToStackModal({
@@ -106,6 +158,9 @@ export function AddToStackModal({
   const defaults = defaultsForCategory(productCategory);
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(defaults.timeOfDay);
   const [protocol, setProtocol] = useState<Protocol>(defaults.protocol);
+  const [dateMode, setDateMode] = useState<DateMode>('today');
+  const [customDate, setCustomDate] = useState(toDateInputValue(new Date()));
+  const [dateError, setDateError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState('');
   const inputRef = useRef<TextInput>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -123,8 +178,21 @@ export function AddToStackModal({
   }, []);
 
   const handleConfirm = () => {
+    const selectedDate = dateMode === 'custom'
+      ? parseDateInput(customDate)
+      : dateForMode(dateMode);
+    if (!selectedDate) {
+      setDateError('Use YYYY-MM-DD.');
+      return;
+    }
+    setDateError(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onConfirm({ timeOfDay, protocol, quantity: quantity.trim() || undefined });
+    onConfirm({
+      timeOfDay,
+      protocol,
+      quantity: quantity.trim() || undefined,
+      loggedAt: withTimeOfDay(selectedDate, timeOfDay),
+    });
   };
 
   const handleCancel = () => {
@@ -142,6 +210,15 @@ export function AddToStackModal({
     setProtocol(p);
   };
 
+  const selectDateMode = (mode: DateMode) => {
+    Haptics.selectionAsync();
+    setDateMode(mode);
+    setDateError(null);
+    if (mode !== 'custom') {
+      setCustomDate(toDateInputValue(dateForMode(mode)));
+    }
+  };
+
   return (
     <Modal
       visible={visible}
@@ -157,14 +234,53 @@ export function AddToStackModal({
         {/* Handle */}
         <View style={styles.handle} />
 
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.overline}>Add to Stack</Text>
           <Text style={styles.productName} numberOfLines={1}>{productName}</Text>
         </View>
 
+        {/* Date */}
+        <Text style={styles.sectionLabel}>Date taken</Text>
+        <View style={styles.dateRow}>
+          {DATE_OPTIONS.map((opt) => {
+            const selected = dateMode === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                style={[styles.dateChip, selected && styles.dateChipSelected]}
+                onPress={() => selectDateMode(opt.value)}
+              >
+                <Text style={[styles.dateChipText, selected && styles.dateChipTextSelected]}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        {dateMode === 'custom' ? (
+          <TextInput
+            style={[styles.dateInput, dateError && styles.dateInputError]}
+            value={customDate}
+            onChangeText={(value) => {
+              setCustomDate(value);
+              setDateError(null);
+            }}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={Colors.inkTertiary}
+            keyboardType="numbers-and-punctuation"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        ) : null}
+        {dateError ? <Text style={styles.dateError}>{dateError}</Text> : null}
+
         {/* Time of day */}
-        <Text style={styles.sectionLabel}>When do you take this?</Text>
+        <Text style={[styles.sectionLabel, { marginTop: Spacing.lg }]}>When do you take this?</Text>
         <View style={styles.timeRow}>
           {TIME_OPTIONS.map((opt) => {
             const selected = timeOfDay === opt.value;
@@ -212,7 +328,6 @@ export function AddToStackModal({
         <Pressable
           style={styles.quantityRow}
           onPress={() => inputRef.current?.focus()}
-          activeOpacity={1}
         >
           <TextInput
             ref={inputRef}
@@ -235,6 +350,7 @@ export function AddToStackModal({
         <Pressable style={styles.cancelBtn} onPress={handleCancel}>
           <Text style={styles.cancelBtnText}>Cancel</Text>
         </Pressable>
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -253,6 +369,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: Radius.lg ?? scale(20),
     paddingHorizontal: scale(24),
     paddingTop: Spacing.sm,
+    maxHeight: '92%',
   },
   handle: {
     width: scale(36),
@@ -332,6 +449,53 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.sm,
+  },
+  dateRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  dateChip: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.md,
+    paddingVertical: scale(10),
+    alignItems: 'center',
+    backgroundColor: Colors.boneCard,
+  },
+  dateChipSelected: {
+    backgroundColor: Colors.ink,
+    borderColor: Colors.ink,
+  },
+  dateChipText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.caption,
+    color: Colors.ink,
+  },
+  dateChipTextSelected: {
+    color: Colors.bone,
+  },
+  dateInput: {
+    backgroundColor: Colors.boneCard,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.md,
+    paddingHorizontal: scale(12),
+    paddingVertical: scale(10),
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+    marginBottom: Spacing.sm,
+  },
+  dateInputError: {
+    borderColor: Colors.alert,
+  },
+  dateError: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    color: Colors.alert,
+    marginBottom: Spacing.sm,
   },
   protocolChip: {
     flexDirection: 'row',

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -17,6 +17,9 @@ import Svg, { Path } from 'react-native-svg';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/services/api';
 import { Colors, Fonts, FontSizes, scale, Radius } from '@/constants/theme';
+import { useAppState } from '@/context/app-state';
+import { useAuth } from '@/context/auth-context';
+import { DOMAINS, computeRadarScores } from '@/constants/domains';
 
 interface Message {
   id: string;
@@ -33,10 +36,30 @@ const PROMPTS = [
 export default function AskEloryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { stack, meals } = useAppState();
+  const { onboardingProfile } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+
+  const stackContext = useMemo(() => {
+    const allProducts = [...stack, ...meals];
+    const scores = computeRadarScores(allProducts);
+    return {
+      products: allProducts.map((p) => ({
+        name: p.name,
+        brand: p.brand,
+        category: p.category,
+        grade: p.grade,
+        ingredients: p.ingredients,
+      })),
+      domain_scores: Object.fromEntries(
+        DOMAINS.map((domain, index) => [domain, scores[index] ?? 50]),
+      ),
+      goals: onboardingProfile?.goals ?? [],
+    };
+  }, [stack, meals, onboardingProfile?.goals]);
 
   useEffect(() => {
     loadHistory();
@@ -74,7 +97,7 @@ export default function AskEloryScreen() {
       const token = await getToken();
       if (!token) return;
       const history = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }));
-      const res = await api.sendChatMessage(token, history, { products: [], domain_scores: {}, goals: [] });
+      const res = await api.sendChatMessage(token, history, stackContext);
       const assistantMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: res.message };
       setMessages(prev => [...prev, assistantMsg]);
     } catch {

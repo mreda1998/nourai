@@ -360,6 +360,29 @@ export interface EvidencePulseResponse {
   articles: EvidenceArticle[];
 }
 
+export interface ExposureDay {
+  date: string;
+  high: number;
+  moderate: number;
+  low: number;
+}
+
+export interface ExposureCategory {
+  name: string;
+  load: number;
+  delta: string;
+  sources: number;
+  alert: boolean;
+  note: string;
+}
+
+export interface ExposureLedgerResponse {
+  summary: string;
+  chart: ExposureDay[];
+  categories: ExposureCategory[];
+  caveat: string;
+}
+
 // ─── Meal Analysis ───────────────────────────────────────────────────────────
 
 export interface RecognizedFood {
@@ -462,6 +485,7 @@ export interface StackEntry {
   product_id: string;
   product_name: string;
   product_brand?: string | null;
+  product_image_url?: string | null;
   product_grade: string;
   product_category: string;
   logged_at: string;
@@ -699,12 +723,31 @@ class APIService {
   async addToStack(
     authToken: string,
     productId: string,
-    timeOfDay?: 'morning' | 'afternoon' | 'evening' | 'night'
+    timeOfDay?: 'morning' | 'afternoon' | 'evening' | 'night',
+    options?: {
+      loggedAt?: Date | string;
+      quantity?: number;
+      unit?: string;
+      notes?: string;
+    },
   ): Promise<StackEntry> {
+    const body: Record<string, unknown> = {
+      product_id: productId,
+      time_of_day: timeOfDay,
+    };
+    if (options?.loggedAt) {
+      body.logged_at = options.loggedAt instanceof Date
+        ? options.loggedAt.toISOString()
+        : options.loggedAt;
+    }
+    if (options?.quantity !== undefined) body.quantity = options.quantity;
+    if (options?.unit) body.unit = options.unit;
+    if (options?.notes) body.notes = options.notes;
+
     return this.fetch<StackEntry>('/users/me/stack', {
       method: 'POST',
       headers: { Authorization: `Bearer ${authToken}` },
-      body: JSON.stringify({ product_id: productId, time_of_day: timeOfDay }),
+      body: JSON.stringify(body),
     });
   }
 
@@ -859,6 +902,12 @@ class APIService {
 
   async getConflictMap(authToken: string): Promise<ConflictMapResponse> {
     return this.fetch<ConflictMapResponse>('/atelier/conflict-map', {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+  }
+
+  async getExposureLedger(authToken: string): Promise<ExposureLedgerResponse> {
+    return this.fetch<ExposureLedgerResponse>('/atelier/exposure-ledger', {
       headers: { Authorization: `Bearer ${authToken}` },
     });
   }

@@ -108,7 +108,9 @@
       "Bash(python -c \"from app.main import app; print\\('✅ App loads successfully'\\)\")",
       "Bash(python scripts/seed_peptides.py)",
       "Bash(npm exec *)",
-      "Bash(python -c \"from app.main import app; print\\('OK'\\)\")"
+      "Bash(python -c \"from app.main import app; print\\('OK'\\)\")",
+      "Bash(xargs sed *)",
+      "Bash(npm list *)"
     ]
   }
 }

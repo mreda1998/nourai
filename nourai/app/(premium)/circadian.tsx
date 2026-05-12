@@ -154,7 +154,13 @@ export default function CircadianScreen() {
 
           {loading ? (
             <ActivityIndicator color={Colors.sand} style={{ marginVertical: scale(32) }} />
-          ) : emptyReason === 'timing_data_pending' || schedule.length === 0 ? (
+          ) : emptyReason === 'stack_empty' || schedule.length === 0 ? (
+            <Animated.View entering={FadeInUp.delay(80).duration(300)}>
+              <Text style={styles.pendingText}>
+                Add products to today&apos;s stack to build your circadian sequence.
+              </Text>
+            </Animated.View>
+          ) : emptyReason === 'timing_data_pending' ? (
             <Animated.View entering={FadeInUp.delay(80).duration(300)}>
               <Text style={styles.pendingText}>
                 Timing data is being researched — check back soon.
@@ -179,7 +185,7 @@ export default function CircadianScreen() {
                   <View style={styles.doseInfo}>
                     <Text style={styles.doseName}>{item.ingredient_name}</Text>
                     <Text style={styles.doseNote}>{item.note}</Text>
-                    {item.synergy && <Text style={styles.synergyTag}>✦ Stack synergy</Text>}
+                    {item.synergy && <Text style={styles.synergyTag}>Evidence-timed</Text>}
                   </View>
                   <EvidenceDots count={item.evidence_dots} />
                 </Animated.View>

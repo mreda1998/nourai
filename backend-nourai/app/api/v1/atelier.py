@@ -7,17 +7,18 @@ GET /atelier/conflict-map — interaction graph (nodes + edges) for the user's s
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from collections import defaultdict
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter
 from pydantic import BaseModel
-from sqlalchemy import or_, select
+from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DBSession
 from app.models.ingredient import Ingredient
 from app.models.ingredient_evidence import IngredientEvidence
 from app.models.ingredient_interaction import IngredientInteraction
-from app.models.product import ProductIngredient
+from app.models.product import Product, ProductIngredient
 from app.models.user import UserStackEntry
 
 router = APIRouter()
@@ -114,41 +115,58 @@ async def get_circadian(
     current_user: CurrentUser,
 ) -> CircadianResponse:
     """Return time-ordered supplement schedule derived from the user's stack."""
-    ingredient_ids = await _stack_ingredient_ids(db, current_user.id)
-    if not ingredient_ids:
-        return CircadianResponse(
-            chronotype=_chronotype_from_sleep_quality(current_user.sleep_quality),
-            schedule=[],
-            empty_reason="timing_data_pending",
-        )
-
-    result = await db.execute(
-        select(Ingredient).where(
-            Ingredient.id.in_(ingredient_ids),
-            Ingredient.optimal_times.isnot(None),
+    today = _today_start()
+    stack_result = await db.execute(
+        select(UserStackEntry.time_of_day, ProductIngredient, Ingredient)
+        .join(ProductIngredient, ProductIngredient.product_id == UserStackEntry.product_id)
+        .outerjoin(Ingredient, ProductIngredient.ingredient_id == Ingredient.id)
+        .where(
+            UserStackEntry.user_id == current_user.id,
+            UserStackEntry.logged_at >= today,
         )
     )
-    ingredients = result.scalars().all()
-
-    if not ingredients:
+    rows = stack_result.all()
+    if not rows:
         return CircadianResponse(
             chronotype=_chronotype_from_sleep_quality(current_user.sleep_quality),
             schedule=[],
-            empty_reason="timing_data_pending",
+            empty_reason="stack_empty",
         )
 
     schedule: list[ScheduleItem] = []
-    for ing in ingredients:
-        for slot in (ing.optimal_times or []):
-            window = slot.get("window", "morning")
+    seen: set[tuple[str, str]] = set()
+    for time_of_day, product_ingredient, ingredient in rows:
+        display_name = ingredient.canonical_name if ingredient else product_ingredient.name
+        slots = ingredient.optimal_times if ingredient and ingredient.optimal_times else None
+
+        if slots:
+            timing_slots = slots
+        else:
+            window = time_of_day or "morning"
+            timing_slots = [{
+                "window": window,
+                "reason": (
+                    ingredient.circadian_notes
+                    if ingredient and ingredient.circadian_notes
+                    else "No evidence-backed timing rule is stored yet; using your logged time."
+                ),
+                "with_food": False,
+            }]
+
+        for slot in timing_slots:
+            window = slot.get("window", time_of_day or "morning")
             time_str = _WINDOW_TIMES.get(window, "08:00")
+            key = (display_name, time_str)
+            if key in seen:
+                continue
+            seen.add(key)
             schedule.append(ScheduleItem(
                 time=time_str,
-                ingredient_name=ing.canonical_name,
-                note=slot.get("reason", ing.circadian_notes or ""),
+                ingredient_name=display_name,
+                note=slot.get("reason", ""),
                 with_food=slot.get("with_food", False),
-                synergy=False,
-                evidence_dots=_evidence_dots(ing),
+                synergy=bool(slots),
+                evidence_dots=_evidence_dots(ingredient) if ingredient else 1,
             ))
 
     schedule.sort(key=lambda s: s.time)
@@ -216,14 +234,17 @@ async def get_conflict_map(
     )
     interactions = interactions_result.scalars().all()
 
-    # Collect ingredient IDs that appear in at least one interaction
+    # Collect ingredient IDs that appear in at least one interaction.
+    # If no interaction rows exist yet, still return the stack compounds as
+    # neutral nodes so the UI can distinguish "no known interactions" from
+    # "empty stack".
     active_ids: set[uuid.UUID] = set()
     for ix in interactions:
         active_ids.add(ix.ingredient_id_a)
         active_ids.add(ix.ingredient_id_b)
 
     if not active_ids:
-        return ConflictMapResponse(nodes=[], edges=[], notes=[])
+        active_ids = id_set
 
     ing_result = await db.execute(
         select(Ingredient).where(Ingredient.id.in_(active_ids))
@@ -347,3 +368,175 @@ async def get_evidence_pulse(
         ))
 
     return EvidencePulseResponse(articles=articles)
+
+
+# ─── Exposure Ledger ──────────────────────────────────────────────────────────
+
+EXPOSURE_RULES: dict[str, tuple[str, ...]] = {
+    "Added caffeine": ("caffeine", "guarana", "yerba mate", "green tea extract"),
+    "Added sugars": ("sugar", "sucrose", "fructose", "glucose", "dextrose", "corn syrup", "maltodextrin"),
+    "Seed oils": ("canola oil", "soybean oil", "sunflower oil", "safflower oil", "corn oil", "cottonseed oil", "grapeseed oil"),
+    "Emulsifiers / thickeners": ("lecithin", "carrageenan", "polysorbate", "mono-", "diglyceride", "cellulose gum", "xanthan gum", "guar gum"),
+    "Artificial sweeteners": ("sucralose", "aspartame", "acesulfame", "saccharin", "neotame", "advantame"),
+    "Preservatives": ("paraben", "phenoxyethanol", "benzoate", "sorbate", "bha", "bht", "sodium nitrite", "potassium sorbate"),
+    "Synthetic fragrance": ("fragrance", "parfum", "limonene", "linalool", "citral", "coumarin", "geraniol"),
+}
+
+EXPOSURE_NOTES: dict[str, str] = {
+    "Added caffeine": "Caffeine-containing ingredients on product labels; this is not a mg dose estimate.",
+    "Added sugars": "Sugar-like ingredients on labels; nutrition-panel grams are not yet integrated here.",
+    "Seed oils": "Common refined seed oils identified from ingredient names.",
+    "Emulsifiers / thickeners": "Functional additives identified from ingredient names.",
+    "Artificial sweeteners": "Non-nutritive sweeteners identified from ingredient names.",
+    "Preservatives": "Preservative ingredients identified from category or name.",
+    "Synthetic fragrance": "Fragrance allergens or parfum/fragrance terms identified from cosmetic labels.",
+}
+
+
+class ExposureDay(BaseModel):
+    date: str
+    high: float
+    moderate: float
+    low: float
+
+
+class ExposureCategory(BaseModel):
+    name: str
+    load: float
+    delta: str
+    sources: int
+    alert: bool
+    note: str
+
+
+class ExposureLedgerResponse(BaseModel):
+    summary: str
+    chart: list[ExposureDay]
+    categories: list[ExposureCategory]
+    caveat: str
+
+
+def _classify_exposures(product: Product, pi: ProductIngredient, ingredient: Ingredient | None) -> set[str]:
+    name = " ".join(
+        part.lower()
+        for part in [
+            pi.name or "",
+            ingredient.canonical_name if ingredient else "",
+            product.sugar or "",
+        ]
+        if part
+    )
+    ingredient_category = str(ingredient.category).lower() if ingredient else ""
+    matches: set[str] = set()
+
+    for category, terms in EXPOSURE_RULES.items():
+        if any(term in name for term in terms):
+            matches.add(category)
+
+    if "preservative" in ingredient_category:
+        matches.add("Preservatives")
+    if product.category == "cosmetic" and any(term in name for term in ("fragrance", "parfum")):
+        matches.add("Synthetic fragrance")
+
+    return matches
+
+
+def _severity(pi: ProductIngredient) -> float:
+    if pi.status == "avoid":
+        return 1.0
+    if pi.status == "watch":
+        return 0.7
+    return 0.45
+
+
+@router.get("/exposure-ledger", response_model=ExposureLedgerResponse)
+async def get_exposure_ledger(
+    db: DBSession,
+    current_user: CurrentUser,
+) -> ExposureLedgerResponse:
+    """Return a relative label-exposure ledger from the user's 14-day stack log."""
+    today = datetime.now(timezone.utc).date()
+    start = datetime.combine(today - timedelta(days=13), datetime.min.time(), tzinfo=timezone.utc)
+    end = datetime.combine(today + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+
+    result = await db.execute(
+        select(UserStackEntry.logged_at, Product, ProductIngredient, Ingredient)
+        .join(Product, UserStackEntry.product_id == Product.id)
+        .join(ProductIngredient, ProductIngredient.product_id == Product.id)
+        .outerjoin(Ingredient, ProductIngredient.ingredient_id == Ingredient.id)
+        .where(
+            UserStackEntry.user_id == current_user.id,
+            UserStackEntry.logged_at >= start,
+            UserStackEntry.logged_at < end,
+        )
+    )
+    rows = result.all()
+
+    daily: dict[date, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    today_scores: dict[str, float] = defaultdict(float)
+    source_names: dict[str, set[str]] = defaultdict(set)
+
+    for logged_at, product, pi, ingredient in rows:
+        day = logged_at.date()
+        for category in _classify_exposures(product, pi, ingredient):
+            score = _severity(pi)
+            daily[day][category] += score
+            if day == today:
+                today_scores[category] += score
+                source_names[category].add(product.name)
+
+    chart: list[ExposureDay] = []
+    for offset in range(13, -1, -1):
+        day = today - timedelta(days=offset)
+        total = sum(daily[day].values())
+        chart.append(ExposureDay(
+            date=day.isoformat(),
+            high=round(min(1.0, total / 8), 2),
+            moderate=round(min(1.0, total / 5), 2),
+            low=round(min(1.0, total / 3), 2),
+        ))
+
+    categories: list[ExposureCategory] = []
+    for name in sorted(EXPOSURE_RULES):
+        today_score = today_scores.get(name, 0.0)
+        previous_scores = [
+            daily[today - timedelta(days=offset)].get(name, 0.0)
+            for offset in range(1, 14)
+        ]
+        previous_avg = sum(previous_scores) / len(previous_scores) if previous_scores else 0
+        delta_value = 0 if previous_avg == 0 else round(((today_score - previous_avg) / previous_avg) * 100)
+        if previous_avg == 0 and today_score > 0:
+            delta = "new"
+        else:
+            delta = f"{delta_value:+d}%"
+
+        if today_score <= 0:
+            continue
+
+        categories.append(ExposureCategory(
+            name=name,
+            load=round(min(1.0, today_score / 3), 2),
+            delta=delta,
+            sources=len(source_names[name]),
+            alert=today_score >= 1.4,
+            note=EXPOSURE_NOTES[name],
+        ))
+
+    categories.sort(key=lambda c: c.load, reverse=True)
+    total_today = sum(today_scores.values())
+    summary = "No label-exposure signals found in today's stack."
+    if total_today > 0:
+        if total_today >= 4:
+            level = "higher than usual"
+        elif total_today >= 2:
+            level = "moderate"
+        else:
+            level = "low"
+        summary = f"Today's relative label exposure is {level} across {len(categories)} tracked categories."
+
+    return ExposureLedgerResponse(
+        summary=summary,
+        chart=chart,
+        categories=categories,
+        caveat="This is a relative label screen, not a dose, blood-level, toxicity, or clinical-risk estimate.",
+    )

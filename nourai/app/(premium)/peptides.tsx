@@ -169,6 +169,9 @@ export default function PeptidesScreen() {
       >
         {/* Header */}
         <Animated.View entering={FadeIn.duration(300)} style={styles.header}>
+          <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
+            <Text style={styles.backText}>← Back</Text>
+          </Pressable>
           <Text style={styles.title}>Peptides</Text>
           <Text style={styles.subtitle}>Research-grade evidence for the gray zone.</Text>
         </Animated.View>
@@ -241,6 +244,15 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: scale(20),
+  },
+  backButton: {
+    marginBottom: scale(12),
+    alignSelf: 'flex-start',
+  },
+  backText: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.inkSecondary,
   },
   title: {
     fontFamily: Fonts.serif,

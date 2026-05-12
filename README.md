@@ -6,7 +6,7 @@ Evidence-backed health product scanner for iOS and Android. Scan any food, suppl
 elory/
 ├── elory/           # React Native / Expo app  (iOS & Android)
 └── backend-elory/   # FastAPI backend          (Python 3.13)
-```
+``
 
 ---
 

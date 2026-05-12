@@ -80,7 +80,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         ingredients: [],
         scannedAt: new Date(e.logged_at ?? e.created_at),
         timeOfDay: e.time_of_day ?? undefined,
-        quantity: e.unit ? `${e.quantity}${e.unit}` : undefined,
+        quantity: e.notes ?? (e.unit ? `${e.quantity}${e.unit}` : undefined),
       }));
     });
     setHasScannedBefore(true);

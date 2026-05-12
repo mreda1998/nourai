@@ -50,7 +50,10 @@ function RootLayoutNav() {
       if (!session?.access_token) return;
       for (const product of stack) {
         try {
-          await api.addToStack(session.access_token, product.id);
+          await api.addToStack(session.access_token, product.id, product.timeOfDay, {
+            loggedAt: product.scannedAt,
+            notes: product.quantity,
+          });
         } catch {
           // Non-fatal — the stack tab will reload from server anyway
         }
@@ -314,4 +317,3 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
-

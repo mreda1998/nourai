@@ -63,6 +63,7 @@ class UserRepository(BaseRepository[UserProfile]):
         query = (
             select(UserStackEntry)
             .where(UserStackEntry.user_id == user_id)
+            .options(selectinload(UserStackEntry.product))
             .order_by(UserStackEntry.logged_at.desc())
         )
 
@@ -88,6 +89,7 @@ class UserRepository(BaseRepository[UserProfile]):
                     UserStackEntry.logged_at <= end_of_day,
                 )
             )
+            .options(selectinload(UserStackEntry.product))
             .order_by(UserStackEntry.logged_at)
         )
         return list(result.scalars().all())
@@ -108,18 +110,20 @@ class UserRepository(BaseRepository[UserProfile]):
         )
         self.db.add(entry)
         await self.db.commit()
-        await self.db.refresh(entry)
-        return entry
+        loaded_entry = await self.get_stack_entry(entry.id, user_id)
+        return loaded_entry or entry
 
     async def get_stack_entry(self, entry_id: UUID, user_id: UUID) -> UserStackEntry | None:
         """Get a specific stack entry for a user."""
         result = await self.db.execute(
-            select(UserStackEntry).where(
+            select(UserStackEntry)
+            .where(
                 and_(
                     UserStackEntry.id == entry_id,
                     UserStackEntry.user_id == user_id,
                 )
             )
+            .options(selectinload(UserStackEntry.product))
         )
         return result.scalar_one_or_none()
 

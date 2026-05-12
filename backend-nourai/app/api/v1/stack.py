@@ -6,13 +6,44 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.deps import CurrentUser, get_stack_service
-from app.schemas.user import StackEntryCreate, StackEntryResponse
+from app.schemas.user import StackEntryCreate, StackEntryWithProduct
 from app.services.stack import StackService
 
 router = APIRouter()
 
 
-@router.get("", response_model=list[StackEntryResponse])
+def _grade(health_score: int | None) -> str:
+    if health_score is None:
+        return "C"
+    if health_score >= 80:
+        return "A"
+    if health_score >= 60:
+        return "B"
+    if health_score >= 40:
+        return "C"
+    return "D"
+
+
+def _entry_with_product(entry) -> StackEntryWithProduct:
+    product = entry.product
+    return StackEntryWithProduct(
+        id=entry.id,
+        product_id=entry.product_id,
+        logged_at=entry.logged_at,
+        time_of_day=entry.time_of_day,
+        quantity=entry.quantity,
+        unit=entry.unit,
+        notes=entry.notes,
+        created_at=entry.created_at,
+        product_name=product.name,
+        product_brand=product.brand,
+        product_image_url=product.image_url,
+        product_grade=_grade(product.health_score),
+        product_category=product.category.value if product.category else "supplement",
+    )
+
+
+@router.get("", response_model=list[StackEntryWithProduct])
 async def get_stack(
     stack_date: date | None = Query(None, alias="date"),
     current_user: CurrentUser = None,
@@ -25,10 +56,10 @@ async def get_stack(
     else:
         entries = await service.get_daily_stack(current_user.id, datetime.utcnow())
 
-    return [StackEntryResponse.model_validate(e) for e in entries]
+    return [_entry_with_product(e) for e in entries]
 
 
-@router.post("", response_model=StackEntryResponse, status_code=201)
+@router.post("", response_model=StackEntryWithProduct, status_code=201)
 async def add_to_stack(
     entry: StackEntryCreate,
     current_user: CurrentUser = None,
@@ -37,7 +68,7 @@ async def add_to_stack(
     """Add a product to user's stack."""
     try:
         stack_entry = await service.add_to_stack(current_user.id, entry)
-        return StackEntryResponse.model_validate(stack_entry)
+        return _entry_with_product(stack_entry)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -55,7 +86,7 @@ async def remove_from_stack(
         raise HTTPException(status_code=404, detail="Stack entry not found")
 
 
-@router.get("/{entry_id}", response_model=StackEntryResponse)
+@router.get("/{entry_id}", response_model=StackEntryWithProduct)
 async def get_stack_entry(
     entry_id: UUID,
     current_user: CurrentUser = None,
@@ -67,4 +98,4 @@ async def get_stack_entry(
     if not entry:
         raise HTTPException(status_code=404, detail="Stack entry not found")
 
-    return StackEntryResponse.model_validate(entry)
+    return _entry_with_product(entry)

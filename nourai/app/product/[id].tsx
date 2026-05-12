@@ -23,6 +23,7 @@ import { api, getProductWithFallback } from '@/services/api';
 import type { Product, ServerPersonalAnalysis } from '@/services/api';
 import { useAppState } from '@/context/app-state';
 import { useAuth } from '@/context/auth-context';
+import { supabase } from '@/lib/supabase';
 import { AddToStackModal, type StackEntry } from '@/components/AddToStackModal';
 import {
   analyzeIngredients,
@@ -186,6 +187,15 @@ export default function ProductDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (isInStack) {
       removeFromStack(product.id);
+      if (isSignedIn) {
+        (async () => {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.access_token) return;
+          const entries = await api.getStack(session.access_token);
+          const entry = entries.find((e) => e.product_id === product.id);
+          if (entry) await api.removeFromStack(session.access_token, entry.id);
+        })().catch(() => {});
+      }
     } else {
       setAddModalVisible(true);
     }
@@ -204,11 +214,21 @@ export default function ProductDetailScreen() {
       category: product.category,
       grade,
       ingredients: product.ingredients.map((i) => i.name),
-      scannedAt: new Date(),
+      scannedAt: entry.loggedAt,
       timeOfDay: entry.timeOfDay,
       protocol: entry.protocol,
       quantity: entry.quantity,
     });
+    if (isSignedIn) {
+      (async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        await api.addToStack(session.access_token, product.id, entry.timeOfDay, {
+          loggedAt: entry.loggedAt,
+          notes: entry.quantity,
+        });
+      })().catch(() => {});
+    }
     setAddModalVisible(false);
   };
 

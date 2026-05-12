@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,48 +13,24 @@ import Animated, { FadeInUp } from 'react-native-reanimated';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { SectionHead } from '@/components/elory';
 import { Colors, Fonts, FontSizes, scale, Radius } from '@/constants/theme';
-
-// 14 days of stacked bar data: [alert, sand, muted]
-const CHART_DATA = [
-  [0.4, 0.55, 0.45],
-  [0.2, 0.55, 0.45],
-  [0.4, 0.30, 0.45],
-  [0.35, 0.45, 0.20],
-  [0.25, 0.50, 0.10],
-  [0.30, 0.40, 0.20],
-  [0.40, 0.35, 0.15],
-  [0.20, 0.50, 0.20],
-  [0.35, 0.40, 0.10],
-  [0.30, 0.45, 0.15],
-  [0.40, 0.35, 0.20],
-  [0.25, 0.50, 0.10],
-  [0.35, 0.40, 0.15],
-  [0.30, 0.45, 0.20],
-];
-
-const CATEGORIES = [
-  { name: 'Microplastics',         load: 0.72, delta: '+8%',   items: 3, alert: true  },
-  { name: 'Synthetic fragrance',   load: 0.45, delta: '-12%',  items: 2, alert: false },
-  { name: 'Added caffeine',        load: 0.61, delta: '+4%',   items: 4, alert: true  },
-  { name: 'Seed oils',             load: 0.38, delta: '-5%',   items: 6, alert: false },
-  { name: 'Emulsifiers',           load: 0.52, delta: '+2%',   items: 5, alert: false },
-  { name: 'Added sugars',          load: 0.28, delta: '-18%',  items: 3, alert: false },
-];
+import { supabase } from '@/lib/supabase';
+import { api, ExposureCategory, ExposureDay } from '@/services/api';
 
 const BAR_COLORS = [Colors.alert, Colors.sand, 'rgba(241,237,228,0.18)'];
 
-function StackedBarChart() {
+function StackedBarChart({ data }: { data: ExposureDay[] }) {
   const W = 300;
   const H = 100;
   const padX = 0;
   const padY = 6;
   const gap = 2;
-  const barW = (W - padX * 2 - gap * (CHART_DATA.length - 1)) / CHART_DATA.length;
+  const barW = (W - padX * 2 - gap * (data.length - 1)) / data.length;
   const availH = H - padY * 2;
 
   return (
     <Svg width={W} height={H}>
-      {CHART_DATA.map((segments, i) => {
+      {data.map((day, i) => {
+        const segments = [day.high, day.moderate, day.low];
         const x = padX + i * (barW + gap);
         let stackY = H - padY;
 
@@ -83,6 +60,30 @@ function StackedBarChart() {
 export default function ExposureScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [chart, setChart] = useState<ExposureDay[]>([]);
+  const [categories, setCategories] = useState<ExposureCategory[]>([]);
+  const [summary, setSummary] = useState('');
+  const [caveat, setCaveat] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
+        if (!token) return;
+        const res = await api.getExposureLedger(token);
+        setChart(res.chart);
+        setCategories(res.categories);
+        setSummary(res.summary);
+        setCaveat(res.caveat);
+      } catch {
+        // Non-fatal — keep empty state
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   return (
     <View style={styles.root}>
@@ -108,74 +109,83 @@ export default function ExposureScreen() {
         </View>
 
         <View style={{ paddingHorizontal: scale(24) }}>
-          {/* Subtitle */}
-          <Animated.View entering={FadeInUp.duration(300)}>
-            <Text style={styles.subtitle}>
-              Today's load is about{' '}
-              <Text style={{ color: Colors.sand }}>consistent</Text>
-              {' '}with your 14-day average.
-            </Text>
-            <View style={styles.subtitleDivider} />
-          </Animated.View>
-
-          {/* Chart */}
-          <Animated.View entering={FadeInUp.delay(80).duration(300)}>
-            <Text style={styles.sectionEyebrow}>Last 14 days</Text>
-            <View style={styles.chartCard}>
-              <StackedBarChart />
-              <View style={styles.chartBorder} />
-            </View>
-
-            {/* Chart legend */}
-            <View style={styles.chartLegend}>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: Colors.alert, opacity: 0.55 }]} />
-                <Text style={styles.legendText}>High load</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: Colors.sand }]} />
-                <Text style={styles.legendText}>Moderate</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: 'rgba(241,237,228,0.3)' }]} />
-                <Text style={styles.legendText}>Low</Text>
-              </View>
-            </View>
-          </Animated.View>
-
-          {/* Category breakdown */}
-          <SectionHead label="By category · today" dark />
-
-          {CATEGORIES.map((cat, i) => (
-            <Animated.View
-              key={i}
-              entering={FadeInUp.delay(i * 50 + 180).duration(280)}
-              style={[styles.catRow, i < CATEGORIES.length - 1 && styles.catRowBorder]}
-            >
-              <View style={styles.catHeader}>
-                <Text style={styles.catName}>{cat.name}</Text>
-                <View style={styles.catRight}>
-                  <Text style={styles.catItems}>{cat.items} sources</Text>
-                  <Text style={[styles.catDelta, {
-                    color: cat.delta.startsWith('+') ? Colors.alert : Colors.sage,
-                  }]}>
-                    {cat.delta}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.loadTrack}>
-                <View
-                  style={[
-                    styles.loadFill,
-                    {
-                      width: `${Math.round(cat.load * 100)}%` as any,
-                      backgroundColor: cat.alert ? Colors.alert : Colors.sand,
-                    },
-                  ]}
-                />
-              </View>
+          {loading ? (
+            <ActivityIndicator color={Colors.sand} style={{ marginVertical: scale(32) }} />
+          ) : categories.length === 0 ? (
+            <Animated.View entering={FadeInUp.duration(300)}>
+              <Text style={styles.subtitle}>{summary || 'No label-exposure signals found in your current stack.'}</Text>
+              {caveat ? <Text style={styles.caveat}>{caveat}</Text> : null}
             </Animated.View>
-          ))}
+          ) : (
+            <>
+              {/* Subtitle */}
+              <Animated.View entering={FadeInUp.duration(300)}>
+                <Text style={styles.subtitle}>{summary}</Text>
+                {caveat ? <Text style={styles.caveat}>{caveat}</Text> : null}
+                <View style={styles.subtitleDivider} />
+              </Animated.View>
+
+              {/* Chart */}
+              <Animated.View entering={FadeInUp.delay(80).duration(300)}>
+                <Text style={styles.sectionEyebrow}>Last 14 days</Text>
+                <View style={styles.chartCard}>
+                  <StackedBarChart data={chart} />
+                  <View style={styles.chartBorder} />
+                </View>
+
+                {/* Chart legend */}
+                <View style={styles.chartLegend}>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: Colors.alert, opacity: 0.55 }]} />
+                    <Text style={styles.legendText}>Higher</Text>
+                  </View>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: Colors.sand }]} />
+                    <Text style={styles.legendText}>Moderate</Text>
+                  </View>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: 'rgba(241,237,228,0.3)' }]} />
+                    <Text style={styles.legendText}>Lower</Text>
+                  </View>
+                </View>
+              </Animated.View>
+
+              {/* Category breakdown */}
+              <SectionHead label="By category · today" dark />
+
+              {categories.map((cat, i) => (
+                <Animated.View
+                  key={cat.name}
+                  entering={FadeInUp.delay(i * 50 + 180).duration(280)}
+                  style={[styles.catRow, i < categories.length - 1 && styles.catRowBorder]}
+                >
+                  <View style={styles.catHeader}>
+                    <Text style={styles.catName}>{cat.name}</Text>
+                    <View style={styles.catRight}>
+                      <Text style={styles.catItems}>{cat.sources} sources</Text>
+                      <Text style={[styles.catDelta, {
+                        color: cat.delta.startsWith('+') || cat.delta === 'new' ? Colors.alert : Colors.sage,
+                      }]}>
+                        {cat.delta}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.loadTrack}>
+                    <View
+                      style={[
+                        styles.loadFill,
+                        {
+                          width: `${Math.round(cat.load * 100)}%` as any,
+                          backgroundColor: cat.alert ? Colors.alert : Colors.sand,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.catNote}>{cat.note}</Text>
+                </Animated.View>
+              ))}
+            </>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -242,6 +252,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(241,237,228,0.12)',
     marginBottom: scale(24),
   },
+  caveat: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    lineHeight: FontSizes.caption * 1.45,
+    color: 'rgba(241,237,228,0.45)',
+    marginBottom: scale(18),
+  },
 
   sectionEyebrow: {
     fontFamily: Fonts.sansSemiBold,
@@ -304,6 +321,12 @@ const styles = StyleSheet.create({
   catDelta: {
     fontFamily: Fonts.serifItalic,
     fontSize: FontSizes.title,
+  },
+  catNote: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    lineHeight: FontSizes.caption * 1.4,
+    color: 'rgba(241,237,228,0.42)',
   },
   loadTrack: {
     height: 2,

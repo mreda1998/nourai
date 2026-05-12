@@ -178,7 +178,11 @@ export default function ConflictMapScreen() {
               </Animated.View>
 
               <SectionHead label="What this means" dark />
-              {notes.map((note, i) => (
+              {notes.length === 0 ? (
+                <Text style={styles.emptyText}>
+                  No evidence-backed pair interactions are stored for these compounds yet.
+                </Text>
+              ) : notes.map((note, i) => (
                 <Animated.View
                   key={i}
                   entering={FadeInUp.delay(i * 60 + 180).duration(280)}

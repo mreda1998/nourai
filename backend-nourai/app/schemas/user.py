@@ -118,3 +118,5 @@ class StackEntryWithProduct(StackEntryResponse):
     product_name: str
     product_brand: str | None = None
     product_image_url: str | None = None
+    product_grade: str
+    product_category: str = "supplement"
