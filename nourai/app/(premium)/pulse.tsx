@@ -14,6 +14,7 @@ import Svg, { Path } from 'react-native-svg';
 import { Colors, Fonts, FontSizes, scale } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { api, EvidenceArticle } from '@/services/api';
+import { useAppState } from '@/context/app-state';
 
 function toneColor(tone: string) {
   if (tone === 'sage') return Colors.sage;
@@ -48,24 +49,40 @@ function EvidenceDots({ count, tone }: { count: number; tone: string }) {
 export default function PulseScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { stack } = useAppState();
   const [articles, setArticles] = useState<EvidenceArticle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [emptyMessage, setEmptyMessage] = useState('Scan products to build your stack and unlock your evidence feed.');
 
   useEffect(() => {
     (async () => {
       try {
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
-        if (!token) return;
+        if (!token) {
+          setEmptyMessage(
+            stack.length > 0
+              ? 'Sign in to sync your stack and load evidence records for these ingredients.'
+              : 'Scan products to build your stack and unlock your evidence feed.',
+          );
+          return;
+        }
         const res = await api.getEvidencePulse(token, 10);
         setArticles(res.articles);
+        if (res.articles.length === 0) {
+          setEmptyMessage(
+            stack.length > 0
+              ? 'Your stack is synced, but no curated evidence records are attached to these ingredients yet.'
+              : 'Scan products to build your stack and unlock your evidence feed.',
+          );
+        }
       } catch {
-        // Non-fatal — keep empty state
+        setEmptyMessage('Could not load the evidence feed right now.');
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [stack.length]);
 
   return (
     <View style={styles.root}>
@@ -96,7 +113,7 @@ export default function PulseScreen() {
           ) : articles.length === 0 ? (
             <Animated.View entering={FadeInUp.duration(300)}>
               <Text style={styles.emptyText}>
-                Scan products to build your stack and unlock your evidence feed.
+                {emptyMessage}
               </Text>
             </Animated.View>
           ) : (
@@ -126,7 +143,6 @@ export default function PulseScreen() {
                   </View>
                   <View style={styles.footer}>
                     <Text style={styles.journal}>{article.journal}</Text>
-                    <Text style={styles.readLink}>Read brief →</Text>
                   </View>
                 </Animated.View>
               ))}
@@ -158,7 +174,6 @@ const styles = StyleSheet.create({
   excerpt: { borderLeftWidth: 1, borderLeftColor: 'rgba(241,237,228,0.2)', paddingLeft: scale(14) },
   excerptText: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, color: 'rgba(241,237,228,0.6)', lineHeight: FontSizes.subtitle * 1.5 },
   footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  journal: { fontFamily: Fonts.sansSemiBold, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1.2, color: 'rgba(241,237,228,0.4)', flex: 1, marginRight: scale(8) },
-  readLink: { fontFamily: Fonts.sansSemiBold, fontSize: FontSizes.caption, color: Colors.sand },
+  journal: { fontFamily: Fonts.sansSemiBold, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1.2, color: 'rgba(241,237,228,0.4)' },
   emptyText: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, color: 'rgba(241,237,228,0.5)', lineHeight: FontSizes.subtitle * 1.5 },
 });

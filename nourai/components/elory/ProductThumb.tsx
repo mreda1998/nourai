@@ -49,7 +49,6 @@ export function ProductThumb({ color = 'default', letter, size = 64 }: Props) {
           {letter}
         </Text>
       )}
-      {/* Bottle highlight */}
       <View
         style={{
           position: 'absolute',

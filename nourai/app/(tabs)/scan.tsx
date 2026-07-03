@@ -206,6 +206,7 @@ export default function ScanScreen() {
       category: product.category,
       grade: product.grade as 'A' | 'B' | 'C' | 'D',
       ingredients: product.ingredients.map((i) => i.name),
+      imageUri: product.image_url ?? null,
       scannedAt: loggedAt,
     });
     if (isSignedIn) {
@@ -353,13 +354,7 @@ export default function ScanScreen() {
       )}
 
       {/* ── Mode toggle ─────────────────────────────────────────────────── */}
-      <View style={[styles.modeToggle, {
-        bottom: (isDetected || hasMealResult || hasSearchResults
-          ? verticalScale(340)
-          : mode === 'search'
-          ? verticalScale(240)
-          : verticalScale(220)) + keyboardHeight,
-      }]}>
+      <View style={[styles.modeToggle, { top: insets.top + scale(62) }]}>
         {(['scan', 'type', 'search'] as InputMode[]).map((m) => (
           <Pressable
             key={m}
@@ -384,7 +379,7 @@ export default function ScanScreen() {
       )}
 
       {/* ── Error ───────────────────────────────────────────────────────── */}
-      {error && !loading && !searching && !analyzing && !isDetected && !hasMealResult && (
+      {error && !loading && !searching && !searchingProducts && !productDetected && !mealAnalysis && (
         <Animated.View entering={FadeIn.duration(300)} style={[styles.errorOverlay, { bottom: insets.bottom + scale(180) }]}>
           <Text style={styles.errorText}>{error}</Text>
           <Pressable
@@ -697,7 +692,6 @@ const styles = StyleSheet.create({
   // Mode toggle
   modeToggle: {
     position: 'absolute',
-    alignSelf: 'center',
     left: scale(20),
     right: scale(20),
     flexDirection: 'row',

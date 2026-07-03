@@ -15,8 +15,90 @@ import { SectionHead } from '@/components/elory';
 import { Colors, Fonts, FontSizes, scale, Radius } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { api, ExposureCategory, ExposureDay } from '@/services/api';
+import { useAppState } from '@/context/app-state';
 
 const BAR_COLORS = [Colors.alert, Colors.sand, 'rgba(241,237,228,0.18)'];
+
+const LOCAL_EXPOSURE_RULES: Record<string, string[]> = {
+  'Added caffeine': ['caffeine', 'guarana', 'yerba mate', 'green tea extract'],
+  'Added sugars': ['sugar', 'sucrose', 'fructose', 'glucose', 'dextrose', 'corn syrup', 'maltodextrin'],
+  'Seed oils': ['canola oil', 'soybean oil', 'sunflower oil', 'safflower oil', 'corn oil', 'cottonseed oil', 'grapeseed oil'],
+  'Emulsifiers / thickeners': ['lecithin', 'carrageenan', 'polysorbate', 'diglyceride', 'cellulose gum', 'xanthan gum', 'guar gum'],
+  'Artificial sweeteners': ['sucralose', 'aspartame', 'acesulfame', 'saccharin'],
+  'Preservatives': ['paraben', 'phenoxyethanol', 'benzoate', 'sorbate', 'bha', 'bht', 'nitrite'],
+  'Synthetic fragrance': ['fragrance', 'parfum', 'limonene', 'linalool', 'citral', 'coumarin', 'geraniol'],
+};
+
+const LOCAL_EXPOSURE_NOTES: Record<string, string> = {
+  'Added caffeine': 'Caffeine-containing ingredients on product labels; this is not a mg dose estimate.',
+  'Added sugars': 'Sugar-like ingredients on labels; nutrition-panel grams are not yet integrated here.',
+  'Seed oils': 'Common refined seed oils identified from ingredient names.',
+  'Emulsifiers / thickeners': 'Functional additives identified from ingredient names.',
+  'Artificial sweeteners': 'Non-nutritive sweeteners identified from ingredient names.',
+  'Preservatives': 'Preservative ingredients identified from ingredient names.',
+  'Synthetic fragrance': 'Fragrance allergens or parfum/fragrance terms identified from cosmetic labels.',
+};
+
+function dayKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function localExposureLedger(stack: ReturnType<typeof useAppState>['stack']) {
+  const today = new Date();
+  const todayKey = dayKey(today);
+  const dailyTotals: Record<string, number> = {};
+  const todayScores: Record<string, number> = {};
+  const sources: Record<string, Set<string>> = {};
+
+  stack.forEach((product) => {
+    const productDay = dayKey(new Date(product.scannedAt));
+    const labelText = [product.name, product.brand, ...product.ingredients].join(' ').toLowerCase();
+    Object.entries(LOCAL_EXPOSURE_RULES).forEach(([category, terms]) => {
+      if (!terms.some((term) => labelText.includes(term))) return;
+      dailyTotals[productDay] = (dailyTotals[productDay] ?? 0) + 0.45;
+      if (productDay === todayKey) {
+        todayScores[category] = (todayScores[category] ?? 0) + 0.45;
+        if (!sources[category]) sources[category] = new Set();
+        sources[category].add(product.name);
+      }
+    });
+  });
+
+  const chart: ExposureDay[] = Array.from({ length: 14 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (13 - index));
+    const total = dailyTotals[dayKey(date)] ?? 0;
+    return {
+      date: dayKey(date),
+      high: Math.min(1, total / 8),
+      moderate: Math.min(1, total / 5),
+      low: Math.min(1, total / 3),
+    };
+  });
+
+  const categories: ExposureCategory[] = Object.entries(todayScores)
+    .map(([name, score]) => ({
+      name,
+      load: Math.min(1, score / 3),
+      delta: 'local',
+      sources: sources[name]?.size ?? 0,
+      alert: score >= 1.4,
+      note: LOCAL_EXPOSURE_NOTES[name],
+    }))
+    .sort((a, b) => b.load - a.load);
+
+  return {
+    chart,
+    categories,
+    summary: categories.length > 0
+      ? `Local preview found ${categories.length} label-exposure ${categories.length === 1 ? 'category' : 'categories'} in today's stack.`
+      : 'No label-exposure signals found in your local stack today.',
+    caveat: 'Local preview: sign in to sync your stack. This is a relative label screen, not a dose, blood-level, toxicity, or clinical-risk estimate.',
+  };
+}
 
 function StackedBarChart({ data }: { data: ExposureDay[] }) {
   const W = 300;
@@ -60,6 +142,7 @@ function StackedBarChart({ data }: { data: ExposureDay[] }) {
 export default function ExposureScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { stack } = useAppState();
   const [chart, setChart] = useState<ExposureDay[]>([]);
   const [categories, setCategories] = useState<ExposureCategory[]>([]);
   const [summary, setSummary] = useState('');
@@ -71,19 +154,37 @@ export default function ExposureScreen() {
       try {
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
-        if (!token) return;
+        const local = localExposureLedger(stack);
+        if (!token) {
+          setChart(local.chart);
+          setCategories(local.categories);
+          setSummary(local.summary);
+          setCaveat(local.caveat);
+          return;
+        }
         const res = await api.getExposureLedger(token);
-        setChart(res.chart);
-        setCategories(res.categories);
-        setSummary(res.summary);
-        setCaveat(res.caveat);
+        if (res.categories.length > 0 || stack.length === 0) {
+          setChart(res.chart);
+          setCategories(res.categories);
+          setSummary(res.summary);
+          setCaveat(res.caveat);
+        } else {
+          setChart(local.chart);
+          setCategories(local.categories);
+          setSummary(local.summary);
+          setCaveat(local.caveat);
+        }
       } catch {
-        // Non-fatal — keep empty state
+        const local = localExposureLedger(stack);
+        setChart(local.chart);
+        setCategories(local.categories);
+        setSummary(local.summary);
+        setCaveat(local.caveat);
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [stack]);
 
   return (
     <View style={styles.root}>

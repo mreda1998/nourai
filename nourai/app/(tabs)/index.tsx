@@ -1,6 +1,7 @@
 import React from 'react';
 import { useRouter } from 'expo-router';
 import {
+  Image,
   Pressable,
   ScrollView,
   Text,
@@ -8,83 +9,94 @@ import {
   SafeAreaView,
 } from 'react-native';
 
-import { Colors, Fonts, Radius, FontSizes, scale } from '@/constants/theme';
+import { Colors, Fonts, Radius, FontSizes } from '@/constants/theme';
 import { useAppState } from '@/context/app-state';
 import { useAuth } from '@/context/auth-context';
 import {
   Eyebrow,
   SerifH,
-  EvidenceSpectrum,
-  Tag,
-  ProductThumb,
   SectionHead,
 } from '@/components/elory';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Grade → pill tag ─────────────────────────────────────────────────────────
 
-function gradeToScore(grade: string): number {
+function gradeTag(grade: string): { label: string; bg: string; color: string } {
   switch (grade) {
-    case 'A': return 95;
-    case 'B': return 80;
-    case 'C': return 60;
-    case 'D': return 35;
-    default: return 50;
+    case 'A': return { label: 'Clean', bg: 'rgba(123,174,142,0.18)', color: '#3d7a55' };
+    case 'B': return { label: 'Good',  bg: 'rgba(123,174,142,0.18)', color: '#3d7a55' };
+    case 'C': return { label: 'Review', bg: 'rgba(232,213,176,0.55)', color: '#8a7050' };
+    case 'D': return { label: 'Watch', bg: 'rgba(196,101,74,0.14)',   color: Colors.alert };
+    default:  return { label: grade,   bg: Colors.surfaceCard,        color: Colors.inkSecondary };
   }
 }
 
-const STACK_THUMB_COLORS: Array<'sand' | 'sage' | 'dark' | 'default'> = [
-  'sand', 'sage', 'dark', 'default', 'sand',
+const CATEGORY_COLOR: Record<string, string> = {
+  supplement: Colors.sage,
+  food: Colors.accent,
+  cosmetic: Colors.alert,
+  otc: '#8a7050',
+};
+
+const WORTH_SCANNING = [
+  {
+    id: 'w1',
+    name: 'CeraVe AM Moisturizer SPF 30',
+    reason: 'Niacinamide + retinol combo found in many routines — worth checking interactions',
+    imageUri: null as string | null,
+    thumbBg: 'rgba(123,174,142,0.18)',
+    thumbEmoji: '🧴',
+  },
+  {
+    id: 'w2',
+    name: 'AG1 Athletic Greens',
+    reason: '72 ingredients — a case study in cumulative dosing complexity',
+    imageUri: null as string | null,
+    thumbBg: 'rgba(232,213,176,0.55)',
+    thumbEmoji: '🌿',
+  },
 ];
 
+function stackSignal(stack: { grade: string; name: string }[]): { text: string; highlight: string | null } | null {
+  if (stack.length === 0) return null;
+  const dItems = stack.filter((p) => p.grade === 'D');
+  if (dItems.length > 0) {
+    return {
+      text: `${dItems.length} product${dItems.length > 1 ? 's' : ''} in your stack ${dItems.length > 1 ? 'contain' : 'contains'} flagged ingredients.`,
+      highlight: dItems[0].name,
+    };
+  }
+  const cItems = stack.filter((p) => p.grade === 'C');
+  if (cItems.length > 0) {
+    return {
+      text: `${cItems.length} product${cItems.length > 1 ? 's' : ''} in your stack warrant a closer look.`,
+      highlight: cItems[0].name,
+    };
+  }
+  return {
+    text: `Your current stack looks clean across all ${stack.length} product${stack.length > 1 ? 's' : ''} scanned.`,
+    highlight: null,
+  };
+}
 
 // ─── Home Screen ──────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { hasScannedBefore, stack, meals } = useAppState();
+  const { stack } = useAppState();
   const { user } = useAuth();
-
-  // Weight each item by its onset ramp so newly-added supplements don't
-  // inflate the score before they've had time to accumulate in the body.
-  const ONSET_DAYS: Record<string, number> = { food: 1, supplement: 14, cosmetic: 28, otc: 7 };
-  const allItems = [...stack, ...meals];
-  const compositeScore =
-    allItems.length === 0
-      ? 0
-      : Math.round(
-          allItems.reduce((sum, p) => {
-            const onset = ONSET_DAYS[p.category] ?? 7;
-            const days = (Date.now() - new Date(p.scannedAt).getTime()) / 86_400_000;
-            const w = Math.min(days / onset, 1);
-            return sum + gradeToScore(p.grade) * w;
-          }, 0) /
-            allItems.reduce((sum, p) => {
-              const onset = ONSET_DAYS[p.category] ?? 7;
-              const days = (Date.now() - new Date(p.scannedAt).getTime()) / 86_400_000;
-              return sum + Math.min(days / onset, 1);
-            }, 0)
-        );
 
   const userName = user?.name?.split(' ')[0] ?? 'you';
   const userInitial = (user?.name?.charAt(0) ?? 'E').toUpperCase();
 
-  // Build ingredient cloud from stack — flagged if any product containing it has grade D
-  const flaggedByGrade = new Set<string>(
-    [...stack, ...meals]
-      .filter((p) => p.grade === 'D')
-      .flatMap((p) => p.ingredients.map((n) => n.toLowerCase()))
-  );
-  const seenIngredients = new Set<string>();
-  const stackIngredients = [...stack, ...meals]
-    .flatMap((p) => p.ingredients)
-    .reduce<Array<{ key: string; label: string; flagged: boolean }>>((acc, name) => {
-      const lower = name.toLowerCase();
-      if (!seenIngredients.has(lower)) {
-        seenIngredients.add(lower);
-        acc.push({ key: lower, label: name, flagged: flaggedByGrade.has(lower) });
-      }
-      return acc;
-    }, []);
+  const displayStack = stack.slice(0, 6).map((p) => ({
+    id: p.id,
+    name: p.name,
+    category: p.category,
+    grade: p.grade,
+    imageUri: p.imageUri ?? null,
+  }));
+
+  const signal = stackSignal(stack);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: Colors.surface }}>
@@ -108,7 +120,6 @@ export default function HomeScreen() {
             <SerifH size={32} italic>Elory.</SerifH>
           </View>
 
-          {/* Avatar button */}
           <Pressable
             onPress={() => router.push('/profile-hub')}
             style={{
@@ -122,214 +133,226 @@ export default function HomeScreen() {
               justifyContent: 'center',
             }}
           >
-            <Text
-              style={{
-                fontFamily: Fonts.serifItalic,
-                fontSize: 15,
-                color: Colors.ink,
-              }}
-            >
+            <Text style={{ fontFamily: Fonts.serifItalic, fontSize: 15, color: Colors.ink }}>
               {userInitial}
             </Text>
           </Pressable>
         </View>
 
-        {/* ── Teal hero card ────────────────────────────────────────────────── */}
-        <View style={{ marginHorizontal: 20, marginBottom: 28 }}>
-          <View
-            style={{
-              backgroundColor: Colors.accent,
-              borderRadius: Radius.lg,
-              paddingHorizontal: 24,
-              paddingTop: 28,
-              paddingBottom: 20,
-              overflow: 'hidden',
-            }}
-          >
-            <Eyebrow style={{ color: 'rgba(241,237,228,0.55)', marginBottom: 10 }}>
-              This evening · 18:42
-            </Eyebrow>
-            <Text
+        {/* ── Stack signal hero card ────────────────────────────────────────── */}
+        {signal ? (
+          <View style={{ marginHorizontal: 20, marginBottom: 28 }}>
+            <Pressable
+              onPress={() => router.push('/(premium)/exposure' as any)}
               style={{
-                fontFamily: Fonts.serifItalic,
-                fontSize: 26,
-                lineHeight: 32,
-                color: Colors.accentInk,
-                marginBottom: 14,
+                backgroundColor: Colors.accent,
+                borderRadius: Radius.lg,
+                paddingHorizontal: 24,
+                paddingTop: 28,
+                paddingBottom: 20,
+                overflow: 'hidden',
               }}
             >
-              Your magnesium glycinate lands best about 90 minutes before you dim the lights.
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-              <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.sand }} />
+              <Eyebrow style={{ color: 'rgba(241,237,228,0.55)', marginBottom: 10 }}>
+                Stack signal
+              </Eyebrow>
               <Text
                 style={{
-                  fontFamily: Fonts.sansSemiBold,
-                  fontSize: 10,
-                  letterSpacing: 1.2,
-                  textTransform: 'uppercase',
-                  color: 'rgba(241,237,228,0.6)',
+                  fontFamily: Fonts.serifItalic,
+                  fontSize: 22,
+                  lineHeight: 30,
+                  color: Colors.accentInk,
+                  marginBottom: 14,
                 }}
               >
-                Based on 4 studies · Read brief
+                {signal.highlight ? (
+                  <>
+                    <Text style={{ color: Colors.sand }}>{signal.highlight}</Text>
+                    {' — '}
+                  </>
+                ) : null}
+                {signal.text}
               </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ── Active Stack section ──────────────────────────────────────────── */}
-        <View style={{ paddingHorizontal: 24, marginBottom: 32 }}>
-          <SectionHead label="Active Stack" right="5 items" />
-
-          {/* 5-column thumbnail grid */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
-            {STACK_THUMB_COLORS.map((color, i) => (
-              <Pressable
-                key={i}
-                onPress={() => router.push('/(tabs)/stack' as any)}
-              >
-                <ProductThumb
-                  color={color}
-                  letter={String.fromCharCode(65 + i)}
-                  size={48}
-                />
-              </Pressable>
-            ))}
-          </View>
-
-          {/* Stack meta row */}
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              borderTopWidth: 1,
-              borderTopColor: Colors.borderHairline,
-              paddingTop: 10,
-            }}
-          >
-            <Text
-              style={{
-                fontFamily: Fonts.sans,
-                fontSize: 11,
-                color: Colors.inkSecondary,
-              }}
-            >
-              4 supplements · 1 topical
-            </Text>
-            <Text
-              style={{
-                fontFamily: Fonts.sansSemiBold,
-                fontSize: 11,
-                color: Colors.accent,
-              }}
-            >
-              2 synergies active
-            </Text>
-          </View>
-        </View>
-
-        {/* ── Recent Scans section ──────────────────────────────────────────── */}
-        <View style={{ paddingHorizontal: 24, marginBottom: 32 }}>
-          <SectionHead label="Recent scans" right="View all" />
-
-          {stack.length === 0 ? (
-            <Text
-              style={{
-                fontFamily: Fonts.serifItalic,
-                fontSize: FontSizes.bodyLarge,
-                color: Colors.inkSecondary,
-                lineHeight: FontSizes.bodyLarge * 1.6,
-                paddingVertical: 12,
-              }}
-            >
-              Scan your first product to see it here.
-            </Text>
-          ) : (
-            <View style={{ gap: 16 }}>
-              {stack.slice(0, 4).map((product, i) => (
-                <Pressable
-                  key={product.id}
-                  onPress={() => router.push(`/product/${product.id}` as any)}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.sand }} />
+                <Text
+                  style={{
+                    fontFamily: Fonts.sansSemiBold,
+                    fontSize: 10,
+                    letterSpacing: 1.2,
+                    textTransform: 'uppercase',
+                    color: 'rgba(241,237,228,0.6)',
+                  }}
                 >
-                  <ProductThumb
-                    color={STACK_THUMB_COLORS[i % STACK_THUMB_COLORS.length]}
-                    letter={product.name.charAt(0).toUpperCase()}
-                    size={44}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Eyebrow style={{ marginBottom: 2 }}>{product.brand}</Eyebrow>
+                  View exposure breakdown
+                </Text>
+              </View>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {/* ── Active Stack ──────────────────────────────────────────────────── */}
+        <View style={{ marginBottom: 28 }}>
+          <View style={{ paddingHorizontal: 24, marginBottom: 10 }}>
+            <SectionHead label="Your stack" right={displayStack.length > 0 ? 'See all' : undefined} />
+          </View>
+          {displayStack.length === 0 ? (
+            <Pressable
+              onPress={() => router.push('/(tabs)/scan' as any)}
+              style={{
+                marginHorizontal: 24,
+                backgroundColor: Colors.surfaceCard,
+                borderWidth: 0.5,
+                borderColor: Colors.borderHairline,
+                borderRadius: 14,
+                paddingVertical: 20,
+                paddingHorizontal: 16,
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <Text style={{ fontFamily: Fonts.serifItalic, fontSize: 16, color: Colors.inkSecondary }}>
+                Scan your first product to get started
+              </Text>
+              <Text style={{ fontFamily: Fonts.sansSemiBold, fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase', color: Colors.sage }}>
+                Open scanner →
+              </Text>
+            </Pressable>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 24, gap: 8 }}
+            >
+              {displayStack.map((item) => {
+                const tag = gradeTag(item.grade);
+                const catColor = CATEGORY_COLOR[item.category] ?? Colors.inkSecondary;
+                return (
+                  <Pressable
+                    key={item.id}
+                    onPress={() => router.push('/(tabs)/stack' as any)}
+                    style={{
+                      backgroundColor: Colors.surfaceCard,
+                      borderWidth: 0.5,
+                      borderColor: Colors.borderHairline,
+                      borderRadius: 12,
+                      padding: 12,
+                      width: 112,
+                    }}
+                  >
                     <Text
                       style={{
-                        fontFamily: Fonts.serif,
-                        fontSize: 18,
-                        color: Colors.ink,
-                        lineHeight: 22,
-                        marginBottom: 6,
+                        fontFamily: Fonts.sansSemiBold,
+                        fontSize: 9,
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.8,
+                        color: catColor,
+                        marginBottom: 3,
                       }}
                       numberOfLines={1}
                     >
-                      {product.name}
+                      {item.category}
                     </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <EvidenceSpectrum
-                        strength={product.grade === 'A' ? 4 : product.grade === 'B' ? 3 : product.grade === 'C' ? 2 : 1}
-                      />
-                      <Tag tone={product.grade === 'A' ? 'sage' : product.grade === 'D' ? 'alert' : 'default'}>
-                        Grade {product.grade}
-                      </Tag>
+                    <Text
+                      style={{
+                        fontFamily: Fonts.sansMedium,
+                        fontSize: 12,
+                        color: Colors.ink,
+                        lineHeight: 15,
+                        marginBottom: 8,
+                      }}
+                      numberOfLines={2}
+                    >
+                      {item.name}
+                    </Text>
+                    <View
+                      style={{
+                        alignSelf: 'flex-start',
+                        backgroundColor: tag.bg,
+                        borderRadius: 999,
+                        paddingVertical: 2,
+                        paddingHorizontal: 8,
+                      }}
+                    >
+                      <Text style={{ fontFamily: Fonts.sansSemiBold, fontSize: 9, color: tag.color }}>
+                        {tag.label}
+                      </Text>
                     </View>
-                  </View>
-                </Pressable>
-              ))}
-            </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           )}
         </View>
 
-        {/* ── Known Today ingredient cloud ──────────────────────────────────── */}
+        {/* ── Worth Scanning ────────────────────────────────────────────────── */}
         <View style={{ paddingHorizontal: 24 }}>
-          <SectionHead label="Known to you today" />
-
-          {stackIngredients.length === 0 ? (
-            <Text
-              style={{
-                fontFamily: Fonts.serifItalic,
-                fontSize: FontSizes.bodyLarge,
-                color: Colors.inkSecondary,
-                lineHeight: FontSizes.bodyLarge * 1.6,
-                paddingVertical: 12,
-              }}
-            >
-              Scan products to see your ingredient cloud.
-            </Text>
-          ) : (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {stackIngredients.map((ing) => (
-                <Pressable
-                  key={ing.key}
-                  style={{
-                    paddingVertical: 7,
-                    paddingHorizontal: 12,
-                    borderRadius: Radius.pill,
-                    borderLeftWidth: ing.flagged ? 2 : 1,
-                    borderWidth: 1,
-                    borderColor: ing.flagged ? Colors.alert : Colors.borderHairline,
-                    backgroundColor: Colors.surfaceCard,
-                  }}
-                >
+          <SectionHead label="Worth scanning" right="Curated by Elory" />
+          <View style={{ gap: 8 }}>
+            {WORTH_SCANNING.map((item) => (
+              <Pressable
+                key={item.id}
+                onPress={() => router.push('/(tabs)/scan' as any)}
+                style={{
+                  backgroundColor: Colors.surfaceCard,
+                  borderWidth: 0.5,
+                  borderColor: Colors.borderHairline,
+                  borderRadius: 14,
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                }}
+              >
+                {item.imageUri ? (
+                  <Image
+                    source={{ uri: item.imageUri }}
+                    style={{ width: 44, height: 44, borderRadius: 10, resizeMode: 'contain' }}
+                  />
+                ) : (
+                  <View
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 10,
+                      backgroundColor: item.thumbBg,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Text style={{ fontSize: 22 }}>{item.thumbEmoji}</Text>
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontFamily: Fonts.sansMedium,
+                      fontSize: 13,
+                      color: Colors.ink,
+                      marginBottom: 2,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {item.name}
+                  </Text>
                   <Text
                     style={{
                       fontFamily: Fonts.sans,
                       fontSize: FontSizes.caption,
-                      color: ing.flagged ? Colors.alert : Colors.ink,
+                      color: Colors.inkSecondary,
+                      lineHeight: 16,
                     }}
+                    numberOfLines={2}
                   >
-                    {ing.label}
+                    {item.reason}
                   </Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
+                </View>
+                <Text style={{ fontSize: 18, color: Colors.inkSecondary, opacity: 0.5 }}>›</Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>

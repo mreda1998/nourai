@@ -15,6 +15,7 @@ import { SectionHead } from '@/components/elory';
 import { Colors, Fonts, FontSizes, scale, Radius } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { api, CircadianScheduleItem } from '@/services/api';
+import { useAppState } from '@/context/app-state';
 
 const PHASE_MARKERS = [
   { h: 6,  label: 'Cortisol peak' },
@@ -23,6 +24,39 @@ const PHASE_MARKERS = [
   { h: 18, label: 'Temp peak' },
   { h: 22, label: 'Melatonin onset' },
 ];
+
+const LOCAL_WINDOW_TIMES = {
+  morning: '08:00',
+  afternoon: '13:00',
+  evening: '19:00',
+  night: '22:00',
+};
+
+function localCircadianSchedule(
+  stack: ReturnType<typeof useAppState>['stack'],
+): CircadianScheduleItem[] {
+  const seen = new Set<string>();
+  return stack.flatMap((product) => {
+    const timeOfDay = product.timeOfDay ?? 'morning';
+    const time = LOCAL_WINDOW_TIMES[timeOfDay];
+    const ingredientNames = product.ingredients.length > 0 ? product.ingredients : [product.name];
+    return ingredientNames
+      .filter((name) => {
+        const key = `${time}:${name.toLowerCase()}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map((name) => ({
+        time,
+        ingredient_name: name,
+        note: 'Using your logged time. Evidence-backed timing has not been synced for this ingredient yet.',
+        with_food: false,
+        synergy: false,
+        evidence_dots: 1,
+      }));
+  }).sort((a, b) => a.time.localeCompare(b.time));
+}
 
 function Timeline({ items }: { items: CircadianScheduleItem[] }) {
   const W = 300;
@@ -95,6 +129,7 @@ function EvidenceDots({ count }: { count: number }) {
 export default function CircadianScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { stack } = useAppState();
   const [schedule, setSchedule] = useState<CircadianScheduleItem[]>([]);
   const [chronotype, setChronotype] = useState('moderate_morning');
   const [loading, setLoading] = useState(true);
@@ -105,18 +140,25 @@ export default function CircadianScreen() {
       try {
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
-        if (!token) return;
+        if (!token) {
+          setSchedule(localCircadianSchedule(stack));
+          setEmptyReason(stack.length > 0 ? 'local_only' : 'stack_empty');
+          return;
+        }
         const res = await api.getCircadian(token);
-        setSchedule(res.schedule);
+        const fallback = localCircadianSchedule(stack);
+        setSchedule(res.schedule.length > 0 ? res.schedule : fallback);
         setChronotype(res.chronotype);
-        setEmptyReason(res.empty_reason ?? null);
+        setEmptyReason(res.schedule.length > 0 ? (res.empty_reason ?? null) : (fallback.length > 0 ? 'local_only' : res.empty_reason ?? null));
       } catch {
-        // Non-fatal — keep empty state
+        const fallback = localCircadianSchedule(stack);
+        setSchedule(fallback);
+        setEmptyReason(fallback.length > 0 ? 'local_only' : 'stack_empty');
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [stack]);
 
   const chronotypeLabel = chronotype.replace(/_/g, ' ');
 
@@ -157,10 +199,10 @@ export default function CircadianScreen() {
           ) : emptyReason === 'stack_empty' || schedule.length === 0 ? (
             <Animated.View entering={FadeInUp.delay(80).duration(300)}>
               <Text style={styles.pendingText}>
-                Add products to today&apos;s stack to build your circadian sequence.
+                Add products to today's stack to build your circadian sequence.
               </Text>
             </Animated.View>
-          ) : emptyReason === 'timing_data_pending' ? (
+          ) : emptyReason === 'timing_data_pending' && schedule.length === 0 ? (
             <Animated.View entering={FadeInUp.delay(80).duration(300)}>
               <Text style={styles.pendingText}>
                 Timing data is being researched — check back soon.
@@ -172,6 +214,12 @@ export default function CircadianScreen() {
                 <Text style={styles.sectionEyebrow}>24h biological phase</Text>
                 <Timeline items={schedule} />
               </Animated.View>
+
+              {emptyReason === 'local_only' ? (
+                <Text style={[styles.pendingText, { marginBottom: scale(18) }]}>
+                  Local preview: sign in to sync this stack and unlock researched timing rules.
+                </Text>
+              ) : null}
 
               <SectionHead label="Today's sequence" dark />
 

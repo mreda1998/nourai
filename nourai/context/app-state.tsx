@@ -10,6 +10,7 @@ export interface Product {
   grade: 'A' | 'B' | 'C' | 'D';
   ingredients: string[];
   scannedAt: Date;
+  imageUri?: string | null;
   // Stack context — set when added via AddToStackModal
   timeOfDay?: 'morning' | 'afternoon' | 'evening' | 'night';
   protocol?: 'meal' | 'supplement' | 'skincare' | 'treatment' | 'other';
@@ -78,6 +79,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         category: e.product_category,
         grade: (e.product_grade as Product['grade']) ?? 'C',
         ingredients: [],
+        imageUri: e.product_image_url ?? null,
         scannedAt: new Date(e.logged_at ?? e.created_at),
         timeOfDay: e.time_of_day ?? undefined,
         quantity: e.notes ?? (e.unit ? `${e.quantity}${e.unit}` : undefined),

@@ -15,6 +15,7 @@ import { SectionHead } from '@/components/elory';
 import { Colors, Fonts, FontSizes, scale, Radius } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { api, ConflictNode, ConflictEdge, ConflictNote } from '@/services/api';
+import { useAppState } from '@/context/app-state';
 
 function nodeColor(tone: string): string {
   if (tone === 'accent') return Colors.sage;
@@ -85,31 +86,70 @@ function ForceGraph({ nodes, edges }: { nodes: ConflictNode[]; edges: ConflictEd
   );
 }
 
+function localConflictNodes(stack: ReturnType<typeof useAppState>['stack']): ConflictNode[] {
+  const names = new Map<string, string>();
+  stack.forEach((product) => {
+    const ingredientNames = product.ingredients.length > 0 ? product.ingredients : [product.name];
+    ingredientNames.forEach((name) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const key = trimmed.toLowerCase();
+      if (!names.has(key)) names.set(key, trimmed);
+    });
+  });
+  return Array.from(names.entries()).slice(0, 12).map(([key, label]) => ({
+    id: `local-${key}`,
+    label,
+    tone: 'sand',
+  }));
+}
+
 export default function ConflictMapScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { stack } = useAppState();
   const [nodes, setNodes] = useState<ConflictNode[]>([]);
   const [edges, setEdges] = useState<ConflictEdge[]>([]);
   const [notes, setNotes] = useState<ConflictNote[]>([]);
   const [loading, setLoading] = useState(true);
+  const [localOnly, setLocalOnly] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
-        if (!token) return;
+        const fallbackNodes = localConflictNodes(stack);
+        if (!token) {
+          setNodes(fallbackNodes);
+          setEdges([]);
+          setNotes([]);
+          setLocalOnly(fallbackNodes.length > 0);
+          return;
+        }
         const res = await api.getConflictMap(token);
-        setNodes(res.nodes);
-        setEdges(res.edges);
-        setNotes(res.notes);
+        if (res.nodes.length > 0) {
+          setNodes(res.nodes);
+          setEdges(res.edges);
+          setNotes(res.notes);
+          setLocalOnly(false);
+        } else {
+          setNodes(fallbackNodes);
+          setEdges([]);
+          setNotes([]);
+          setLocalOnly(fallbackNodes.length > 0);
+        }
       } catch {
-        // Non-fatal — keep empty state
+        const fallbackNodes = localConflictNodes(stack);
+        setNodes(fallbackNodes);
+        setEdges([]);
+        setNotes([]);
+        setLocalOnly(fallbackNodes.length > 0);
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [stack]);
 
   const synCount = edges.filter((e) => e.type === 'synergy').length;
   const compCount = edges.filter((e) => e.type === 'compete').length;
@@ -179,8 +219,10 @@ export default function ConflictMapScreen() {
 
               <SectionHead label="What this means" dark />
               {notes.length === 0 ? (
-                <Text style={styles.emptyText}>
-                  No evidence-backed pair interactions are stored for these compounds yet.
+                  <Text style={styles.emptyText}>
+                  {localOnly
+                    ? 'Local preview: sign in to sync this stack and check evidence-backed pair interactions.'
+                    : 'No evidence-backed pair interactions are stored for these compounds yet.'}
                 </Text>
               ) : notes.map((note, i) => (
                 <Animated.View

@@ -95,7 +95,15 @@ export default function AskEloryScreen() {
 
     try {
       const token = await getToken();
-      if (!token) return;
+      if (!token) {
+        const assistantMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: 'Sign in to use Ask Elory. Your local stack can be previewed in the other tools, but chat needs a synced account so answers can use your saved stack and history.',
+        };
+        setMessages(prev => [...prev, assistantMsg]);
+        return;
+      }
       const history = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }));
       const res = await api.sendChatMessage(token, history, stackContext);
       const assistantMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: res.message };
