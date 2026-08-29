@@ -178,10 +178,10 @@ export default function AskEloryScreen() {
         {/* Message thread */}
         {messages.map((msg) =>
           msg.role === 'user' ? (
-            <Animated.View key={msg.id} entering={FadeInUp.duration(200)}>
-              <Text style={styles.msgTimestamp}>You</Text>
-              <Text style={styles.userMsg}>{msg.content}</Text>
-              <View style={styles.msgDivider} />
+            <Animated.View key={msg.id} entering={FadeInUp.duration(200)} style={{ marginBottom: scale(20) }}>
+              <View style={styles.userBubble}>
+                <Text style={styles.userBubbleText}>{msg.content}</Text>
+              </View>
             </Animated.View>
           ) : (
             <Animated.View key={msg.id} entering={FadeInUp.duration(200)} style={{ gap: scale(10), marginBottom: scale(20) }}>
@@ -243,9 +243,8 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: scale(24), paddingTop: scale(4) },
   promptCard: { padding: scale(14), borderWidth: 1, borderColor: 'rgba(18,51,50,0.1)', borderRadius: Radius.md },
   promptText: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, color: 'rgba(18,51,50,0.8)', lineHeight: FontSizes.subtitle * 1.4 },
-  msgTimestamp: { fontFamily: Fonts.sansSemiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, color: 'rgba(18,51,50,0.4)', marginBottom: scale(8) },
-  userMsg: { fontFamily: Fonts.serif, fontSize: FontSizes.title, lineHeight: FontSizes.title * 1.4, color: Colors.ink, paddingBottom: scale(16) },
-  msgDivider: { height: 1, backgroundColor: 'rgba(18,51,50,0.1)', marginBottom: scale(20) },
+  userBubble: { backgroundColor: Colors.ink, borderRadius: Radius.lg, paddingHorizontal: scale(16), paddingVertical: scale(12), alignSelf: 'flex-end', maxWidth: '85%' },
+  userBubbleText: { fontFamily: Fonts.serif, fontSize: FontSizes.title, lineHeight: FontSizes.title * 1.4, color: Colors.surface },
   eloryMeta: { flexDirection: 'row', alignItems: 'center', gap: scale(8), marginBottom: scale(8) },
   eloryAvatar: { width: scale(22), height: scale(22), borderRadius: 999, backgroundColor: Colors.sand, alignItems: 'center', justifyContent: 'center' },
   eloryAvatarText: { fontFamily: Fonts.serifItalic, fontSize: 12, color: Colors.surface },
