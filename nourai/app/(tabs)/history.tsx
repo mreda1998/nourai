@@ -2,8 +2,17 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { api, ScanHistoryItem, SearchHistoryItem } from '@/services/api';
+import Svg, { Path } from 'react-native-svg';
 import { Colors, Fonts, Radius } from '@/constants/theme';
-import { EloryScreen, FilterPills, ProductThumb, ScreenHeader } from '@/components/elory';
+import { EloryScreen, FilterPills, ScoreListRow, ScreenHeader } from '@/components/elory';
+
+function FilterIcon() {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={Colors.inkSecondary} strokeWidth={1.6}>
+      <Path d="M3 5h18M6 12h12M10 19h4" strokeLinecap="round" />
+    </Svg>
+  );
+}
 
 type Row = { id: string; type: 'scan' | 'search'; title: string; meta: string; at: string; productId?: string; category?: string; grade?: string; imageUri?: string | null };
 const filters = [{ key: 'all', label: 'All' }, { key: 'scan', label: 'Scans' }, { key: 'search', label: 'Searches' }];
@@ -47,18 +56,41 @@ export default function HistoryScreen() {
 
   return (
     <EloryScreen header={<ScreenHeader title="History" />}>
-      <View style={styles.search}><Text style={styles.searchIcon}>⌕</Text><TextInput value={query} onChangeText={setQuery} placeholder="Search your history" placeholderTextColor={Colors.inkTertiary} style={styles.searchInput} /></View>
+      <View style={styles.search}>
+        <Text style={styles.searchIcon}>⌕</Text>
+        <TextInput value={query} onChangeText={setQuery} placeholder="Search your history" placeholderTextColor={Colors.inkTertiary} style={styles.searchInput} />
+        <Pressable hitSlop={10} style={styles.filterButton}>
+          <FilterIcon />
+        </Pressable>
+      </View>
       <FilterPills options={filters} selected={filter} onSelect={setFilter} />
       {Object.entries(groups).map(([day, items]) => (
         <View key={day} style={styles.group}>
           <Text style={styles.day}>{day}</Text>
-          {items.map((item) => (
-            <Pressable key={item.id} style={styles.row} onPress={() => item.productId && router.push(`/product/${item.productId}` as never)}>
-              {item.type === 'scan' ? <ProductThumb size={42} letter={item.title.slice(0, 1)} imageUri={item.imageUri} /> : <View style={styles.searchThumb}><Text style={styles.searchThumbIcon}>⌕</Text></View>}
-              <View style={{ flex: 1 }}><Text style={styles.title}>{item.title}</Text><Text style={styles.meta}>{item.meta} · {new Date(item.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text></View>
-              {item.type === 'scan' ? <View style={[styles.grade, { borderColor: item.grade === 'A' ? Colors.sage : Colors.sand }]}><Text style={styles.gradeText}>{item.grade === 'A' ? '91' : '82'}</Text></View> : <Text style={styles.arrow}>›</Text>}
-            </Pressable>
-          ))}
+          {items.map((item) => {
+            const time = new Date(item.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            if (item.type === 'scan') {
+              const score = item.grade === 'A' ? 91 : item.grade === 'B' ? 82 : item.grade === 'C' ? 70 : 58;
+              return (
+                <View key={item.id} style={styles.row}>
+                  <ScoreListRow
+                    imageUrl={item.imageUri}
+                    title={item.title}
+                    subtitle={`${item.meta} · ${time}`}
+                    score={score}
+                    onPress={() => item.productId && router.push(`/product/${item.productId}` as never)}
+                  />
+                </View>
+              );
+            }
+            return (
+              <Pressable key={item.id} style={styles.row} onPress={() => item.productId && router.push(`/product/${item.productId}` as never)}>
+                <View style={styles.searchThumb}><Text style={styles.searchThumbIcon}>⌕</Text></View>
+                <View style={{ flex: 1 }}><Text style={styles.title}>{item.title}</Text><Text style={styles.meta}>{item.meta} · {time}</Text></View>
+                <Text style={styles.arrow}>›</Text>
+              </Pressable>
+            );
+          })}
         </View>
       ))}
     </EloryScreen>
@@ -66,7 +98,7 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  search: { height: 48, borderRadius: Radius.pill, backgroundColor: Colors.surfaceCard, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 9, marginBottom: 14 }, searchIcon: { color: Colors.inkSecondary, fontSize: 20 }, searchInput: { flex: 1, color: Colors.ink, fontFamily: Fonts.sans, fontSize: 11 },
+  search: { height: 48, borderRadius: Radius.pill, backgroundColor: Colors.surfaceCard, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 9, marginBottom: 14 }, searchIcon: { color: Colors.inkSecondary, fontSize: 20 }, searchInput: { flex: 1, color: Colors.ink, fontFamily: Fonts.sans, fontSize: 11 }, filterButton: { paddingLeft: 4 },
   group: { marginTop: 23 }, day: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 20, marginBottom: 4 },
-  row: { minHeight: 72, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.borderHairline, flexDirection: 'row', alignItems: 'center', gap: 12 }, searchThumb: { width: 42, height: 52, borderRadius: 21, backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }, searchThumbIcon: { color: Colors.accent, fontSize: 18 }, title: { fontFamily: Fonts.sansMedium, fontSize: 12, color: Colors.ink }, meta: { fontFamily: Fonts.sans, fontSize: 8.5, color: Colors.inkSecondary, marginTop: 4 }, grade: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, alignItems: 'center', justifyContent: 'center' }, gradeText: { fontFamily: Fonts.serifMedium, fontSize: 12, color: Colors.ink }, arrow: { color: Colors.inkSecondary, fontSize: 22 },
+  row: { minHeight: 72, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.borderHairline, flexDirection: 'row', alignItems: 'center', gap: 12 }, searchThumb: { width: 42, height: 52, borderRadius: 21, backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }, searchThumbIcon: { color: Colors.accent, fontSize: 18 }, title: { fontFamily: Fonts.sansMedium, fontSize: 12, color: Colors.ink }, meta: { fontFamily: Fonts.sans, fontSize: 8.5, color: Colors.inkSecondary, marginTop: 4 }, arrow: { color: Colors.inkSecondary, fontSize: 22 },
 });
