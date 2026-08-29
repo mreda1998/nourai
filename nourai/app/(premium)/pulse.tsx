@@ -28,6 +28,37 @@ function toneIcon(tone: string) {
   return '◇';
 }
 
+function Sparkline({ values }: { values: number[] }) {
+  const width = scale(64);
+  const height = scale(24);
+  if (values.length < 2) return null;
+
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const range = max - min || 1;
+  const stepX = width / (values.length - 1);
+
+  const points = values.map((v, i) => ({
+    x: i * stepX,
+    y: height - ((v - min) / range) * height,
+  }));
+
+  // Smooth the polyline into a cubic-bezier path through the points.
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i];
+    const p1 = points[i + 1];
+    const midX = (p0.x + p1.x) / 2;
+    d += ` C ${midX} ${p0.y}, ${midX} ${p1.y}, ${p1.x} ${p1.y}`;
+  }
+
+  return (
+    <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+      <Path d={d} stroke={Colors.sand} strokeWidth={1.5} fill="none" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 function EvidenceDots({ count, tone }: { count: number; tone: string }) {
   const fill = toneColor(tone);
   return (
@@ -84,6 +115,12 @@ export default function PulseScreen() {
     })();
   }, [stack.length]);
 
+  const ingredientCount = new Set(articles.map((a) => a.ingredient)).size;
+  // Sparkline wave = each article's evidence-strength (`dots`, 1-4) in fetch order,
+  // i.e. the recent evidence-strength trend across the digest — a real signal
+  // derived from already-fetched data, not a fabricated/random series.
+  const dotsSeries = articles.slice(0, 8).map((a) => a.dots);
+
   return (
     <View style={styles.root}>
       <ScrollView
@@ -119,9 +156,12 @@ export default function PulseScreen() {
           ) : (
             <>
               <Animated.View entering={FadeInUp.duration(300)}>
-                <Text style={styles.subtitle}>
-                  {articles.length} signal{articles.length !== 1 ? 's' : ''} across ingredients in your stack.
-                </Text>
+                <View style={styles.digestRow}>
+                  <Text style={[styles.subtitle, styles.digestText]}>
+                    {articles.length} signal{articles.length !== 1 ? 's' : ''} across {ingredientCount} ingredient{ingredientCount !== 1 ? 's' : ''} in your stack.
+                  </Text>
+                  <Sparkline values={dotsSeries} />
+                </View>
                 <View style={styles.subtitleDivider} />
               </Animated.View>
 
@@ -165,7 +205,9 @@ const styles = StyleSheet.create({
   eyebrow: { fontFamily: Fonts.sansSemiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, color: 'rgba(18,51,50,0.45)', marginBottom: scale(10) },
   title: { fontFamily: Fonts.serif, fontSize: scale(38), lineHeight: scale(40), color: Colors.ink, letterSpacing: -0.5 },
   subtitle: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, lineHeight: FontSizes.subtitle * 1.5, color: 'rgba(18,51,50,0.75)', paddingBottom: scale(20) },
-  subtitleDivider: { height: 1, backgroundColor: 'rgba(18,51,50,0.12)', marginBottom: scale(24) },
+  digestRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: scale(12) },
+  digestText: { flex: 1, paddingBottom: 0 },
+  subtitleDivider: { height: 1, backgroundColor: 'rgba(18,51,50,0.12)', marginTop: scale(14), marginBottom: scale(24) },
   article: { paddingVertical: scale(20), gap: scale(12) },
   articleBorder: { borderBottomWidth: 1, borderBottomColor: 'rgba(18,51,50,0.1)' },
   articleMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
