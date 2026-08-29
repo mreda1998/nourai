@@ -309,6 +309,11 @@ export default function ProductDetailScreen() {
     return found ?? { name: label, value: 0, is_negative: false };
   }).filter((d) => d.value > 0);
 
+  const supportDomains = product.bio_domains
+    .filter((d) => d.value > 0 && !d.is_negative)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 3);
+
   const hasPersonalData =
     personalAnalysis &&
     (personalAnalysis.hasConcernFlags || personalAnalysis.hasGoalSupports);
@@ -422,11 +427,11 @@ export default function ProductDetailScreen() {
         </View>
 
         {/* ── What this product supports ──────────────────────────────── */}
-        {bioDomains.length > 0 && (
+        {supportDomains.length > 0 && (
           <View style={{ marginBottom: 24 }}>
             <SectionHead label="What this product supports" />
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {bioDomains.slice(0, 3).map((domain) => (
+              {supportDomains.map((domain) => (
                 <View key={domain.name} style={styles.supportPill}>
                   <Text style={styles.supportPillText}>{domain.name}</Text>
                 </View>
