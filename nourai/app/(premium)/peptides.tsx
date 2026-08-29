@@ -37,32 +37,24 @@ const WADA_PROHIBITED = new Set(['prohibited_in_competition', 'prohibited_all'])
 
 // ─── Badge Components ─────────────────────────────────────────────────────────
 
-function USStatusBadge({ status }: { status: string | null }) {
+function USStatusTag({ status }: { status: string | null }) {
   if (!status) return null;
   const label = US_STATUS_LABEL[status] ?? status;
   const color =
     status === 'fda_approved'
-      ? Colors.accentHill
+      ? Colors.accent
       : status === 'compounded'
       ? Colors.inkSecondary
-      : Colors.accentAlert;
-  return (
-    <View style={[styles.badge, { borderColor: color }]}>
-      <Text style={[styles.badgeText, { color }]}>{label}</Text>
-    </View>
-  );
+      : Colors.alert;
+  return <Text style={[styles.tagText, { color }]}>{label}</Text>;
 }
 
-function WADABadge({ status }: { status: string | null }) {
+function WADATag({ status }: { status: string | null }) {
   if (!status) return null;
   const prohibited = WADA_PROHIBITED.has(status);
-  const color = prohibited ? Colors.accentAlert : Colors.accentHill;
+  const color = prohibited ? Colors.alert : Colors.accent;
   const label = prohibited ? 'WADA ✗' : 'WADA ✓';
-  return (
-    <View style={[styles.badge, { borderColor: color }]}>
-      <Text style={[styles.badgeText, { color }]}>{label}</Text>
-    </View>
-  );
+  return <Text style={[styles.tagText, { color }]}>{label}</Text>;
 }
 
 // ─── Peptide Card ─────────────────────────────────────────────────────────────
@@ -72,19 +64,24 @@ function PeptideCard({ item, onPress }: { item: PeptideListItem; onPress: () => 
     ? item.evidence_level.charAt(0).toUpperCase() + item.evidence_level.slice(1)
     : null;
 
+  const hasUsStatus = !!item.us_regulatory_status;
+  const hasWada = !!item.wada_status;
+
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
     >
-      <View style={styles.cardHeader}>
-        <Text style={styles.cardName}>{item.canonical_name}</Text>
-        {levelLabel && <Text style={styles.cardLevel}>{levelLabel}</Text>}
-      </View>
-      <View style={styles.badgeRow}>
-        <USStatusBadge status={item.us_regulatory_status} />
-        <WADABadge status={item.wada_status} />
-      </View>
+      <Text style={styles.cardName}>{item.canonical_name}</Text>
+      {(hasUsStatus || hasWada || levelLabel) && (
+        <View style={styles.tagRow}>
+          <USStatusTag status={item.us_regulatory_status} />
+          {hasUsStatus && (hasWada || levelLabel) && <Text style={styles.tagDot}>·</Text>}
+          <WADATag status={item.wada_status} />
+          {hasWada && levelLabel && <Text style={styles.tagDot}>·</Text>}
+          {levelLabel && <Text style={styles.cardLevel}>{levelLabel}</Text>}
+        </View>
+      )}
       {item.mechanism_summary && (
         <Text style={styles.cardMechanism} numberOfLines={2}>
           {item.mechanism_summary}
@@ -235,7 +232,7 @@ export default function PeptidesScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.bone,
+    backgroundColor: Colors.surface,
   },
   scroll: {
     paddingHorizontal: scale(24),
@@ -269,7 +266,7 @@ const styles = StyleSheet.create({
     marginBottom: scale(12),
   },
   searchInput: {
-    backgroundColor: Colors.boneCard,
+    backgroundColor: Colors.surfaceCard,
     borderWidth: 1,
     borderColor: Colors.borderHairline,
     borderRadius: Radius.md,
@@ -291,7 +288,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: Colors.borderHairline,
-    backgroundColor: Colors.boneCard,
+    backgroundColor: Colors.surfaceCard,
   },
   filterChipSelected: {
     backgroundColor: Colors.ink,
@@ -304,33 +301,26 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   filterChipTextSelected: {
-    color: Colors.bone,
+    color: Colors.surface,
   },
   list: {
     gap: scale(12),
   },
   card: {
-    backgroundColor: Colors.boneCard,
+    backgroundColor: Colors.surfaceCard,
     borderWidth: 1,
     borderColor: Colors.borderHairline,
     borderRadius: Radius.lg,
-    padding: scale(16),
+    padding: scale(18),
   },
   cardPressed: {
     opacity: 0.7,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: scale(8),
-  },
   cardName: {
-    fontFamily: Fonts.serif,
-    fontSize: scale(18),
+    fontFamily: Fonts.serifMedium,
+    fontSize: scale(19),
     color: Colors.ink,
-    flex: 1,
-    marginRight: scale(8),
+    marginBottom: scale(6),
   },
   cardLevel: {
     fontFamily: Fonts.sansSemiBold,
@@ -339,22 +329,23 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
-  badgeRow: {
+  tagRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: scale(6),
-    marginBottom: scale(8),
+    marginBottom: scale(10),
     flexWrap: 'wrap',
   },
-  badge: {
-    paddingHorizontal: scale(8),
-    paddingVertical: scale(3),
-    borderRadius: Radius.sm,
-    borderWidth: 1,
-  },
-  badgeText: {
+  tagText: {
     fontFamily: Fonts.sansSemiBold,
-    fontSize: 10,
-    letterSpacing: 0.4,
+    fontSize: FontSizes.caption,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  tagDot: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    color: Colors.inkTertiary,
   },
   cardMechanism: {
     fontFamily: Fonts.sans,
@@ -368,7 +359,7 @@ const styles = StyleSheet.create({
   errorText: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
-    color: Colors.accentAlert,
+    color: Colors.alert,
     textAlign: 'center',
     marginTop: scale(48),
   },
