@@ -15,7 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { Colors, Fonts, FontSizes, Radius, scale } from '@/constants/theme';
 import { api } from '@/services/api';
 import type { IngredientEvidenceRecord } from '@/services/api';
-import { Eyebrow, SerifH, FilterPills } from '@/components/elory';
+import { Eyebrow, SerifH, FilterPills, EvidenceSpectrum } from '@/components/elory';
 import type { FilterPillOption } from '@/components/elory';
 
 const STUDY_TYPE_LABEL: Record<string, string> = {
@@ -50,12 +50,6 @@ function confidenceLabel(c: string): string {
   if (c === 'high') return 'Strong';
   if (c === 'moderate') return 'Moderate';
   return 'Preliminary';
-}
-
-function confidenceColor(c: string): string {
-  if (c === 'high') return Colors.sage;
-  if (c === 'moderate') return Colors.sand;
-  return Colors.inkTertiary;
 }
 
 function BackIcon() {
@@ -143,11 +137,11 @@ export default function ResearchEvidenceScreen() {
                 <View style={{ flex: 1 }}>
                   {ev.pmid && <Text style={styles.metaText}>PMID: {ev.pmid}</Text>}
                 </View>
-                <View style={[styles.confidenceBadge, { backgroundColor: confidenceColor(ev.confidence) + '22', borderColor: confidenceColor(ev.confidence) }]}>
-                  <Text style={[styles.confidenceText, { color: confidenceColor(ev.confidence) }]}>
-                    {confidenceLabel(ev.confidence)}
-                  </Text>
-                </View>
+                <EvidenceSpectrum
+                  strength={ev.confidence === 'high' ? 5 : ev.confidence === 'moderate' ? 3 : 2}
+                  max={5}
+                  label={confidenceLabel(ev.confidence)}
+                />
               </View>
             </View>
           ))}
@@ -240,17 +234,6 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.sans,
     fontSize: FontSizes.xs,
     color: Colors.inkTertiary,
-  },
-  confidenceBadge: {
-    borderWidth: 1,
-    borderRadius: Radius.pill,
-    paddingHorizontal: scale(9),
-    paddingVertical: scale(3),
-  },
-  confidenceText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    letterSpacing: 0.4,
   },
   emptyText: {
     fontFamily: Fonts.sans,
