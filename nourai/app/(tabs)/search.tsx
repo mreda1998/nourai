@@ -1,400 +1,106 @@
-import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'expo-router';
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  Pressable,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeInUp, FadeIn } from 'react-native-reanimated';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import Svg, { Circle, Path } from 'react-native-svg';
+import { api, IngredientListItem, ProductListItem } from '@/services/api';
+import { Colors, Fonts, Radius } from '@/constants/theme';
+import { EloryScreen, FilterPills, ProductThumb, ScreenHeader } from '@/components/elory';
 
-import {
-  Colors,
-  Fonts,
-  Spacing,
-  Radius,
-  FontSizes,
-  Layout,
-  scale,
-  verticalScale,
-} from '@/constants/theme';
-import { api, type ProductListItem } from '@/services/api';
-import ProductListItemComponent from '@/components/ProductListItem';
-
-const DISCOVERY_LIMIT = 50;
-const SEARCH_LIMIT = 30;
-const DEBOUNCE_MS = 300;
-
-const CATEGORIES = [
-  { id: 'all', label: 'All' },
-  { id: 'food', label: 'Food' },
-  { id: 'cosmetic', label: 'Cosmetics' },
-  { id: 'supplement', label: 'Supplements' },
-  { id: 'otc', label: 'OTC' },
+type Mode = 'products' | 'ingredients';
+const modes = [{ key: 'products', label: 'Products' }, { key: 'ingredients', label: 'Ingredients' }];
+const categories = [{ key: 'all', label: 'All' }, { key: 'supplement', label: 'Supplements' }, { key: 'cosmetic', label: 'Skincare' }, { key: 'food', label: 'Food' }];
+const popularIngredients = [
+  { id: 'niacinamide', name: 'Niacinamide', category: 'Skin barrier · Vitamin B3', evidence: 'Established' },
+  { id: 'creatine', name: 'Creatine monohydrate', category: 'Performance · Amino acid', evidence: 'Established' },
+  { id: 'magnesium', name: 'Magnesium glycinate', category: 'Sleep · Mineral', evidence: 'Strong' },
+  { id: 'ashwagandha', name: 'Ashwagandha', category: 'Stress · Botanical', evidence: 'Emerging' },
 ];
 
 export default function SearchScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ q?: string }>();
+  const [mode, setMode] = useState<Mode>('products');
+  const [category, setCategory] = useState('all');
+  const [query, setQuery] = useState(params.q ?? '');
+  const [products, setProducts] = useState<ProductListItem[]>([]);
+  const [ingredients, setIngredients] = useState<IngredientListItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [query, setQuery] = useState('');
-  const [isFocused, setIsFocused] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('all');
-
-  // Two separate product lists: discovery (on mount) and search results
-  const [discoveryProducts, setDiscoveryProducts] = useState<ProductListItem[]>([]);
-  const [searchResults, setSearchResults] = useState<ProductListItem[]>([]);
-  const [totalResults, setTotalResults] = useState(0);
-
-  const [loadingDiscovery, setLoadingDiscovery] = useState(true);
-  const [searching, setSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const isSearchMode = query.trim().length >= 2;
-
-  // Refs for debounce timer and in-flight request cancellation
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
-  // ── Discovery: reload when category changes ──────────────────────────────
   useEffect(() => {
-    loadDiscovery();
-  }, [selectedCategory]);
+    let alive = true;
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        if (mode === 'ingredients') {
+          if (query.trim().length >= 2) {
+            const value = await api.searchIngredients(query.trim(), 30);
+            if (alive) setIngredients(value.ingredients);
+            api.addToSearchHistory(query.trim(), 'ingredient').catch(() => {});
+          } else if (alive) setIngredients([]);
+        } else if (query.trim().length >= 2) {
+          const value = await api.searchProducts(query.trim(), { limit: 30, category: category === 'all' ? undefined : category });
+          if (alive) setProducts(value.products);
+          api.addToSearchHistory(query.trim(), 'product').catch(() => {});
+        } else {
+          const value = await api.getProducts({ limit: 12, category: category === 'all' ? undefined : category });
+          if (alive) setProducts(value.products);
+        }
+      } catch { /* discovery stays gracefully empty */ } finally { if (alive) setLoading(false); }
+    }, query ? 280 : 0);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [mode, query, category]);
 
-  // ── Search: debounce on query or category change ─────────────────────────
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    if (query.trim().length < 2) {
-      // Not enough to search — cancel any in-flight request
-      if (abortRef.current) abortRef.current.abort();
-      setSearchResults([]);
-      setSearching(false);
-      return;
-    }
-
-    setSearching(true);
-    debounceRef.current = setTimeout(() => {
-      runSearch(query.trim());
-    }, DEBOUNCE_MS);
-
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query, selectedCategory]);
-
-  // ── Fetch discovery set ───────────────────────────────────────────────────
-  const loadDiscovery = async () => {
-    setLoadingDiscovery(true);
-    setError(null);
-    try {
-      const category = selectedCategory !== 'all' ? selectedCategory : undefined;
-      const res = await api.getProducts({ limit: DISCOVERY_LIMIT, category });
-      setDiscoveryProducts(res.products);
-    } catch {
-      setError('Failed to load products');
-    } finally {
-      setLoadingDiscovery(false);
-    }
-  };
-
-  // ── Server-side search ────────────────────────────────────────────────────
-  const runSearch = async (q: string) => {
-    // Cancel previous in-flight request
-    if (abortRef.current) abortRef.current.abort();
-    abortRef.current = new AbortController();
-
-    setError(null);
-    try {
-      const category = selectedCategory !== 'all' ? selectedCategory : undefined;
-      const includeUsda = selectedCategory === 'all' || selectedCategory === 'food';
-
-      // Run product DB search and USDA search in parallel
-      const [res, usdaRes] = await Promise.all([
-        api.searchProducts(q, { limit: SEARCH_LIMIT, category }),
-        includeUsda ? api.searchFoods(q, 8) : Promise.resolve({ products: [], total: 0, ai_generated: false }),
-      ]);
-
-      // Merge: local DB first, then USDA results not already in local results
-      const localIds = new Set(res.products.map((p) => p.id));
-      const merged = [
-        ...res.products,
-        ...usdaRes.products.filter((p) => !localIds.has(p.id)),
-      ];
-
-      setSearchResults(merged);
-      setTotalResults(merged.length);
-    } catch (e: any) {
-      if (e?.name !== 'AbortError') setError('Search failed');
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  // ── Displayed data ────────────────────────────────────────────────────────
-  const displayedProducts = isSearchMode ? searchResults : discoveryProducts;
-  const isLoading = isSearchMode ? searching : loadingDiscovery;
-
-  // Section label
-  const sectionLabel = isSearchMode
-    ? (searching ? 'Searching…' : `${totalResults} result${totalResults !== 1 ? 's' : ''}`)
-    : `Top ${discoveryProducts.length} Products`;
+  const visibleIngredients = useMemo(() => query.trim().length >= 2 ? ingredients.map((i) => ({ id: i.id, name: i.canonical_name, category: i.category, evidence: 'Evidence reviewed' })) : popularIngredients, [ingredients, query]);
 
   return (
-    <View style={styles.screen}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.container,
-          { paddingTop: insets.top + Spacing.lg },
-        ]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Discover</Text>
-        </View>
+    <EloryScreen header={<ScreenHeader title="Explore" />}>
+      <View style={styles.searchBox}>
+        <Text style={styles.searchIcon}>⌕</Text>
+        <TextInput value={query} onChangeText={setQuery} placeholder="Search products, brands or ingredients" placeholderTextColor={Colors.inkTertiary} style={styles.input} />
+        {query ? <Pressable onPress={() => setQuery('')}><Text style={styles.clear}>×</Text></Pressable> : null}
+      </View>
+      <FilterPills options={modes} selected={mode} onSelect={(value) => setMode(value as Mode)} />
+      {mode === 'products' ? <View style={{ marginTop: 12 }}><FilterPills options={categories} selected={category} onSelect={setCategory} /></View> : null}
+      {loading ? <ActivityIndicator color={Colors.accent} style={{ marginTop: 30 }} /> : null}
 
-        {/* Search Input */}
-        <View style={styles.searchContainer}>
-          <View style={[styles.searchBox, isFocused && styles.searchBoxFocused]}>
-            <Text style={styles.searchIcon}>⌕</Text>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search products, brands…"
-              placeholderTextColor={Colors.inkTertiary}
-              value={query}
-              onChangeText={setQuery}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
-            />
-            {query.length > 0 && (
-              <Pressable onPress={() => setQuery('')}>
-                <Text style={styles.clearBtn}>✕</Text>
-              </Pressable>
-            )}
-          </View>
-        </View>
+      {!loading && mode === 'products' ? (
+        <>
+          <View style={styles.sectionRow}><Text style={styles.sectionTitle}>{query ? 'Search results' : 'Recently viewed'}</Text><Text style={styles.sectionLink}>{products.length} products</Text></View>
+          {!query && products.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cards}>
+              {products.slice(0, 6).map((product) => <ProductCard key={product.id} item={product} />)}
+            </ScrollView>
+          ) : products.map((product) => <ProductRow key={product.id} item={product} />)}
 
-        {/* Category Filter */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryScroll}
-        >
-          {CATEGORIES.map((cat) => (
-            <Pressable
-              key={cat.id}
-              style={[
-                styles.categoryPill,
-                selectedCategory === cat.id && styles.categoryPillActive,
-              ]}
-              onPress={() => setSelectedCategory(cat.id)}
-            >
-              <Text
-                style={[
-                  styles.categoryPillText,
-                  selectedCategory === cat.id && styles.categoryPillTextActive,
-                ]}
-              >
-                {cat.label}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+          {!query ? <>
+            <View style={styles.sectionRow}><Text style={styles.sectionTitle}>Popular ingredients</Text><Text style={styles.sectionLink}>See all</Text></View>
+            {popularIngredients.slice(0, 3).map((item, index) => <IngredientRow key={item.id} item={item} index={index} />)}
+            <View style={styles.sectionRow}><Text style={styles.sectionTitle}>Trending now</Text></View>
+            <View style={styles.trending}><Pressable style={styles.trendingCard} onPress={() => router.push('/newsletter/creatine' as never)}><Text style={styles.trendingKicker}>Research brief</Text><Text style={styles.trendingTitle}>Creatine beyond muscle</Text><Text style={styles.trendingMeta}>7 min read</Text></Pressable><Pressable style={[styles.trendingCard, { backgroundColor: '#E6DDCF' }]} onPress={() => router.push('/newsletter/circadian' as never)}><Text style={styles.trendingKicker}>Protocol</Text><Text style={styles.trendingTitle}>Reset your sleep rhythm</Text><Text style={styles.trendingMeta}>6 min read</Text></Pressable></View>
+          </> : null}
+        </>
+      ) : null}
 
-        {/* Error */}
-        {error && !isLoading && (
-          <View style={styles.centered}>
-            <Text style={styles.errorText}>{error}</Text>
-            <Pressable style={styles.retryBtn} onPress={loadDiscovery}>
-              <Text style={styles.retryBtnText}>Retry</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {/* Product list */}
-        {!error && (
-          <View style={styles.productsSection}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionLabel}>{sectionLabel}</Text>
-              {isLoading && <ActivityIndicator size="small" color={Colors.ink} />}
-            </View>
-
-            {!isLoading && displayedProducts.length === 0 ? (
-              <Animated.View entering={FadeIn.duration(400)} style={styles.emptyState}>
-                <Text style={styles.emptyText}>
-                  {isSearchMode ? 'No products found' : 'No products yet'}
-                </Text>
-                <Text style={styles.emptySubtext}>
-                  {isSearchMode ? 'Try a different term or category' : 'Try a different category'}
-                </Text>
-              </Animated.View>
-            ) : (
-              <View>
-                {displayedProducts.map((product, index) => (
-                  <Animated.View
-                    key={product.id}
-                    entering={FadeInUp.duration(300).delay(index * 40)}
-                  >
-                    <ProductListItemComponent
-                      id={product.id}
-                      name={product.name}
-                      brand={product.brand}
-                      category={product.category}
-                      grade={product.grade}
-                      onPress={() => router.push(`/product/${product.id}`)}
-                    />
-                  </Animated.View>
-                ))}
-              </View>
-            )}
-          </View>
-        )}
-
-        <View style={{ height: verticalScale(100) }} />
-      </ScrollView>
-    </View>
+      {!loading && mode === 'ingredients' ? <View style={{ marginTop: 8 }}>{visibleIngredients.map((item, index) => <IngredientRow key={item.id} item={item} index={index} />)}</View> : null}
+    </EloryScreen>
   );
 }
 
+function ProductCard({ item }: { item: ProductListItem }) {
+  return <Pressable style={styles.card} onPress={() => router.push(`/product/${item.id}` as never)}><ProductThumb size={67} imageUri={item.image_url} letter={item.name.slice(0, 1)} /><Text style={styles.cardBrand}>{item.brand || item.category}</Text><Text style={styles.cardName} numberOfLines={2}>{item.name}</Text><View style={styles.cardScore}><Text style={styles.cardScoreText}>{item.grade === 'A' ? 91 : item.grade === 'B' ? 82 : 70}</Text></View></Pressable>;
+}
+
+function ProductRow({ item }: { item: ProductListItem }) {
+  return <Pressable style={styles.productRow} onPress={() => router.push(`/product/${item.id}` as never)}><ProductThumb size={43} imageUri={item.image_url} letter={item.name.slice(0, 1)} /><View style={{ flex: 1 }}><Text style={styles.cardBrand}>{item.brand || item.category}</Text><Text style={styles.rowName}>{item.name}</Text></View><View style={styles.rowScore}><Text style={styles.cardScoreText}>{item.grade === 'A' ? 91 : item.grade === 'B' ? 82 : 70}</Text></View></Pressable>;
+}
+
+function IngredientRow({ item, index }: { item: { id: string; name: string; category: string; evidence: string }; index: number }) {
+  return <Pressable style={styles.ingredientRow} onPress={() => router.push(`/ingredient/${item.id}` as never)}><View style={styles.molecule}><Svg width={40} height={40} viewBox="0 0 40 40" fill="none" stroke={Colors.accent} strokeWidth={1}><Circle cx={10 + index * 2} cy={13} r={3} /><Circle cx={28} cy={11 + index} r={3} /><Circle cx={20} cy={28} r={3} /><Path d="M13 14l12-2M12 16l7 10M26 14l-5 11" /></Svg></View><View style={{ flex: 1 }}><Text style={styles.ingredientName}>{item.name}</Text><Text style={styles.ingredientMeta}>{item.category}</Text></View><View><View style={styles.dots}>{[0,1,2,3,4].map((dot) => <View key={dot} style={[styles.dot, dot > 3 && { backgroundColor: 'transparent' }]} />)}</View><Text style={styles.evidence}>{item.evidence}</Text></View></Pressable>;
+}
+
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: Colors.bone,
-  },
-  container: {
-    paddingBottom: Layout.bottomPadding,
-  },
-  header: {
-    paddingHorizontal: Layout.screenPaddingHorizontal,
-    marginBottom: Spacing.lg,
-  },
-  title: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.display,
-    color: Colors.ink,
-  },
-  searchContainer: {
-    paddingHorizontal: Layout.screenPaddingHorizontal,
-    marginBottom: Spacing.lg,
-  },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.boneCard,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    height: scale(52),
-    gap: Spacing.sm,
-  },
-  searchBoxFocused: {
-    borderColor: Colors.ink,
-  },
-  searchIcon: {
-    fontSize: FontSizes.heading - 4,
-    color: Colors.inkTertiary,
-  },
-  searchInput: {
-    flex: 1,
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.subtitle,
-    color: Colors.ink,
-  },
-  clearBtn: {
-    fontSize: FontSizes.bodyLarge,
-    color: Colors.inkTertiary,
-    padding: 4,
-  },
-  categoryScroll: {
-    paddingHorizontal: Layout.screenPaddingHorizontal,
-    paddingBottom: Spacing.lg,
-    gap: Spacing.sm,
-  },
-  categoryPill: {
-    paddingVertical: scale(10),
-    paddingHorizontal: scale(20),
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    backgroundColor: Colors.boneCard,
-    marginRight: Spacing.sm,
-  },
-  categoryPillActive: {
-    backgroundColor: Colors.ink,
-    borderColor: Colors.ink,
-  },
-  categoryPillText: {
-    fontFamily: Fonts.sansMedium,
-    fontSize: FontSizes.body,
-    color: Colors.inkSecondary,
-  },
-  categoryPillTextActive: {
-    color: Colors.bone,
-  },
-  centered: {
-    paddingVertical: verticalScale(60),
-    alignItems: 'center',
-    paddingHorizontal: Layout.screenPaddingHorizontal,
-  },
-  errorText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.bodyLarge,
-    color: Colors.accentAlert,
-    marginBottom: Spacing.md,
-    textAlign: 'center',
-  },
-  retryBtn: {
-    backgroundColor: Colors.ink,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    borderRadius: Radius.pill,
-  },
-  retryBtnText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.body,
-    color: Colors.bone,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  productsSection: {
-    paddingHorizontal: Layout.screenPaddingHorizontal,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderStrong,
-    marginBottom: Spacing.lg,
-  },
-  sectionLabel: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    color: Colors.ink,
-  },
-  emptyState: {
-    paddingVertical: verticalScale(40),
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.heading,
-    color: Colors.ink,
-    marginBottom: Spacing.sm,
-  },
-  emptySubtext: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.inkSecondary,
-  },
+  searchBox: { height: 49, borderRadius: Radius.pill, backgroundColor: Colors.surfaceCard, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 9, marginBottom: 12 }, searchIcon: { color: Colors.inkSecondary, fontSize: 20 }, input: { flex: 1, fontFamily: Fonts.sans, fontSize: 11, color: Colors.ink }, clear: { color: Colors.inkSecondary, fontSize: 19 },
+  sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 25, marginBottom: 10 }, sectionTitle: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 21 }, sectionLink: { fontFamily: Fonts.sansMedium, color: Colors.accent, fontSize: 9 }, cards: { gap: 10, paddingRight: 20 }, card: { width: 135, height: 203, borderRadius: Radius.md, backgroundColor: Colors.surfaceCard, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, padding: 11, alignItems: 'center' }, cardBrand: { alignSelf: 'stretch', fontFamily: Fonts.sansSemiBold, color: Colors.inkSecondary, textTransform: 'uppercase', fontSize: 7.5, letterSpacing: .65, marginTop: 6 }, cardName: { alignSelf: 'stretch', fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 15, lineHeight: 17, marginTop: 3 }, cardScore: { position: 'absolute', right: 9, top: 9, width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.surfaceCard, borderWidth: 2, borderColor: Colors.sage, alignItems: 'center', justifyContent: 'center' }, cardScoreText: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 11 },
+  productRow: { minHeight: 72, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.borderHairline, flexDirection: 'row', alignItems: 'center', gap: 11 }, rowName: { fontFamily: Fonts.sansMedium, color: Colors.ink, fontSize: 12, marginTop: 2 }, rowScore: { width: 33, height: 33, borderRadius: 17, borderWidth: 2, borderColor: Colors.sage, alignItems: 'center', justifyContent: 'center' },
+  ingredientRow: { minHeight: 72, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.borderHairline, flexDirection: 'row', alignItems: 'center', gap: 11 }, molecule: { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }, ingredientName: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 16 }, ingredientMeta: { fontFamily: Fonts.sans, color: Colors.inkSecondary, fontSize: 8.5, marginTop: 2 }, dots: { flexDirection: 'row', justifyContent: 'flex-end', gap: 2.5 }, dot: { width: 6, height: 6, borderRadius: 3, borderWidth: .7, borderColor: Colors.accent, backgroundColor: Colors.accent }, evidence: { fontFamily: Fonts.sans, fontSize: 7.5, color: Colors.inkSecondary, marginTop: 4 },
+  trending: { flexDirection: 'row', gap: 10 }, trendingCard: { flex: 1, minHeight: 134, borderRadius: Radius.md, backgroundColor: '#D8E2DC', padding: 13, justifyContent: 'flex-end' }, trendingKicker: { fontFamily: Fonts.sansSemiBold, fontSize: 7.5, textTransform: 'uppercase', letterSpacing: .7, color: Colors.inkSecondary }, trendingTitle: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 17, lineHeight: 18, marginTop: 5 }, trendingMeta: { fontFamily: Fonts.sans, color: Colors.inkSecondary, fontSize: 8, marginTop: 8 },
 });

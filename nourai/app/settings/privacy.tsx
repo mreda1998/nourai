@@ -21,7 +21,7 @@ export default function PrivacyScreen() {
       <ScrollView contentContainerStyle={styles.body}>
         <Text style={styles.sectionTitle}>Your data, your control</Text>
         <Text style={styles.paragraph}>
-          NourAI does not sell your personal data to third parties. Your scan history,
+          Elory does not sell your personal data to third parties. Your scan history,
           health profile, and stack are stored securely and used only to personalise
           your in-app experience.
         </Text>
@@ -39,16 +39,16 @@ export default function PrivacyScreen() {
           You can request full data deletion by contacting us at{' '}
           <Text
             style={styles.link}
-            onPress={() => Linking.openURL('mailto:privacy@nourai.app')}
+            onPress={() => Linking.openURL('mailto:privacy@elory.app')}
           >
-            privacy@nourai.app
+            privacy@elory.app
           </Text>
           . We will process your request within 30 days.
         </Text>
 
         <Pressable
           style={styles.policyBtn}
-          onPress={() => Linking.openURL('https://nourai.app/privacy')}
+          onPress={() => Linking.openURL('https://elory.app/privacy')}
         >
           <Text style={styles.policyBtnText}>View Full Privacy Policy</Text>
         </Pressable>

@@ -16,20 +16,20 @@ export default function AboutScreen() {
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
           <Text style={styles.backArrow}>‹</Text>
         </Pressable>
-        <Text style={styles.title}>About NourAI</Text>
+        <Text style={styles.title}>About Elory</Text>
         <View style={styles.backBtn} />
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.appName}>NourAI</Text>
-        <Text style={styles.tagline}>Ingredient intelligence, in your pocket.</Text>
+        <Text style={styles.appName}>ELORY</Text>
+        <Text style={styles.tagline}>Evidence over opinions.</Text>
         <Text style={styles.version}>Version {version}</Text>
 
         <View style={styles.divider} />
 
         <Pressable
           style={styles.linkRow}
-          onPress={() => Linking.openURL('https://nourai.app/terms')}
+          onPress={() => Linking.openURL('https://elory.app/terms')}
         >
           <Text style={styles.linkText}>Terms of Service</Text>
           <Text style={styles.chevron}>›</Text>
@@ -37,7 +37,7 @@ export default function AboutScreen() {
 
         <Pressable
           style={styles.linkRow}
-          onPress={() => Linking.openURL('https://nourai.app/privacy')}
+          onPress={() => Linking.openURL('https://elory.app/privacy')}
         >
           <Text style={styles.linkText}>Privacy Policy</Text>
           <Text style={styles.chevron}>›</Text>
@@ -45,7 +45,7 @@ export default function AboutScreen() {
 
         <Pressable
           style={styles.linkRow}
-          onPress={() => Linking.openURL('mailto:support@nourai.app')}
+          onPress={() => Linking.openURL('mailto:support@elory.app')}
         >
           <Text style={styles.linkText}>Contact Support</Text>
           <Text style={styles.chevron}>›</Text>

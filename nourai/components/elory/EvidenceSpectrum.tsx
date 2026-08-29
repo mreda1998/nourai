@@ -10,7 +10,7 @@ interface Props {
   dark?: boolean;
 }
 
-export function EvidenceSpectrum({ strength = 3, max = 4, color, label, dark }: Props) {
+export function EvidenceSpectrum({ strength = 3, max = 5, color, label, dark }: Props) {
   const c = color ?? (dark ? Colors.sand : Colors.ink);
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -19,10 +19,10 @@ export function EvidenceSpectrum({ strength = 3, max = 4, color, label, dark }: 
           <View
             key={i}
             style={{
-              width: 8,
-              height: 8,
-              borderRadius: 4,
-              borderWidth: 1,
+              width: 7,
+              height: 7,
+              borderRadius: 3.5,
+              borderWidth: 0.8,
               borderColor: c,
               backgroundColor: i < strength ? c : 'transparent',
             }}
@@ -34,8 +34,7 @@ export function EvidenceSpectrum({ strength = 3, max = 4, color, label, dark }: 
           style={{
             fontFamily: Fonts.sansSemiBold,
             fontSize: 10,
-            textTransform: 'uppercase',
-            letterSpacing: 1.0,
+            letterSpacing: 0.1,
             color: dark ? 'rgba(241,237,228,0.55)' : Colors.inkSecondary,
           }}
         >

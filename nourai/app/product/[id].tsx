@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,7 +21,7 @@ import {
   verticalScale,
 } from '@/constants/theme';
 import { api, getProductWithFallback } from '@/services/api';
-import type { Product, ServerPersonalAnalysis } from '@/services/api';
+import type { LabObservation, Product, ServerPersonalAnalysis } from '@/services/api';
 import { useAppState } from '@/context/app-state';
 import { useAuth } from '@/context/auth-context';
 import { supabase } from '@/lib/supabase';
@@ -33,22 +34,25 @@ import {
   Eyebrow,
   SerifH,
   EvidenceSpectrum,
-  SpectrumBar,
   Tag,
   AlertNote,
   ProductThumb,
   SectionHead,
+  ScoreRing,
+  FactorBar,
 } from '@/components/elory';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function healthScoreToStrength(score: number | undefined): number {
-  if (!score) return 1;
-  if (score >= 80) return 4;
-  if (score >= 60) return 3;
-  if (score >= 40) return 2;
-  return 1;
+function gradeToScore(grade: string): number {
+  switch (grade) {
+    case 'A': return 90;
+    case 'B': return 72;
+    case 'C': return 52;
+    case 'D': return 30;
+    default: return 50;
+  }
 }
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function categoryToThumbColor(
   cat: string,
@@ -72,6 +76,8 @@ export default function ProductDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [tappingNutrient, setTappingNutrient] = useState<string | null>(null);
+  const [labObservations, setLabObservations] = useState<LabObservation[]>([]);
+  const [activeTab, setActiveTab] = useState('Overview');
 
   const [serverAnalysis, setServerAnalysis] =
     useState<ServerPersonalAnalysis | null>(null);
@@ -157,6 +163,22 @@ export default function ProductDetailScreen() {
       .then(setServerAnalysis)
       .catch(() => {});
   }, [product?.id, onboardingProfile]);
+
+  useEffect(() => {
+    if (!product || product.id.startsWith('usda-')) {
+      setLabObservations([]);
+      return;
+    }
+    let active = true;
+    api.getProductLabResults(product.id)
+      .then((result) => {
+        if (active) setLabObservations(result.observations);
+      })
+      .catch(() => {
+        if (active) setLabObservations([]);
+      });
+    return () => { active = false; };
+  }, [product?.id]);
 
   // ── Nutrient tap ──────────────────────────────────────────────────────────
   const handleNutrientTap = async (nutrient: {
@@ -266,7 +288,6 @@ export default function ProductDetailScreen() {
   // ── Data helpers ──────────────────────────────────────────────────────────
   const thumbColor = categoryToThumbColor(product.category);
   const thumbLetter = product.name?.[0]?.toUpperCase() ?? '?';
-  const evidenceStrength = healthScoreToStrength(undefined); // Product has no health_score field
 
   const nutrients = product.ingredients.filter((i) => i.is_nutrient);
   const regularIngredients = product.ingredients.filter((i) => !i.is_nutrient);
@@ -292,6 +313,12 @@ export default function ProductDetailScreen() {
   const hasPersonalData =
     personalAnalysis &&
     (personalAnalysis.hasConcernFlags || personalAnalysis.hasGoalSupports);
+
+  const flaggedCount = regularIngredients.filter(
+    (ing) => !!ingredientPersonalization?.get(ing.name)?.concernFlags.length
+  ).length;
+  const strongCount = regularIngredients.length - flaggedCount;
+  const overallScore = gradeToScore(product.grade);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -319,6 +346,7 @@ export default function ProductDetailScreen() {
               color={thumbColor}
               letter={thumbLetter}
               size={72}
+              imageUri={product.image_url}
             />
             <View style={{ flex: 1 }}>
               {product.brand ? (
@@ -341,36 +369,49 @@ export default function ProductDetailScreen() {
           </View>
         </View>
 
+        <View style={styles.segmentedTabs}>
+          {['Overview', 'Ingredients', 'Nutrition', 'About'].map((tab) => (
+            <Pressable key={tab} style={[styles.segmentedTab, activeTab === tab && styles.segmentedTabActive]} onPress={() => setActiveTab(tab)}>
+              <Text style={[styles.segmentedTabText, activeTab === tab && styles.segmentedTabTextActive]}>{tab}</Text>
+            </Pressable>
+          ))}
+        </View>
+
         {/* ── Verdict card ──────────────────────────────────────────────── */}
         <View style={styles.verdictCard}>
-          <Eyebrow style={{ marginBottom: 10 }}>The short version</Eyebrow>
-          {product.description ? (
-            <Text style={styles.verdictText}>{product.description}</Text>
-          ) : (
-            <Text style={styles.verdictText}>
-              {product.is_ai_generated
-                ? 'AI-generated analysis. Verify before use.'
-                : `${product.name} contains ${product.ingredients.length} ingredient${product.ingredients.length !== 1 ? 's' : ''}.`}
-            </Text>
-          )}
-          <View style={styles.statRow}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 20, marginBottom: 16 }}>
+            <ScoreRing score={overallScore} label="Ingredient Intelligence Score" size={92} />
             <View style={{ flex: 1 }}>
-              <Eyebrow style={{ fontSize: 9, marginBottom: 6 }}>Evidence</Eyebrow>
-              <EvidenceSpectrum strength={evidenceStrength} />
-            </View>
-            <View style={styles.statDivider} />
-            <View style={{ flex: 1, paddingHorizontal: 8 }}>
-              <Eyebrow style={{ fontSize: 9, marginBottom: 4 }}>Fit for you</Eyebrow>
-              <Text style={styles.statValue}>
-                {personalAnalysis?.hasConcernFlags ? 'Conditional' : 'General'}
-              </Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={{ flex: 1, paddingLeft: 8 }}>
-              <Eyebrow style={{ fontSize: 9, marginBottom: 4 }}>Category</Eyebrow>
-              <Text style={styles.statValue}>{product.category}</Text>
+              <Eyebrow style={{ marginBottom: 6 }}>The short version</Eyebrow>
+              {product.description ? (
+                <Text style={styles.verdictText}>{product.description}</Text>
+              ) : (
+                <Text style={styles.verdictText}>
+                  {product.is_ai_generated
+                    ? 'AI-generated analysis. Verify before use.'
+                    : `${product.name} contains ${product.ingredients.length} ingredient${product.ingredients.length !== 1 ? 's' : ''}.`}
+                </Text>
+              )}
             </View>
           </View>
+          {regularIngredients.length > 0 && (
+            <View style={styles.statRow}>
+              <View style={{ flex: 1 }}>
+                <Eyebrow style={{ fontSize: 9, marginBottom: 6 }}>Strong evidence</Eyebrow>
+                <Text style={styles.statValue}>{strongCount}</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={{ flex: 1, paddingHorizontal: 8 }}>
+                <Eyebrow style={{ fontSize: 9, marginBottom: 4 }}>Flagged</Eyebrow>
+                <Text style={styles.statValue}>{flaggedCount}</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={{ flex: 1, paddingLeft: 8 }}>
+                <Eyebrow style={{ fontSize: 9, marginBottom: 4 }}>Category</Eyebrow>
+                <Text style={styles.statValue}>{product.category}</Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* ── Allergen warning ──────────────────────────────────────────── */}
@@ -516,21 +557,73 @@ export default function ProductDetailScreen() {
           </View>
         ) : null}
 
+        {/* ── Independent laboratory measurements ─────────────────────── */}
+        {labObservations.length > 0 ? (
+          <View style={{ marginBottom: 28 }}>
+            <SectionHead
+              label="Independent lab results"
+              right={`${labObservations.length} measurements`}
+            />
+            <Text style={styles.labNotice}>
+              Published measurements are shown separately from Elory's score. Results apply to
+              the tested sample or lot and may not represent every unit.
+            </Text>
+            <View style={styles.labCard}>
+              {labObservations.slice(0, 8).map((observation, index) => (
+                <View
+                  key={observation.observation_id}
+                  style={[
+                    styles.labRow,
+                    index < Math.min(labObservations.length, 8) - 1 && styles.labRowBorder,
+                  ]}
+                >
+                  <View style={{ flex: 1, marginRight: 12 }}>
+                    <Text style={styles.labAnalyte}>{observation.analyte_name}</Text>
+                    <Text style={styles.labSource}>
+                      {observation.publisher} · {observation.method_name}
+                      {observation.lot_number ? ` · Lot ${observation.lot_number}` : ''}
+                      {` · Grade ${observation.trust_grade}`}
+                    </Text>
+                    <Pressable onPress={() => Linking.openURL(observation.source_url)}>
+                      <Text style={styles.labSourceLink}>Published source ↗</Text>
+                    </Pressable>
+                  </View>
+                  <Text style={styles.labValue}>
+                    {observation.raw_value ?? `${observation.qualifier ?? ''}${observation.value ?? '—'}`}{' '}
+                    {observation.unit}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
         {/* ── Bio-domain impact ─────────────────────────────────────────── */}
         {bioDomains.length > 0 ? (
           <View style={{ marginBottom: 28 }}>
             <SectionHead label="Bio-domain impact" />
             {bioDomains.map((domain) => (
-              <View key={domain.name} style={{ marginBottom: 12 }}>
-                <SpectrumBar
-                  label={domain.name}
-                  position={domain.value / 100}
-                  tone={domain.is_negative ? 'alert' : 'ink'}
-                  right={domain.is_negative ? 'negative' : 'positive'}
-                />
-              </View>
+              <FactorBar key={domain.name} label={domain.name} value={domain.value} />
             ))}
           </View>
+        ) : null}
+
+        {product.attribution ? (
+          <Pressable
+            style={styles.attributionCard}
+            onPress={() => Linking.openURL(product.attribution!.source_url)}
+          >
+            <Text style={styles.attributionText}>
+              {product.attribution.attribution_text}
+            </Text>
+            <Text style={styles.attributionLink}>
+              {product.attribution.data_license_name ?? 'Source data'}
+              {product.attribution.image_license_name
+                ? ` · Images ${product.attribution.image_license_name}`
+                : ''}
+              {' · View source ↗'}
+            </Text>
+          </Pressable>
         ) : null}
 
         {/* ── Add to stack ──────────────────────────────────────────────── */}
@@ -631,6 +724,11 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
   },
+  segmentedTabs: { flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.borderHairline, marginBottom: 20 },
+  segmentedTab: { flex: 1, alignItems: 'center', paddingVertical: 10, marginBottom: -1 },
+  segmentedTabActive: { borderBottomWidth: 2, borderBottomColor: Colors.accent },
+  segmentedTabText: { fontFamily: Fonts.sansMedium, fontSize: 9, color: Colors.inkSecondary },
+  segmentedTabTextActive: { color: Colors.accent },
 
   // Verdict card
   verdictCard: {
@@ -786,9 +884,75 @@ const styles = StyleSheet.create({
     marginLeft: scale(8),
   },
 
+  // Independent laboratory evidence
+  labNotice: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.caption,
+    lineHeight: 18,
+    color: Colors.inkSecondary,
+    marginBottom: 10,
+  },
+  labCard: {
+    backgroundColor: Colors.surfaceCard,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+  },
+  labRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: scale(16),
+    paddingVertical: scale(12),
+  },
+  labRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderHairline,
+  },
+  labAnalyte: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+  },
+  labSource: {
+    fontFamily: Fonts.sans,
+    fontSize: 11,
+    color: Colors.inkSecondary,
+    marginTop: 2,
+  },
+  labSourceLink: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: 11,
+    color: Colors.accent,
+    marginTop: 3,
+  },
+  labValue: {
+    fontFamily: Fonts.serif,
+    fontSize: 17,
+    color: Colors.ink,
+  },
+
+  attributionCard: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderHairline,
+    paddingTop: scale(14),
+    marginBottom: scale(20),
+  },
+  attributionText: {
+    fontFamily: Fonts.sans,
+    fontSize: 11,
+    color: Colors.inkSecondary,
+  },
+  attributionLink: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: 11,
+    color: Colors.accent,
+    marginTop: 3,
+  },
+
   // Stack button
   stackBtn: {
-    backgroundColor: Colors.ink,
+    backgroundColor: Colors.accent,
     borderRadius: Radius.pill,
     paddingVertical: scale(14),
     alignItems: 'center',

@@ -69,7 +69,7 @@ function RootLayoutNav() {
     if (!isOnboarded) {
       // User hasn't completed onboarding
       router.replace('/onboarding');
-    } else if (!inAuthGroup && segments[0] !== '(tabs)' && segments[0] !== '(premium)' && segments[0] !== 'profile-hub' && segments[0] !== 'profile' && segments[0] !== 'product' && segments[0] !== 'ingredient' && segments[0] !== 'newsletter' && segments[0] !== 'settings' && segments[0] !== 'health' && segments[0] !== 'domain') {
+    } else if (!inAuthGroup && segments[0] !== '(tabs)' && segments[0] !== '(premium)' && segments[0] !== 'profile-hub' && segments[0] !== 'profile' && segments[0] !== 'product' && segments[0] !== 'ingredient' && segments[0] !== 'newsletter' && segments[0] !== 'settings' && segments[0] !== 'health' && segments[0] !== 'domain' && segments[0] !== 'domains' && segments[0] !== 'research') {
       // After onboarding, go to main app
       router.replace('/(tabs)');
     }

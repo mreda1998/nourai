@@ -11,7 +11,7 @@ export default function PremiumLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: Colors.darkSurface },
+          contentStyle: { backgroundColor: Colors.surface },
           animation: 'slide_from_bottom',
         }}
       />

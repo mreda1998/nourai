@@ -52,7 +52,7 @@ const FEATURES = [
 
 function ArrowIcon() {
   return (
-    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="rgba(241,237,228,0.45)" strokeWidth={1.8}>
+    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="rgba(18,51,50,0.45)" strokeWidth={1.8}>
       <Path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
@@ -66,7 +66,7 @@ function DiamondIcon() {
   );
 }
 
-export default function AtelierScreen() {
+export default function PremiumScreen() {
   const router = useRouter();
 
   return (
@@ -86,7 +86,7 @@ export default function AtelierScreen() {
         {/* Title block */}
         <View style={styles.titleBlock}>
           <Text style={styles.eyebrow}>Premium · Intelligence</Text>
-          <Text style={styles.title}>The Atelier.</Text>
+          <Text style={styles.title}>Elory Premium.</Text>
           <Text style={styles.subtitle}>
             Intelligence tools that know your stack. Each feature reads your compounds,
             your timing, and the evidence — then tells you something real.
@@ -122,7 +122,7 @@ export default function AtelierScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.darkSurface,
+    backgroundColor: Colors.surface,
   },
   scroll: {
     paddingHorizontal: scale(24),
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: 'rgba(241,237,228,0.22)',
+    borderColor: 'rgba(18,51,50,0.22)',
     borderRadius: 999,
   },
   badgeText: {
@@ -159,14 +159,14 @@ const styles = StyleSheet.create({
     fontSize: 10,
     textTransform: 'uppercase',
     letterSpacing: 1.4,
-    color: 'rgba(241,237,228,0.45)',
+    color: 'rgba(18,51,50,0.45)',
     marginBottom: scale(10),
   },
   title: {
     fontFamily: Fonts.serifItalic,
     fontSize: scale(42),
     lineHeight: scale(44),
-    color: Colors.darkInk,
+    color: Colors.ink,
     marginBottom: scale(14),
     letterSpacing: -0.5,
   },
@@ -174,25 +174,25 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.serifItalic,
     fontSize: FontSizes.subtitle,
     lineHeight: FontSizes.subtitle * 1.55,
-    color: 'rgba(241,237,228,0.65)',
+    color: 'rgba(18,51,50,0.65)',
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(241,237,228,0.15)',
+    backgroundColor: 'rgba(18,51,50,0.15)',
     marginBottom: scale(24),
   },
   cards: {
     gap: scale(12),
   },
   card: {
-    backgroundColor: 'rgba(241,237,228,0.04)',
+    backgroundColor: 'rgba(18,51,50,0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(241,237,228,0.1)',
+    borderColor: 'rgba(18,51,50,0.1)',
     borderRadius: Radius.lg,
     padding: scale(20),
   },
   cardPressed: {
-    backgroundColor: 'rgba(241,237,228,0.08)',
+    backgroundColor: 'rgba(18,51,50,0.08)',
   },
   cardTop: {
     flexDirection: 'row',
@@ -205,19 +205,19 @@ const styles = StyleSheet.create({
     fontSize: 9,
     textTransform: 'uppercase',
     letterSpacing: 1.4,
-    color: 'rgba(241,237,228,0.45)',
+    color: 'rgba(18,51,50,0.45)',
   },
   cardTitle: {
     fontFamily: Fonts.serifItalic,
     fontSize: scale(22),
     lineHeight: scale(26),
-    color: Colors.darkInk,
+    color: Colors.ink,
     marginBottom: scale(6),
   },
   cardDescription: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.caption,
     lineHeight: FontSizes.caption * 1.55,
-    color: 'rgba(241,237,228,0.5)',
+    color: 'rgba(18,51,50,0.5)',
   },
 });

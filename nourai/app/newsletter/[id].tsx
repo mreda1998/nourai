@@ -15,6 +15,7 @@
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
   Pressable,
+  ImageBackground,
   ScrollView,
   StyleSheet,
   Text,
@@ -69,22 +70,10 @@ const ARTICLES: Record<string, Article> = {
 // ─── Decorative hero icon (molecule-style) ─────────────────────────────────────
 
 function MoleculeHero() {
-  const s = scale(40);
   return (
-    <View style={heroStyles.container}>
+    <ImageBackground source={require('@/assets/images/elory-architecture-hero.png')} style={heroStyles.container} imageStyle={{ borderRadius: 14 }}>
       <View style={heroStyles.noise} />
-      <Svg width={s * 3} height={s * 2} viewBox="0 0 120 80" style={{ opacity: 0.25 }}>
-        <Circle cx="20" cy="40" r="8" fill="none" stroke={Colors.bone} strokeWidth="1.2" />
-        <Circle cx="60" cy="20" r="10" fill="none" stroke={Colors.bone} strokeWidth="1.2" />
-        <Circle cx="100" cy="40" r="8" fill="none" stroke={Colors.bone} strokeWidth="1.2" />
-        <Circle cx="60" cy="60" r="8" fill="none" stroke={Colors.bone} strokeWidth="1.2" />
-        <Line x1="28" y1="40" x2="50" y2="20" stroke={Colors.bone} strokeWidth="1" opacity="0.6" />
-        <Line x1="70" y1="20" x2="92" y2="40" stroke={Colors.bone} strokeWidth="1" opacity="0.6" />
-        <Line x1="28" y1="40" x2="52" y2="60" stroke={Colors.bone} strokeWidth="1" opacity="0.6" />
-        <Line x1="68" y1="60" x2="92" y2="40" stroke={Colors.bone} strokeWidth="1" opacity="0.6" />
-        <Circle cx="60" cy="40" r="4" fill={Colors.bone} opacity="0.3" />
-      </Svg>
-    </View>
+    </ImageBackground>
   );
 }
 
@@ -92,7 +81,8 @@ const heroStyles = StyleSheet.create({
   container: {
     width: '100%',
     height: verticalScale(260),
-    backgroundColor: Colors.ink,
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -101,8 +91,8 @@ const heroStyles = StyleSheet.create({
   noise: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: '#333',
-    opacity: 0.3,
+    backgroundColor: Colors.ink,
+    opacity: 0.08,
   },
 });
 
@@ -139,18 +129,13 @@ export default function NewsletterArticle() {
   return (
     <View style={styles.screen}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Hero */}
-        <Animated.View entering={FadeIn.duration(400)}>
-          <MoleculeHero />
-        </Animated.View>
-
         {/* Floating back button */}
         <View style={[styles.navOverlay, { top: insets.top + Spacing.md }]}>
           <BackButton />
         </View>
 
         {/* Article */}
-        <Animated.View entering={FadeInDown.duration(500).delay(100)} style={styles.article}>
+        <Animated.View entering={FadeInDown.duration(500).delay(100)} style={[styles.article, { paddingTop: insets.top + 64 }]}>
           {/* Section tag */}
           <Text style={styles.sectionTag}>{article.sectionTag}</Text>
 
@@ -164,6 +149,24 @@ export default function NewsletterArticle() {
               <Text style={styles.pubDate}>{article.date}</Text>
             </View>
             <View style={styles.authorAvatar} />
+          </View>
+
+          <Animated.View entering={FadeIn.duration(400)} style={{ marginBottom: 22 }}>
+            <MoleculeHero />
+          </Animated.View>
+
+          <View style={styles.contentsCard}>
+            <Text style={styles.contentsTitle}>In this article</Text>
+            {['Why the evidence stands out', 'Dose, timing and formulation', 'Safety and practical takeaways'].map((item, index) => (
+              <View key={item} style={[styles.contentsRow, index > 0 && styles.contentsBorder]}><Text style={styles.contentsNumber}>0{index + 1}</Text><Text style={styles.contentsText}>{item}</Text></View>
+            ))}
+          </View>
+
+          <View style={styles.takeawayCard}>
+            <Text style={styles.takeawayKicker}>Key takeaways</Text>
+            <Text style={styles.takeawayText}>•  Creatine monohydrate remains the best-supported form.</Text>
+            <Text style={styles.takeawayText}>•  Consistency matters more than precise timing.</Text>
+            <Text style={styles.takeawayText}>•  Benefits extend beyond strength into cognitive energy.</Text>
           </View>
 
           {/* Article body */}
@@ -279,6 +282,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.borderHairline,
   },
+  contentsCard: { backgroundColor: Colors.surfaceCard, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, borderRadius: 12, paddingHorizontal: 14, marginBottom: 14 },
+  contentsTitle: { fontFamily: Fonts.serifMedium, fontSize: 18, color: Colors.ink, paddingVertical: 12 },
+  contentsRow: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  contentsBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.borderHairline },
+  contentsNumber: { fontFamily: Fonts.serifItalic, fontSize: 10, color: Colors.accent },
+  contentsText: { fontFamily: Fonts.sans, fontSize: 9.5, color: Colors.inkSecondary },
+  takeawayCard: { borderLeftWidth: 2, borderLeftColor: Colors.accent, backgroundColor: 'rgba(15,86,82,.05)', padding: 14, marginBottom: 24 },
+  takeawayKicker: { fontFamily: Fonts.sansSemiBold, fontSize: 8, textTransform: 'uppercase', letterSpacing: 1, color: Colors.accent, marginBottom: 7 },
+  takeawayText: { fontFamily: Fonts.sans, fontSize: 9.5, color: Colors.inkSecondary, lineHeight: 15, marginBottom: 3 },
 
   // Body
   body: { gap: 0 },

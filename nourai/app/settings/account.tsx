@@ -77,7 +77,7 @@ export default function AccountScreen() {
                   onPress: () => {
                     Alert.alert(
                       'Contact Support',
-                      'To delete your account and all associated data, please email support@nourai.app',
+                      'To delete your account and all associated data, please email support@elory.app',
                       [{ text: 'OK' }]
                     );
                   },

@@ -31,42 +31,42 @@ export const isTablet = SCREEN_WIDTH >= 768;
 // Elory palette — teal canonical
 export const Colors = {
   // Surfaces
-  surface: '#F1EDE4',
-  surfaceAlt: '#E8E3D7',
-  surfaceCard: '#FAF7F0',
+  surface: '#F7F4EE',
+  surfaceAlt: '#EEE9E0',
+  surfaceCard: '#FCFAF6',
 
   // Ink
-  ink: '#0F2928',
-  inkSecondary: 'rgba(15, 41, 40, 0.62)',
-  inkTertiary: 'rgba(15, 41, 40, 0.38)',
+  ink: '#123332',
+  inkSecondary: 'rgba(18, 51, 50, 0.64)',
+  inkTertiary: 'rgba(18, 51, 50, 0.38)',
 
   // Borders
-  borderHairline: 'rgba(15, 41, 40, 0.12)',
-  borderStrong: 'rgba(15, 41, 40, 0.85)',
+  borderHairline: 'rgba(18, 51, 50, 0.13)',
+  borderStrong: 'rgba(18, 51, 50, 0.82)',
 
   // Brand
-  accent: '#1A5C5A',
-  accentInk: '#F1EDE4',
-  sand: '#E8D5B0',
-  sage: '#7BAE8E',
-  alert: '#C4654A',
+  accent: '#0F5652',
+  accentInk: '#F9F6F0',
+  sand: '#D8B883',
+  sage: '#71977F',
+  alert: '#B86542',
 
   // Premium / dark register
-  darkSurface: '#0F3E3D',
-  darkInk: '#F1EDE4',
+  darkSurface: '#123F3D',
+  darkInk: '#F9F6F0',
 
   // Legacy aliases (keep so existing code doesn't break before screens are updated)
-  bone: '#F1EDE4',
-  boneCard: '#FAF7F0',
-  boneDark: '#E8E3D7',
-  boneWarm: '#F1EDE4',
-  cardPure: '#FAF7F0',
-  inkWarm: '#0F2928',
-  textMuted: 'rgba(15, 41, 40, 0.62)',
-  borderHairlineOld: 'rgba(15, 41, 40, 0.12)',
+  bone: '#F7F4EE',
+  boneCard: '#FCFAF6',
+  boneDark: '#EEE9E0',
+  boneWarm: '#F7F4EE',
+  cardPure: '#FCFAF6',
+  inkWarm: '#123332',
+  textMuted: 'rgba(18, 51, 50, 0.64)',
+  borderHairlineOld: 'rgba(18, 51, 50, 0.13)',
   accentClay: '#C4654A',
   accentMoss: '#7BAE8E',
-  accentHill: '#1A5C5A',
+  accentHill: '#0F5652',
   accentAlert: '#C4654A',
   alertBg: 'rgba(196, 101, 74, 0.06)',
   alertBorder: 'rgba(196, 101, 74, 0.2)',
@@ -76,7 +76,7 @@ export const Colors = {
   error: '#C4654A',
   scannerBg: '#000',
   scannerOverlay: 'rgba(0, 0, 0, 0.3)',
-  scannerGreen: '#7BAE8E',
+  scannerGreen: '#71977F',
 };
 
 // Elory typography — Cormorant Garamond serif + DM Sans sans
@@ -105,9 +105,9 @@ export const FontSizes = {
   bodyLarge: fontScale(14),
   subtitle: fontScale(15),
   title: fontScale(18),
-  heading: fontScale(24),
-  display: fontScale(28),
-  hero: fontScale(36),
+  heading: fontScale(26),
+  display: fontScale(31),
+  hero: fontScale(40),
   giant: fontScale(42),
 };
 
@@ -123,8 +123,8 @@ export const Spacing = {
 export const Radius = {
   sm: 6,
   md: 12,
-  lg: 20,
-  xl: 28,
+  lg: 16,
+  xl: 22,
   pill: 999,
   arch: 120,
 };
@@ -133,9 +133,9 @@ export const Shadows = {
   soft: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: scale(4) },
-    shadowOpacity: 0.1,
-    shadowRadius: scale(12),
-    elevation: 4,
+    shadowOpacity: 0.045,
+    shadowRadius: scale(10),
+    elevation: 2,
   },
   medium: {
     shadowColor: '#000',
@@ -229,7 +229,7 @@ export const Glass = {
 };
 
 export const Layout = {
-  screenPaddingHorizontal: scale(24),
+  screenPaddingHorizontal: scale(20),
   screenPaddingTop: verticalScale(60),
   tabBarHeight: verticalScale(80),
   bottomPadding: verticalScale(120),

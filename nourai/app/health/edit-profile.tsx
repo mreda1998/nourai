@@ -114,6 +114,17 @@ export default function EditHealthProfileScreen() {
 
       <ScrollView contentContainerStyle={s.container} showsVerticalScrollIndicator={false}>
 
+        <View style={s.section}>
+          <Text style={s.sectionLabel}>Basic Information</Text>
+          <Text style={s.sectionSub}>Used only to make evidence more relevant to you.</Text>
+          <View style={s.infoCard}>
+            <InfoRow label="Biological sex" value={onboardingProfile?.biologicalSex?.replace('_', ' ') || 'Not specified'} />
+            <InfoRow label="Age range" value={onboardingProfile?.ageRange || 'Not specified'} border />
+            <InfoRow label="Activity level" value={onboardingProfile?.activityLevel?.replace('_', ' ') || 'Not specified'} border />
+            <InfoRow label="Sleep quality" value={onboardingProfile?.sleepQuality?.replace('_', ' ') || 'Not specified'} border />
+          </View>
+        </View>
+
         {/* Concerns */}
         <View style={s.section}>
           <Text style={s.sectionLabel}>Health Concerns</Text>
@@ -183,6 +194,10 @@ export default function EditHealthProfileScreen() {
   );
 }
 
+function InfoRow({ label, value, border }: { label: string; value: string; border?: boolean }) {
+  return <View style={[s.infoRow, border && s.infoRowBorder]}><Text style={s.infoLabel}>{label}</Text><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={s.infoValue}>{value}</Text><Text style={s.infoArrow}>›</Text></View></View>;
+}
+
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
@@ -223,6 +238,26 @@ const s = StyleSheet.create({
   section: {
     marginBottom: Spacing.xl,
   },
+  infoCard: {
+    backgroundColor: Colors.surfaceCard,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.borderHairline,
+    paddingHorizontal: Spacing.md,
+  },
+  infoRow: {
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  infoRowBorder: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.borderHairline,
+  },
+  infoLabel: { fontFamily: Fonts.sansMedium, fontSize: 11, color: Colors.ink },
+  infoValue: { fontFamily: Fonts.sans, fontSize: 9.5, color: Colors.inkSecondary, textTransform: 'capitalize' },
+  infoArrow: { fontSize: 19, color: Colors.inkSecondary },
   sectionLabel: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.sm,

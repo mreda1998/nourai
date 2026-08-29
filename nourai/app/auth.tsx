@@ -78,7 +78,7 @@ export default function AuthScreen() {
     return (
       <View style={[styles.screen, styles.confirmScreen]}>
         <Animated.View entering={FadeIn.duration(400)} style={styles.confirmContent}>
-          <Text style={styles.logo}>elory</Text>
+          <Text style={styles.logo}>ELORY</Text>
           <Text style={styles.confirmTitle}>Check your email</Text>
           <Text style={styles.confirmBody}>
             We sent a confirmation link to{'\n'}
@@ -122,8 +122,8 @@ export default function AuthScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.logo}>elory</Text>
-          <Text style={styles.tagline}>Clinical intelligence for your wellness</Text>
+          <Text style={styles.logo}>ELORY</Text>
+          <Text style={styles.tagline}>Evidence, made personal.</Text>
         </View>
 
         {/* Auth Form */}
@@ -270,8 +270,9 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(48),
   },
   logo: {
-    fontFamily: Fonts.serif,
-    fontSize: scale(48),
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: scale(18),
+    letterSpacing: 6,
     color: Colors.ink,
     marginBottom: Spacing.sm,
   },
@@ -286,7 +287,7 @@ const styles = StyleSheet.create({
   },
   formTitle: {
     fontFamily: Fonts.serif,
-    fontSize: FontSizes.display,
+    fontSize: FontSizes.heading,
     color: Colors.ink,
     marginBottom: Spacing.xl,
     textAlign: 'center',
@@ -306,7 +307,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.boneCard,
     borderWidth: 1,
     borderColor: Colors.borderHairline,
-    borderRadius: Radius.md,
+    borderRadius: Radius.pill,
     paddingHorizontal: Spacing.md,
     paddingVertical: verticalScale(16),
     fontFamily: Fonts.sans,
@@ -321,7 +322,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   submitButton: {
-    backgroundColor: Colors.ink,
+    backgroundColor: Colors.accent,
     paddingVertical: verticalScale(18),
     borderRadius: Radius.pill,
     alignItems: 'center',

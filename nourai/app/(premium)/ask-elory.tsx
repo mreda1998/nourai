@@ -136,7 +136,7 @@ export default function AskEloryScreen() {
       <View style={{ paddingTop: insets.top + scale(12), paddingHorizontal: scale(24), paddingBottom: scale(20) }}>
         <View style={styles.headerRow}>
           <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="rgba(241,237,228,0.6)" strokeWidth={2}>
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="rgba(18,51,50,0.6)" strokeWidth={2}>
               <Path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
             <Text style={styles.backText}>Back</Text>
@@ -146,7 +146,7 @@ export default function AskEloryScreen() {
               <Text style={styles.newConvoBtn}>New</Text>
             </Pressable>
             <View style={styles.atelierBadge}>
-              <Text style={styles.atelierBadgeText}>◆ Atelier</Text>
+              <Text style={styles.atelierBadgeText}>ELORY PREMIUM</Text>
             </View>
           </View>
         </View>
@@ -212,14 +212,14 @@ export default function AskEloryScreen() {
           <TextInput
             style={styles.input}
             placeholder="Ask about your stack…"
-            placeholderTextColor="rgba(241,237,228,0.3)"
+            placeholderTextColor="rgba(18,51,50,0.3)"
             value={input}
             onChangeText={setInput}
             multiline
             onSubmitEditing={handleSend}
           />
           <Pressable style={[styles.sendBtn, sending && { opacity: 0.5 }]} onPress={handleSend}>
-            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={Colors.darkSurface} strokeWidth={2}>
+            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={Colors.surface} strokeWidth={2}>
               <Path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </Pressable>
@@ -230,29 +230,29 @@ export default function AskEloryScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.darkSurface },
+  root: { flex: 1, backgroundColor: Colors.surface },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: scale(24) },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  backText: { fontFamily: Fonts.sansSemiBold, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'rgba(241,237,228,0.6)' },
-  newConvoBtn: { fontFamily: Fonts.sansSemiBold, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'rgba(241,237,228,0.4)' },
-  atelierBadge: { paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(241,237,228,0.22)', borderRadius: 999 },
+  backText: { fontFamily: Fonts.sansSemiBold, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'rgba(18,51,50,0.6)' },
+  newConvoBtn: { fontFamily: Fonts.sansSemiBold, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'rgba(18,51,50,0.4)' },
+  atelierBadge: { paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(18,51,50,0.22)', borderRadius: 999 },
   atelierBadgeText: { fontFamily: Fonts.sansSemiBold, fontSize: 9, letterSpacing: 1.8, textTransform: 'uppercase', color: Colors.sand },
-  eyebrow: { fontFamily: Fonts.sansSemiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, color: 'rgba(241,237,228,0.45)', marginBottom: scale(10) },
-  title: { fontFamily: Fonts.serifItalic, fontSize: scale(40), lineHeight: scale(42), color: Colors.darkInk, letterSpacing: -0.5 },
+  eyebrow: { fontFamily: Fonts.sansSemiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, color: 'rgba(18,51,50,0.45)', marginBottom: scale(10) },
+  title: { fontFamily: Fonts.serifItalic, fontSize: scale(40), lineHeight: scale(42), color: Colors.ink, letterSpacing: -0.5 },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: scale(24), paddingTop: scale(4) },
-  promptCard: { padding: scale(14), borderWidth: 1, borderColor: 'rgba(241,237,228,0.1)', borderRadius: Radius.md },
-  promptText: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, color: 'rgba(241,237,228,0.8)', lineHeight: FontSizes.subtitle * 1.4 },
-  msgTimestamp: { fontFamily: Fonts.sansSemiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, color: 'rgba(241,237,228,0.4)', marginBottom: scale(8) },
-  userMsg: { fontFamily: Fonts.serif, fontSize: FontSizes.title, lineHeight: FontSizes.title * 1.4, color: Colors.darkInk, paddingBottom: scale(16) },
-  msgDivider: { height: 1, backgroundColor: 'rgba(241,237,228,0.1)', marginBottom: scale(20) },
+  promptCard: { padding: scale(14), borderWidth: 1, borderColor: 'rgba(18,51,50,0.1)', borderRadius: Radius.md },
+  promptText: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, color: 'rgba(18,51,50,0.8)', lineHeight: FontSizes.subtitle * 1.4 },
+  msgTimestamp: { fontFamily: Fonts.sansSemiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, color: 'rgba(18,51,50,0.4)', marginBottom: scale(8) },
+  userMsg: { fontFamily: Fonts.serif, fontSize: FontSizes.title, lineHeight: FontSizes.title * 1.4, color: Colors.ink, paddingBottom: scale(16) },
+  msgDivider: { height: 1, backgroundColor: 'rgba(18,51,50,0.1)', marginBottom: scale(20) },
   eloryMeta: { flexDirection: 'row', alignItems: 'center', gap: scale(8), marginBottom: scale(8) },
   eloryAvatar: { width: scale(22), height: scale(22), borderRadius: 999, backgroundColor: Colors.sand, alignItems: 'center', justifyContent: 'center' },
-  eloryAvatarText: { fontFamily: Fonts.serifItalic, fontSize: 12, color: Colors.darkSurface },
-  eloryLabel: { fontFamily: Fonts.sansSemiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, color: 'rgba(241,237,228,0.4)' },
-  eloryText: { fontFamily: Fonts.serif, fontSize: FontSizes.title, lineHeight: FontSizes.title * 1.5, color: Colors.darkInk, marginBottom: scale(20) },
+  eloryAvatarText: { fontFamily: Fonts.serifItalic, fontSize: 12, color: Colors.surface },
+  eloryLabel: { fontFamily: Fonts.sansSemiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, color: 'rgba(18,51,50,0.4)' },
+  eloryText: { fontFamily: Fonts.serif, fontSize: FontSizes.title, lineHeight: FontSizes.title * 1.5, color: Colors.ink, marginBottom: scale(20) },
   inputBar: { paddingHorizontal: scale(16), paddingTop: scale(8) },
-  inputPill: { flexDirection: 'row', alignItems: 'center', gap: scale(8), paddingLeft: scale(20), paddingRight: scale(6), paddingVertical: scale(6), borderRadius: 999, backgroundColor: 'rgba(241,237,228,0.08)', borderWidth: 1, borderColor: 'rgba(241,237,228,0.12)' },
-  input: { flex: 1, fontFamily: Fonts.sans, fontSize: FontSizes.body, color: Colors.darkInk, maxHeight: scale(80), paddingVertical: scale(6) },
+  inputPill: { flexDirection: 'row', alignItems: 'center', gap: scale(8), paddingLeft: scale(20), paddingRight: scale(6), paddingVertical: scale(6), borderRadius: 999, backgroundColor: 'rgba(18,51,50,0.08)', borderWidth: 1, borderColor: 'rgba(18,51,50,0.12)' },
+  input: { flex: 1, fontFamily: Fonts.sans, fontSize: FontSizes.body, color: Colors.ink, maxHeight: scale(80), paddingVertical: scale(6) },
   sendBtn: { width: scale(36), height: scale(36), borderRadius: 999, backgroundColor: Colors.sand, alignItems: 'center', justifyContent: 'center' },
 });

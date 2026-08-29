@@ -26,20 +26,20 @@ export function PremiumLock({ featureName = 'This feature' }: Props) {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       <BlurView
-        tint="dark"
-        intensity={40}
+        tint="light"
+        intensity={72}
         style={[StyleSheet.absoluteFill, styles.container]}
       >
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>◆ Atelier</Text>
+          <Text style={styles.badgeText}>ELORY PREMIUM</Text>
         </View>
-        <Text style={styles.title}>{featureName} is an{'\n'}Atelier feature.</Text>
+        <Text style={styles.title}>{featureName} is an{'\n'}Elory Premium feature.</Text>
         <Text style={styles.sub}>
           Unlock circadian dosing, conflict maps, exposure tracking and more.
         </Text>
         <Pressable style={styles.cta} onPress={handleUnlock}>
           <Text style={styles.ctaText}>
-            {__DEV__ ? 'Unlock (Dev Mode)' : 'Unlock Atelier'}
+            {__DEV__ ? 'Preview feature' : 'Unlock Premium'}
           </Text>
         </Pressable>
       </BlurView>
@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: 'rgba(241,237,228,0.3)',
+    borderColor: Colors.borderHairline,
     borderRadius: 999,
     marginBottom: 20,
   },
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.serifItalic,
     fontSize: 28,
     lineHeight: 34,
-    color: Colors.darkInk,
+    color: Colors.ink,
     textAlign: 'center',
     marginBottom: 16,
   },
@@ -80,12 +80,12 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.sans,
     fontSize: 14,
     lineHeight: 21,
-    color: 'rgba(241,237,228,0.7)',
+    color: Colors.inkSecondary,
     textAlign: 'center',
     marginBottom: 32,
   },
   cta: {
-    backgroundColor: Colors.sand,
+    backgroundColor: Colors.accent,
     paddingHorizontal: 32,
     paddingVertical: 16,
     borderRadius: 999,
@@ -95,6 +95,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.8,
     textTransform: 'uppercase',
-    color: Colors.darkSurface,
+    color: Colors.accentInk,
   },
 });

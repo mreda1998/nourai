@@ -204,80 +204,45 @@ function AhaCard({
 
 // ─── Step 1: Welcome ──────────────────────────────────────────────────────────
 
-function StepWelcome({ onNext }: { onNext: () => void }) {
+function StepWelcome({ onNext, onGuest }: { onNext: () => void; onGuest: () => void }) {
+  const router = useRouter();
   return (
     <ScrollView
       contentContainerStyle={{ paddingBottom: 60 }}
       showsVerticalScrollIndicator={false}
     >
-      <View style={{ width: '100%', height: scale(320), backgroundColor: Colors.surfaceCard }} />
-      <View style={{ paddingHorizontal: 24, paddingTop: 28 }}>
+      <View style={{ paddingHorizontal: 24, paddingTop: 14, alignItems: 'center' }}>
+        <Text style={{ fontFamily: Fonts.sansSemiBold, letterSpacing: 5, fontSize: 16, color: Colors.ink, marginBottom: 18 }}>ELORY</Text>
+      </View>
+      <Image source={require('@/assets/images/elory-architecture-hero.png')} style={{ width: '100%', height: scale(355) }} resizeMode="cover" />
+      <View style={{ paddingHorizontal: 24, paddingTop: 24, alignItems: 'center' }}>
         <Text
           style={{
-            fontFamily: Fonts.serifItalic,
-            fontSize: scale(34),
-            lineHeight: scale(40),
+            fontFamily: Fonts.serif,
+            fontSize: scale(35),
+            lineHeight: scale(38),
             color: Colors.ink,
-            marginBottom: 16,
+            marginBottom: 10,
+            textAlign: 'center',
           }}
         >
-          {'A knowledgeable\nfriend, in your\npocket.'}
+          Evidence over opinions.
         </Text>
         <Text
           style={{
             fontFamily: Fonts.sans,
-            fontSize: FontSizes.bodyLarge,
+            fontSize: FontSizes.body,
             color: Colors.inkSecondary,
             lineHeight: FontSizes.bodyLarge * 1.6,
-            marginBottom: 28,
+            marginBottom: 22,
+            textAlign: 'center',
           }}
         >
-          Elory reads ingredient lists the way a trained biochemist would — and tells you what actually matters for your body.
+          Understand every product, ingredient and health choice through clear, sourced research.
         </Text>
-        <View
-          style={{
-            backgroundColor: Colors.surfaceCard,
-            borderWidth: 1,
-            borderColor: Colors.borderHairline,
-            borderRadius: Radius.lg,
-            padding: 20,
-            marginBottom: 36,
-          }}
-        >
-          <Text
-            style={{
-              fontFamily: Fonts.sansSemiBold,
-              fontSize: 9,
-              textTransform: 'uppercase',
-              letterSpacing: 1.6,
-              color: Colors.inkSecondary,
-              marginBottom: 14,
-            }}
-          >
-            What Elory is not
-          </Text>
-          {[
-            'A replacement for your doctor or pharmacist.',
-            'A fear-driven list of "toxins" to avoid.',
-            'A marketing tool for any brand or product.',
-          ].map((item, i) => (
-            <Text
-              key={i}
-              style={{
-                fontFamily: Fonts.serifItalic,
-                fontSize: FontSizes.body,
-                color: Colors.inkSecondary,
-                lineHeight: FontSizes.body * 1.55,
-                marginBottom: i < 2 ? 8 : 0,
-              }}
-            >
-              {'— '}{item}
-            </Text>
-          ))}
-        </View>
-        <Pressable style={s.pillBtn} onPress={onNext}>
-          <Text style={s.pillBtnText}>Begin</Text>
-        </Pressable>
+        <Pressable style={[s.pillBtn, { backgroundColor: Colors.accent }]} onPress={onNext}><Text style={s.pillBtnText}>Create account</Text></Pressable>
+        <Pressable style={[s.pillBtn, { backgroundColor: Colors.surfaceCard, borderWidth: 1, borderColor: Colors.accent, marginTop: 10 }]} onPress={() => router.push('/auth' as never)}><Text style={[s.pillBtnText, { color: Colors.accent }]}>Sign in</Text></Pressable>
+        <Pressable style={{ padding: 15 }} onPress={onGuest}><Text style={{ fontFamily: Fonts.sansMedium, color: Colors.inkSecondary, fontSize: 10 }}>Continue as guest</Text></Pressable>
       </View>
     </ScrollView>
   );
@@ -1140,9 +1105,9 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={s.screen}>
-      <ProgressBar step={step} total={13} />
+      {step > 0 ? <ProgressBar step={step} total={13} /> : null}
 
-      {step === 0  && <StepWelcome onNext={next} />}
+      {step === 0  && <StepWelcome onNext={next} onGuest={handleContinueAsGuest} />}
       {step === 1  && <StepNoiseProblem onNext={next} />}
       {step === 2  && <StepFocus selected={focusAreas} onToggle={toggleFocus} onNext={next} />}
       {step === 3  && <StepAha1 onNext={next} />}

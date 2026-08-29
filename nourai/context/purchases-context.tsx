@@ -39,7 +39,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const isPremium =
-    customerInfo?.entitlements.active[ENTITLEMENT_ID] !== undefined ?? false;
+    customerInfo?.entitlements.active[ENTITLEMENT_ID] !== undefined;
 
   // ── Load on mount ────────────────────────────────────────────────────────
 

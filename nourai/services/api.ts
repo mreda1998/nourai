@@ -50,6 +50,15 @@ export interface Product {
   bio_domains: BioDomain[];
   recommendations: Recommendation[];
   citations: Citation[];
+  attribution?: {
+    source_name: string;
+    source_url: string;
+    attribution_text: string;
+    data_license_name?: string | null;
+    data_license_url?: string | null;
+    image_license_name?: string | null;
+    image_license_url?: string | null;
+  } | null;
 }
 
 export interface ProductListItem {
@@ -66,6 +75,75 @@ export interface ProductSearchResponse {
   products: ProductListItem[];
   total: number;
   ai_generated: boolean;
+}
+
+export type IngestionJobStatus =
+  | 'queued'
+  | 'running'
+  | 'retry'
+  | 'complete'
+  | 'needs_review'
+  | 'dead';
+
+export interface BarcodeIngestionResponse {
+  job_id: string;
+  status: IngestionJobStatus;
+  gtin14?: string;
+  product_id?: string | null;
+  poll_after_ms: number;
+  message: string;
+}
+
+export function isBarcodeIngestionResponse(
+  value: Product | BarcodeIngestionResponse,
+): value is BarcodeIngestionResponse {
+  return 'job_id' in value && 'status' in value;
+}
+
+export interface LabInterpretation {
+  classification: string;
+  summary?: string | null;
+  jurisdiction?: string | null;
+  population_context?: string | null;
+  threshold_name?: string | null;
+  threshold_source_url?: string | null;
+  threshold_version?: string | null;
+  threshold_value?: number | null;
+  threshold_unit?: string | null;
+}
+
+export interface LabObservation {
+  observation_id: string;
+  analyte_name: string;
+  value?: number | null;
+  unit: string;
+  basis?: string | null;
+  qualifier?: string | null;
+  raw_value?: string | null;
+  detection_status: string;
+  lod?: number | null;
+  loq?: number | null;
+  uncertainty?: number | null;
+  uncertainty_unit?: string | null;
+  method_name: string;
+  laboratory_name?: string | null;
+  analyzed_at?: string | null;
+  sample_external_id: string;
+  sample_name: string;
+  lot_number?: string | null;
+  dataset_title: string;
+  publisher: string;
+  source_url: string;
+  dataset_version?: string | null;
+  license_name?: string | null;
+  applicability: string;
+  trust_grade: string;
+  interpretations: LabInterpretation[];
+}
+
+export interface ProductLabResultsResponse {
+  product_id: string;
+  observations: LabObservation[];
 }
 
 // ─── Server-side Personalization ─────────────────────────────────────────────
@@ -166,6 +244,8 @@ export interface IngredientDetail {
   biodomain_scores: IngredientBioDomainScore[];
   // Mechanism image (set by research agent after illustration generation)
   mechanism_image_url: string | null;
+  // 2D chemical structure image (from PubChem), null when no single structure exists
+  structure_image_url: string | null;
   // Pre-computed per-bio-domain effect signal (JSONB from model)
   domain_effects: Record<string, {
     direction: 'benefit' | 'risk' | 'neutral' | 'mixed';
@@ -504,12 +584,53 @@ export interface ScanHistoryItem {
   product_brand?: string;
   product_grade: string;
   product_category: string;
+  product_image_url?: string | null;
   scanned_at: string;
 }
 
 export interface ScanHistoryResponse {
   items: ScanHistoryItem[];
   total: number;
+}
+
+// Search History Types
+export interface SearchHistoryItem {
+  id: string;
+  query: string;
+  result_type: string;
+  searched_at: string;
+}
+
+export interface SearchHistoryResponse {
+  items: SearchHistoryItem[];
+  total: number;
+}
+
+// Daily Longevity Score Types
+export interface DailyScoreCategory {
+  key: string;
+  label: string;
+  value: number;
+}
+
+export interface DailyScoreResponse {
+  overall: number;
+  qualifier: string;
+  categories: DailyScoreCategory[];
+}
+
+export interface HealthDomainFactor {
+  ingredient_name: string;
+  strength: string;
+  direction: 'benefit' | 'harm' | 'neutral';
+}
+
+export interface HealthDomainResponse {
+  biodomain: string;
+  label: string;
+  score: number;
+  qualifier: string;
+  factors: HealthDomainFactor[];
 }
 
 // ─── Auth token provider ────────────────────────────────────────────────────
@@ -575,7 +696,7 @@ class APIService {
     if (params?.offset) queryParams.append('offset', params.offset.toString());
 
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    return this.fetch<ProductSearchResponse>(`/products/${query}`);
+    return this.fetch<ProductSearchResponse>(`/products${query}`);
   }
 
   /**
@@ -593,8 +714,18 @@ class APIService {
   /**
    * Get product by barcode (used by scanner)
    */
-  async getProductByBarcode(barcode: string): Promise<Product> {
-    return this.fetch<Product>(`/products/barcode/${barcode}`);
+  async getProductByBarcode(barcode: string): Promise<Product | BarcodeIngestionResponse> {
+    return this.fetch<Product | BarcodeIngestionResponse>(`/products/barcode/${barcode}`);
+  }
+
+  /** Poll a product verification job returned by a first-time barcode scan. */
+  async getIngestionStatus(jobId: string): Promise<BarcodeIngestionResponse> {
+    return this.fetch<BarcodeIngestionResponse>(`/products/ingestion/${jobId}`);
+  }
+
+  /** Public, product-linked measurements with dataset and method provenance. */
+  async getProductLabResults(productId: string): Promise<ProductLabResultsResponse> {
+    return this.fetch<ProductLabResultsResponse>(`/lab-results/products/${productId}`);
   }
 
   /**
@@ -700,6 +831,54 @@ class APIService {
       method: 'POST',
       body: JSON.stringify({ product_id: productId }),
     });
+  }
+
+  // ============================================
+  // Search History Methods
+  // ============================================
+
+  /**
+   * Get user's search history (auth token injected automatically)
+   */
+  async getSearchHistory(params?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<SearchHistoryResponse> {
+    const queryParams = new URLSearchParams();
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.offset) queryParams.append('offset', params.offset.toString());
+
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return this.fetch<SearchHistoryResponse>(`/users/me/search-history${query}`);
+  }
+
+  /**
+   * Log a search in history (auth token injected automatically)
+   */
+  async addToSearchHistory(query: string, resultType: 'product' | 'ingredient' = 'product'): Promise<SearchHistoryItem> {
+    return this.fetch<SearchHistoryItem>('/users/me/search-history', {
+      method: 'POST',
+      body: JSON.stringify({ query, result_type: resultType }),
+    });
+  }
+
+  // ============================================
+  // Daily Score Methods
+  // ============================================
+
+  /**
+   * Get the Daily Longevity Score for the user's current-day stack.
+   */
+  async getDailyScore(): Promise<DailyScoreResponse> {
+    return this.fetch<DailyScoreResponse>('/users/me/daily-score');
+  }
+
+  /**
+   * Get a single biodomain's score + top contributing ingredients from today's stack.
+   * `biodomain` is one of the canonical keys in app/core/biodomains.py (backend).
+   */
+  async getHealthDomain(biodomain: string): Promise<HealthDomainResponse> {
+    return this.fetch<HealthDomainResponse>(`/users/me/health-domain/${biodomain}`);
   }
 
   // ============================================

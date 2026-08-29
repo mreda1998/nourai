@@ -42,7 +42,7 @@ function ForceGraph({ nodes, edges }: { nodes: ConflictNode[]; edges: ConflictEd
     <Svg width={340} height={340}>
       <Defs>
         <Pattern id="dots" width={16} height={16} patternUnits="userSpaceOnUse">
-          <Circle cx={1} cy={1} r={0.5} fill="rgba(241,237,228,0.08)" />
+          <Circle cx={1} cy={1} r={0.5} fill="rgba(18,51,50,0.08)" />
         </Pattern>
       </Defs>
       <Rect width={340} height={340} fill="url(#dots)" />
@@ -68,12 +68,12 @@ function ForceGraph({ nodes, edges }: { nodes: ConflictNode[]; edges: ConflictEd
         const color = nodeColor(n.tone);
         return (
           <React.Fragment key={n.id}>
-            <Circle cx={n.x} cy={n.y} r={18} fill={Colors.darkSurface} stroke={color} strokeWidth={1.2} />
+            <Circle cx={n.x} cy={n.y} r={18} fill={Colors.surface} stroke={color} strokeWidth={1.2} />
             <Circle cx={n.x} cy={n.y} r={3.5} fill={color} />
             <SvgText
               x={n.x} y={n.y + 30}
               textAnchor="middle"
-              fill="rgba(241,237,228,0.75)"
+              fill="rgba(18,51,50,0.75)"
               fontSize={10}
               fontFamily={Fonts.serifItalic}
             >
@@ -164,13 +164,13 @@ export default function ConflictMapScreen() {
         <View style={{ paddingTop: insets.top + scale(12), paddingHorizontal: scale(24), paddingBottom: scale(20) }}>
           <View style={styles.headerRow}>
             <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="rgba(241,237,228,0.6)" strokeWidth={2}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="rgba(18,51,50,0.6)" strokeWidth={2}>
                 <Path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
               <Text style={styles.backText}>Back</Text>
             </Pressable>
             <View style={styles.atelierBadge}>
-              <Text style={styles.atelierBadgeText}>◆ Atelier</Text>
+              <Text style={styles.atelierBadgeText}>ELORY PREMIUM</Text>
             </View>
           </View>
           <Text style={styles.eyebrow}>Premium · Interactions</Text>
@@ -246,24 +246,24 @@ export default function ConflictMapScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.darkSurface },
+  root: { flex: 1, backgroundColor: Colors.surface },
   scroll: {},
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: scale(24) },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  backText: { fontFamily: Fonts.sansSemiBold, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'rgba(241,237,228,0.6)' },
-  atelierBadge: { paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(241,237,228,0.22)', borderRadius: 999 },
+  backText: { fontFamily: Fonts.sansSemiBold, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'rgba(18,51,50,0.6)' },
+  atelierBadge: { paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(18,51,50,0.22)', borderRadius: 999 },
   atelierBadgeText: { fontFamily: Fonts.sansSemiBold, fontSize: 9, letterSpacing: 1.8, textTransform: 'uppercase', color: Colors.sand },
-  eyebrow: { fontFamily: Fonts.sansSemiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, color: 'rgba(241,237,228,0.45)', marginBottom: scale(10) },
-  title: { fontFamily: Fonts.serif, fontSize: scale(38), lineHeight: scale(40), color: Colors.darkInk, letterSpacing: -0.5 },
-  subtitle: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, lineHeight: FontSizes.subtitle * 1.5, color: 'rgba(241,237,228,0.75)', paddingBottom: scale(20) },
-  subtitleDivider: { height: 1, backgroundColor: 'rgba(241,237,228,0.12)', marginBottom: scale(24) },
+  eyebrow: { fontFamily: Fonts.sansSemiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, color: 'rgba(18,51,50,0.45)', marginBottom: scale(10) },
+  title: { fontFamily: Fonts.serif, fontSize: scale(38), lineHeight: scale(40), color: Colors.ink, letterSpacing: -0.5 },
+  subtitle: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, lineHeight: FontSizes.subtitle * 1.5, color: 'rgba(18,51,50,0.75)', paddingBottom: scale(20) },
+  subtitleDivider: { height: 1, backgroundColor: 'rgba(18,51,50,0.12)', marginBottom: scale(24) },
   legend: { flexDirection: 'row', gap: scale(20), marginBottom: scale(16), alignItems: 'center' },
   legendItem: { flexDirection: 'row', alignItems: 'center' },
-  legendText: { fontFamily: Fonts.sans, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.0, color: 'rgba(241,237,228,0.55)' },
-  graphCard: { backgroundColor: 'rgba(241,237,228,0.03)', borderWidth: 1, borderColor: 'rgba(241,237,228,0.1)', borderRadius: Radius.lg, overflow: 'hidden', marginBottom: scale(28) },
+  legendText: { fontFamily: Fonts.sans, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.0, color: 'rgba(18,51,50,0.55)' },
+  graphCard: { backgroundColor: 'rgba(18,51,50,0.03)', borderWidth: 1, borderColor: 'rgba(18,51,50,0.1)', borderRadius: Radius.lg, overflow: 'hidden', marginBottom: scale(28) },
   noteRow: { borderLeftWidth: 2, paddingLeft: scale(14), paddingVertical: scale(12), marginBottom: scale(10), gap: scale(4) },
   noteType: { fontFamily: Fonts.sansSemiBold, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1.4 },
-  notePair: { fontFamily: Fonts.serif, fontSize: FontSizes.title, color: Colors.darkInk },
-  noteText: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, color: 'rgba(241,237,228,0.65)', lineHeight: FontSizes.subtitle * 1.45 },
-  emptyText: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, color: 'rgba(241,237,228,0.5)', lineHeight: FontSizes.subtitle * 1.5 },
+  notePair: { fontFamily: Fonts.serif, fontSize: FontSizes.title, color: Colors.ink },
+  noteText: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, color: 'rgba(18,51,50,0.65)', lineHeight: FontSizes.subtitle * 1.45 },
+  emptyText: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, color: 'rgba(18,51,50,0.5)', lineHeight: FontSizes.subtitle * 1.5 },
 });
