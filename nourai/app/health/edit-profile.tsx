@@ -109,8 +109,17 @@ export default function EditHealthProfileScreen() {
         <Pressable style={s.backBtn} onPress={() => router.back()}>
           <Text style={s.backBtnIcon}>‹</Text>
         </Pressable>
-        <Text style={s.pageTitle}>Health Profile</Text>
+        <Text style={s.pageTitle}>Edit Health Profile</Text>
+        <Pressable style={s.headerSaveBtn} onPress={handleSave} disabled={isSaving}>
+          {isSaving
+            ? <ActivityIndicator color={Colors.ink} />
+            : <Text style={s.headerSaveBtnText}>Save</Text>
+          }
+        </Pressable>
       </View>
+      <Text style={s.headerSub}>
+        Your profile helps Elory personalize insights and recommendations.
+      </Text>
 
       <ScrollView contentContainerStyle={s.container} showsVerticalScrollIndicator={false}>
 
@@ -118,8 +127,8 @@ export default function EditHealthProfileScreen() {
           <Text style={s.sectionLabel}>Basic Information</Text>
           <Text style={s.sectionSub}>Used only to make evidence more relevant to you.</Text>
           <View style={s.infoCard}>
-            <InfoRow label="Biological sex" value={onboardingProfile?.biologicalSex?.replace('_', ' ') || 'Not specified'} />
-            <InfoRow label="Age range" value={onboardingProfile?.ageRange || 'Not specified'} border />
+            <InfoRow label="Age range" value={onboardingProfile?.ageRange || 'Not specified'} />
+            <InfoRow label="Biological sex" value={onboardingProfile?.biologicalSex?.replace('_', ' ') || 'Not specified'} border />
             <InfoRow label="Activity level" value={onboardingProfile?.activityLevel?.replace('_', ' ') || 'Not specified'} border />
             <InfoRow label="Sleep quality" value={onboardingProfile?.sleepQuality?.replace('_', ' ') || 'Not specified'} border />
           </View>
@@ -155,8 +164,8 @@ export default function EditHealthProfileScreen() {
 
         {/* Goals */}
         <View style={s.section}>
-          <Text style={s.sectionLabel}>Health Goals</Text>
-          <Text style={s.sectionSub}>Pick up to {MAX_GOALS}. We'll surface supporting evidence.</Text>
+          <Text style={s.sectionLabel}>Goals</Text>
+          <Text style={s.sectionSub}>Select up to {MAX_GOALS}. We'll surface supporting evidence.</Text>
           <View style={s.pillGrid}>
             {GOALS.map((g) => {
               const active = goals.includes(g.id);
@@ -177,19 +186,6 @@ export default function EditHealthProfileScreen() {
 
         {error && <Text style={s.errorText}>{error}</Text>}
       </ScrollView>
-
-      <View style={[s.saveBar, { paddingBottom: insets.bottom + Spacing.lg }]}>
-        <Pressable
-          style={[s.saveBtn, isSaving && { opacity: 0.6 }]}
-          onPress={handleSave}
-          disabled={isSaving}
-        >
-          {isSaving
-            ? <ActivityIndicator color={Colors.bone} />
-            : <Text style={s.saveBtnText}>Save Changes</Text>
-          }
-        </Pressable>
-      </View>
     </View>
   );
 }
@@ -227,13 +223,33 @@ const s = StyleSheet.create({
     marginTop: -2,
   },
   pageTitle: {
+    flex: 1,
     fontFamily: Fonts.serifMedium,
     fontSize: FontSizes.display,
     color: Colors.ink,
   },
+  headerSaveBtn: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    minWidth: scale(40),
+    alignItems: 'flex-end',
+  },
+  headerSaveBtnText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.body,
+    color: Colors.ink,
+  },
+  headerSub: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.inkSecondary,
+    paddingHorizontal: Layout.screenPaddingHorizontal,
+    marginBottom: Spacing.lg,
+    lineHeight: FontSizes.body * 1.5,
+  },
   container: {
     paddingHorizontal: Layout.screenPaddingHorizontal,
-    paddingBottom: verticalScale(120),
+    paddingBottom: verticalScale(40),
   },
   section: {
     marginBottom: Spacing.xl,
@@ -356,27 +372,5 @@ const s = StyleSheet.create({
     color: Colors.accentAlert,
     textAlign: 'center',
     marginBottom: Spacing.md,
-  },
-  saveBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: Layout.screenPaddingHorizontal,
-    paddingTop: Spacing.lg,
-    backgroundColor: Colors.bone,
-  },
-  saveBtn: {
-    backgroundColor: Colors.ink,
-    paddingVertical: scale(16),
-    borderRadius: Radius.pill,
-    alignItems: 'center',
-  },
-  saveBtnText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.caption,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-    color: Colors.bone,
   },
 });

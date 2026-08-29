@@ -129,8 +129,14 @@ export default function AuthScreen() {
         {/* Auth Form */}
         <View style={styles.form}>
           <Text style={styles.formTitle}>
-            {mode === 'signin' ? 'Welcome Back' : 'Create Account'}
+            {mode === 'signin' ? 'Welcome Back' : 'Create your account'}
           </Text>
+
+          {mode === 'signup' && (
+            <Text style={styles.signupSubtitle}>
+              Join Elory. Set your goals so we can personalize every recommendation for you.
+            </Text>
+          )}
 
           {mode === 'signup' && (
             <View style={styles.inputGroup}>
@@ -207,6 +213,19 @@ export default function AuthScreen() {
               </Text>
             </Text>
           </Pressable>
+
+          {/* Step indicator — signup is step 1 of the account → personalize funnel */}
+          {mode === 'signup' && (
+            <View style={styles.stepDots}>
+              <View style={styles.stepDotActive}>
+                <Text style={styles.stepDotActiveText}>1</Text>
+              </View>
+              <View style={styles.stepDotLine} />
+              <View style={styles.stepDotInactive} />
+              <View style={styles.stepDotLine} />
+              <View style={styles.stepDotInactive} />
+            </View>
+          )}
 
           {/* Divider */}
           <View style={styles.divider}>
@@ -291,6 +310,46 @@ const styles = StyleSheet.create({
     color: Colors.ink,
     marginBottom: Spacing.xl,
     textAlign: 'center',
+  },
+  signupSubtitle: {
+    fontFamily: Fonts.sans,
+    fontSize: FontSizes.body,
+    color: Colors.inkSecondary,
+    textAlign: 'center',
+    lineHeight: FontSizes.body * 1.5,
+    marginTop: -Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  stepDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.xl,
+  },
+  stepDotActive: {
+    width: scale(22),
+    height: scale(22),
+    borderRadius: scale(11),
+    backgroundColor: Colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepDotActiveText: {
+    fontFamily: Fonts.sansSemiBold,
+    fontSize: FontSizes.sm,
+    color: Colors.bone,
+  },
+  stepDotInactive: {
+    width: scale(8),
+    height: scale(8),
+    borderRadius: scale(4),
+    backgroundColor: Colors.borderHairline,
+  },
+  stepDotLine: {
+    width: scale(24),
+    height: 1,
+    backgroundColor: Colors.borderHairline,
+    marginHorizontal: Spacing.sm,
   },
   inputGroup: {
     marginBottom: Spacing.lg,

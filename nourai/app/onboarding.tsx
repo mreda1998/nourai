@@ -238,7 +238,7 @@ function StepWelcome({ onNext, onGuest }: { onNext: () => void; onGuest: () => v
             textAlign: 'center',
           }}
         >
-          Understand every product, ingredient and health choice through clear, sourced research.
+          Ingredient intelligence for a longer, healthier life.
         </Text>
         <Pressable style={[s.pillBtn, { backgroundColor: Colors.accent }]} onPress={onNext}><Text style={s.pillBtnText}>Create account</Text></Pressable>
         <Pressable style={[s.pillBtn, { backgroundColor: Colors.surfaceCard, borderWidth: 1, borderColor: Colors.accent, marginTop: 10 }]} onPress={() => router.push('/auth' as never)}><Text style={[s.pillBtnText, { color: Colors.accent }]}>Sign in</Text></Pressable>
