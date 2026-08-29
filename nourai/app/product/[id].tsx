@@ -38,7 +38,6 @@ import {
   AlertNote,
   ProductThumb,
   SectionHead,
-  ScoreRing,
   FactorBar,
 } from '@/components/elory';
 
@@ -345,8 +344,9 @@ export default function ProductDetailScreen() {
             <ProductThumb
               color={thumbColor}
               letter={thumbLetter}
-              size={72}
+              size={96}
               imageUri={product.image_url}
+              variant="panel"
             />
             <View style={{ flex: 1 }}>
               {product.brand ? (
@@ -369,50 +369,103 @@ export default function ProductDetailScreen() {
           </View>
         </View>
 
-        <View style={styles.segmentedTabs}>
-          {['Overview', 'Ingredients', 'Nutrition', 'About'].map((tab) => (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.segmentedTabs}
+        >
+          {[
+            'Overview',
+            `Ingredients (${regularIngredients.length})`,
+            'Nutrition',
+            'About',
+          ].map((tab) => (
             <Pressable key={tab} style={[styles.segmentedTab, activeTab === tab && styles.segmentedTabActive]} onPress={() => setActiveTab(tab)}>
               <Text style={[styles.segmentedTabText, activeTab === tab && styles.segmentedTabTextActive]}>{tab}</Text>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
 
         {/* ── Verdict card ──────────────────────────────────────────────── */}
         <View style={styles.verdictCard}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 20, marginBottom: 16 }}>
-            <ScoreRing score={overallScore} label="Ingredient Intelligence Score" size={92} />
-            <View style={{ flex: 1 }}>
-              <Eyebrow style={{ marginBottom: 6 }}>The short version</Eyebrow>
-              {product.description ? (
-                <Text style={styles.verdictText}>{product.description}</Text>
-              ) : (
-                <Text style={styles.verdictText}>
-                  {product.is_ai_generated
-                    ? 'AI-generated analysis. Verify before use.'
-                    : `${product.name} contains ${product.ingredients.length} ingredient${product.ingredients.length !== 1 ? 's' : ''}.`}
-                </Text>
-              )}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4 }}>
+              <Text style={{ fontFamily: Fonts.serifMedium, fontSize: 52, color: Colors.ink, lineHeight: 52 }}>
+                {overallScore}
+              </Text>
+              <Text style={{ fontFamily: Fonts.sans, fontSize: 14, color: Colors.inkSecondary, marginBottom: 6 }}>/100</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={{ fontFamily: Fonts.serifMedium, fontSize: 16, color: Colors.ink, marginBottom: 6 }}>
+                {overallScore >= 80 ? 'High' : overallScore >= 60 ? 'Good' : overallScore >= 40 ? 'Moderate' : 'Low'}
+              </Text>
+              <EvidenceSpectrum strength={Math.round(overallScore / 20)} />
             </View>
           </View>
-          {regularIngredients.length > 0 && (
-            <View style={styles.statRow}>
+          <Text style={{ fontFamily: Fonts.sans, fontSize: 12, color: Colors.inkSecondary, marginBottom: 6 }}>
+            Ingredient Intelligence Score
+          </Text>
+          <Text style={styles.metaText}>Evidence quality across all ingredients</Text>
+
+          <View style={{ marginTop: 16 }}>
+            <Eyebrow style={{ marginBottom: 6 }}>The short version</Eyebrow>
+            {product.description ? (
+              <Text style={styles.verdictText}>{product.description}</Text>
+            ) : (
+              <Text style={styles.verdictText}>
+                {product.is_ai_generated
+                  ? 'AI-generated analysis. Verify before use.'
+                  : `${product.name} contains ${product.ingredients.length} ingredient${product.ingredients.length !== 1 ? 's' : ''}.`}
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {/* ── What this product supports ──────────────────────────────── */}
+        {bioDomains.length > 0 && (
+          <View style={{ marginBottom: 24 }}>
+            <SectionHead label="What this product supports" />
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {bioDomains.slice(0, 3).map((domain) => (
+                <View key={domain.name} style={styles.supportPill}>
+                  <Text style={styles.supportPillText}>{domain.name}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* ── Ingredient highlights ────────────────────────────────────── */}
+        {regularIngredients.length > 0 && (
+          <View style={{ marginBottom: 28 }}>
+            <SectionHead label="Ingredient highlights" />
+            <View style={styles.highlightsCard}>
               <View style={{ flex: 1 }}>
                 <Eyebrow style={{ fontSize: 9, marginBottom: 6 }}>Strong evidence</Eyebrow>
                 <Text style={styles.statValue}>{strongCount}</Text>
+                <View style={{ marginTop: 8 }}>
+                  <EvidenceSpectrum strength={strongCount > 0 ? 5 : 0} />
+                </View>
               </View>
               <View style={styles.statDivider} />
               <View style={{ flex: 1, paddingHorizontal: 8 }}>
-                <Eyebrow style={{ fontSize: 9, marginBottom: 4 }}>Flagged</Eyebrow>
-                <Text style={styles.statValue}>{flaggedCount}</Text>
+                <Eyebrow style={{ fontSize: 9, marginBottom: 6 }}>Emerging evidence</Eyebrow>
+                <Text style={styles.statValue}>0</Text>
+                <View style={{ marginTop: 8 }}>
+                  <EvidenceSpectrum strength={0} />
+                </View>
               </View>
               <View style={styles.statDivider} />
               <View style={{ flex: 1, paddingLeft: 8 }}>
-                <Eyebrow style={{ fontSize: 9, marginBottom: 4 }}>Category</Eyebrow>
-                <Text style={styles.statValue}>{product.category}</Text>
+                <Eyebrow style={{ fontSize: 9, marginBottom: 6 }}>Limited / Uncertain</Eyebrow>
+                <Text style={styles.statValue}>{flaggedCount}</Text>
+                <View style={{ marginTop: 8 }}>
+                  <EvidenceSpectrum strength={flaggedCount > 0 ? 1 : 0} />
+                </View>
               </View>
             </View>
-          )}
-        </View>
+          </View>
+        )}
 
         {/* ── Allergen warning ──────────────────────────────────────────── */}
         {product.has_allergen_warning && product.allergen_warning ? (
@@ -470,7 +523,12 @@ export default function ProductDetailScreen() {
                       marginBottom: 4,
                     }}
                   >
-                    <View style={{ flex: 1, marginRight: 8 }}>
+                    <View style={{ flexDirection: 'row', flex: 1, marginRight: 8, alignItems: 'center' }}>
+                      <View style={styles.ingredientAvatar}>
+                        <Text style={styles.ingredientAvatarText}>
+                          {ingredient.name?.[0]?.toUpperCase() ?? '?'}
+                        </Text>
+                      </View>
                       <Text style={styles.ingredientName}>
                         {ingredient.name}
                         {ingredient.concentration
@@ -724,11 +782,17 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
   },
-  segmentedTabs: { flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.borderHairline, marginBottom: 20 },
-  segmentedTab: { flex: 1, alignItems: 'center', paddingVertical: 10, marginBottom: -1 },
-  segmentedTabActive: { borderBottomWidth: 2, borderBottomColor: Colors.accent },
-  segmentedTabText: { fontFamily: Fonts.sansMedium, fontSize: 9, color: Colors.inkSecondary },
-  segmentedTabTextActive: { color: Colors.accent },
+  segmentedTabs: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+  segmentedTab: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+  },
+  segmentedTabActive: { backgroundColor: Colors.ink, borderColor: Colors.ink },
+  segmentedTabText: { fontFamily: Fonts.sansMedium, fontSize: 13, color: Colors.inkSecondary },
+  segmentedTabTextActive: { color: Colors.surface },
 
   // Verdict card
   verdictCard: {
@@ -746,24 +810,37 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     color: Colors.ink,
   },
-  statRow: {
+  highlightsCard: {
     flexDirection: 'row',
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: Colors.borderHairline,
-    alignItems: 'center',
+    backgroundColor: Colors.surfaceCard,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    borderRadius: Radius.lg,
+    padding: 20,
+    alignItems: 'flex-start',
   },
   statDivider: {
     width: 1,
-    height: 28,
+    height: 44,
     backgroundColor: Colors.borderHairline,
   },
   statValue: {
     fontFamily: Fonts.serifItalic,
-    fontSize: 14,
+    fontSize: 22,
     color: Colors.ink,
-    textTransform: 'capitalize',
   },
+
+  // Support pills
+  supportPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+  },
+  supportPillText: { fontFamily: Fonts.sansMedium, fontSize: 13, color: Colors.ink },
 
   // Allergen
   allergenCard: {
@@ -839,11 +916,28 @@ const styles = StyleSheet.create({
     paddingLeft: 14,
     marginLeft: -14,
   },
+  ingredientAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  ingredientAvatarText: {
+    fontFamily: Fonts.serifItalic,
+    fontSize: 13,
+    color: Colors.ink,
+  },
   ingredientName: {
     fontFamily: Fonts.serif,
     fontSize: 19,
     color: Colors.ink,
     lineHeight: 24,
+    flexShrink: 1,
   },
   ingredientDesc: {
     fontFamily: Fonts.sans,
