@@ -121,10 +121,16 @@ export default function AuthScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.logo}>ELORY</Text>
-          <Text style={styles.tagline}>Evidence, made personal.</Text>
-        </View>
+        {mode === 'signup' ? (
+          <Pressable style={styles.backHeader} onPress={() => router.back()} hitSlop={12}>
+            <Text style={styles.backHeaderIcon}>‹</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.header}>
+            <Text style={styles.logo}>ELORY</Text>
+            <Text style={styles.tagline}>Evidence, made personal.</Text>
+          </View>
+        )}
 
         {/* Auth Form */}
         <View style={styles.form}>
@@ -134,7 +140,7 @@ export default function AuthScreen() {
 
           {mode === 'signup' && (
             <Text style={styles.signupSubtitle}>
-              Join Elory. Set your goals so we can personalize every recommendation for you.
+              Join Elory to unlock personalized, evidence-based recommendations.
             </Text>
           )}
 
@@ -287,6 +293,21 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: verticalScale(48),
+  },
+  backHeader: {
+    width: scale(40),
+    height: scale(40),
+    borderRadius: scale(20),
+    borderWidth: 1,
+    borderColor: Colors.borderHairline,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: verticalScale(32),
+  },
+  backHeaderIcon: {
+    fontSize: FontSizes.heading,
+    color: Colors.ink,
+    marginTop: -2,
   },
   logo: {
     fontFamily: Fonts.sansSemiBold,
