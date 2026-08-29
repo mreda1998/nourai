@@ -5,10 +5,11 @@ import { Colors, Fonts, Radius } from '@/constants/theme';
 import { EloryScreen, FilterPills, ScreenHeader } from '@/components/elory';
 
 const categories = [
-  { key: 'all', label: 'All' },
+  { key: 'latest', label: 'Latest' },
   { key: 'longevity', label: 'Longevity' },
   { key: 'nutrition', label: 'Nutrition' },
-  { key: 'research', label: 'Research' },
+  { key: 'supplements', label: 'Supplements' },
+  { key: 'mind', label: 'Mind' },
 ];
 
 const stories = [
@@ -18,7 +19,7 @@ const stories = [
 ];
 
 export default function JournalScreen() {
-  const [category, setCategory] = useState('all');
+  const [category, setCategory] = useState('latest');
   return (
     <EloryScreen header={<ScreenHeader title="ELORY Journal" />}>
       <FilterPills options={categories} selected={category} onSelect={setCategory} />
