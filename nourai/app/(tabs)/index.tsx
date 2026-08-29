@@ -15,7 +15,15 @@ function Header({ name }: { name?: string }) {
     <View style={styles.header}>
       <View style={styles.avatar}><Text style={styles.avatarText}>{name?.slice(0, 1).toUpperCase() || 'E'}</Text></View>
       <BrandMark compact />
-      <View style={styles.headerActions}><Text style={styles.headerIcon}>⌁</Text><View style={styles.notificationDot} /></View>
+      <View style={styles.headerActions}>
+        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={Colors.ink} strokeWidth={1.6}>
+          <Path d="M18.8 4.3a6.5 6.5 0 00-13.6 0c-1.2 1.2-1.2 5.2 0 6.5v2.2a1 1 0 001 1h2v1a1 1 0 001 1h6a1 1 0 001-1v-1h2a1 1 0 001-1v-2.2c1.2-1.3 1.2-5.3 0-6.5z" />
+          <Path d="M9 20h6" strokeLinecap="round" />
+        </Svg>
+        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={Colors.ink} strokeWidth={1.6}>
+          <Path d="M3 18h2v-8H3v8M10.5 18h2v-13h-2v13M18 18h2V6h-2v12" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      </View>
     </View>
   );
 }
@@ -136,8 +144,7 @@ const styles = StyleSheet.create({
   header: { height: 54, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#D8C4A7', alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 16 },
-  headerActions: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: Colors.borderHairline, alignItems: 'center', justifyContent: 'center' },
-  headerIcon: { color: Colors.ink, fontSize: 17 }, notificationDot: { position: 'absolute', top: 5, right: 5, width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.alert },
+  headerActions: { height: 32, borderRadius: 16, borderWidth: 1, borderColor: Colors.borderHairline, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 10 },
   greeting: { fontFamily: Fonts.serif, color: Colors.ink, fontSize: 31, lineHeight: 34, marginTop: 4 },
   intro: { fontFamily: Fonts.sans, fontSize: 11, color: Colors.inkSecondary, marginTop: 4, marginBottom: 22 },
   scoreCard: { backgroundColor: Colors.surfaceCard, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, padding: 17, marginBottom: 20 },
