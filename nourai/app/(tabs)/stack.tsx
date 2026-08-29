@@ -6,7 +6,7 @@ import { useAuth } from '@/context/auth-context';
 import { api } from '@/services/api';
 import { supabase } from '@/lib/supabase';
 import { Colors, Fonts, Radius } from '@/constants/theme';
-import { EloryScreen, FilterPills, ProductThumb, ScreenHeader } from '@/components/elory';
+import { EloryScreen, FilterPills, ScoreListRow, ScreenHeader } from '@/components/elory';
 
 const filters = [
   { key: 'all', label: 'All' },
@@ -23,15 +23,12 @@ const demo: Product[] = [
 
 function StackRow({ item, onRemove }: { item: Product; onRemove: () => void }) {
   const score = item.grade === 'A' ? 91 : item.grade === 'B' ? 82 : item.grade === 'C' ? 70 : 58;
+  const dose = item.quantity || (item.category === 'cosmetic' ? 'Use as directed' : 'Daily');
   return (
     <Pressable style={styles.row} onPress={() => !item.id.startsWith('demo-') && router.push(`/product/${item.id}` as never)}>
-      <ProductThumb size={45} imageUri={item.imageUri} letter={item.name.slice(0, 1)} />
       <View style={{ flex: 1 }}>
-        <Text style={styles.brand}>{item.brand || item.category}</Text>
-        <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.dose}>{item.quantity || (item.category === 'cosmetic' ? 'Use as directed' : 'Daily')}</Text>
+        <ScoreListRow imageUrl={item.imageUri} title={item.name} subtitle={`${item.brand || item.category} · ${dose}`} score={score} />
       </View>
-      <View style={[styles.score, { borderColor: score >= 85 ? Colors.sage : Colors.sand }]}><Text style={styles.scoreText}>{score}</Text></View>
       <Pressable hitSlop={12} onPress={onRemove}><Text style={styles.more}>•••</Text></Pressable>
     </Pressable>
   );
@@ -99,6 +96,6 @@ const styles = StyleSheet.create({
   add: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center' }, addText: { color: Colors.accentInk, fontSize: 17, lineHeight: 18 },
   summary: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surfaceCard, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, borderRadius: Radius.md, padding: 13, marginTop: 17, marginBottom: 23, gap: 13 }, summaryValue: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 22, lineHeight: 22, textAlign: 'center' }, summaryLabel: { fontFamily: Fonts.sans, color: Colors.inkSecondary, fontSize: 8.5, marginTop: 3 }, summaryRule: { height: 29, width: StyleSheet.hairlineWidth, backgroundColor: Colors.borderHairline }, optimize: { marginLeft: 'auto', backgroundColor: Colors.accent, borderRadius: Radius.pill, paddingVertical: 9, paddingHorizontal: 13 }, optimizeText: { fontFamily: Fonts.sansMedium, color: Colors.accentInk, fontSize: 9.5 },
   section: { marginBottom: 21 }, sectionHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 3 }, sectionTitle: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 20 }, sectionCaption: { fontFamily: Fonts.sans, color: Colors.inkSecondary, fontSize: 8.5 },
-  row: { minHeight: 77, flexDirection: 'row', alignItems: 'center', gap: 11, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.borderHairline }, brand: { fontFamily: Fonts.sansSemiBold, textTransform: 'uppercase', color: Colors.inkSecondary, fontSize: 7.5, letterSpacing: .7, marginBottom: 2 }, name: { fontFamily: Fonts.sansMedium, color: Colors.ink, fontSize: 12 }, dose: { fontFamily: Fonts.sans, color: Colors.inkSecondary, fontSize: 9, marginTop: 3 }, score: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, alignItems: 'center', justifyContent: 'center' }, scoreText: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 12 }, more: { fontFamily: Fonts.sansSemiBold, color: Colors.inkTertiary, letterSpacing: 1, transform: [{ rotate: '90deg' }] },
+  row: { minHeight: 77, flexDirection: 'row', alignItems: 'center', gap: 11, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.borderHairline }, more: { fontFamily: Fonts.sansSemiBold, color: Colors.inkTertiary, letterSpacing: 1, transform: [{ rotate: '90deg' }] },
   addProduct: { height: 47, borderRadius: Radius.pill, borderWidth: 1, borderColor: Colors.accent, alignItems: 'center', justifyContent: 'center' }, addProductText: { fontFamily: Fonts.sansMedium, color: Colors.accent, fontSize: 11 },
 });
