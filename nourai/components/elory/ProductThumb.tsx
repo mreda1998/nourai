@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import { Image } from 'expo-image';
-import { Colors, Fonts } from '@/constants/theme';
+import { Colors, Fonts, Radius } from '@/constants/theme';
 
 type ThumbColor = 'sand' | 'sage' | 'dark' | 'default';
 
@@ -10,9 +10,10 @@ interface Props {
   letter?: string;
   size?: number;
   imageUri?: string | null;
+  variant?: 'arch' | 'panel';
 }
 
-export function ProductThumb({ color = 'default', letter, size = 64, imageUri }: Props) {
+export function ProductThumb({ color = 'default', letter, size = 64, imageUri, variant = 'arch' }: Props) {
   const bg =
     color === 'sand' ? Colors.sand
     : color === 'sage' ? 'rgba(123,174,142,0.25)'
@@ -21,16 +22,26 @@ export function ProductThumb({ color = 'default', letter, size = 64, imageUri }:
 
   const textColor = color === 'dark' ? Colors.surface : Colors.ink;
 
-  return (
-    <View
-      style={{
+  const shapeStyle = variant === 'panel'
+    ? {
+        width: size,
+        height: size * 1.35,
+        borderRadius: Radius.md,
+      }
+    : {
         width: size,
         height: size * 1.25,
-        backgroundColor: imageUri ? Colors.surfaceCard : bg,
         borderTopLeftRadius: 999,
         borderTopRightRadius: 999,
         borderBottomLeftRadius: 6,
         borderBottomRightRadius: 6,
+      };
+
+  return (
+    <View
+      style={{
+        ...shapeStyle,
+        backgroundColor: imageUri ? Colors.surfaceCard : bg,
         borderWidth: 1,
         borderColor: Colors.borderHairline,
         alignItems: 'center',
