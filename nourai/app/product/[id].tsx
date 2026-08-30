@@ -446,11 +446,8 @@ export default function ProductDetailScreen() {
             <SectionHead label="Ingredient highlights" />
             <View style={styles.highlightsCard}>
               <View style={{ flex: 1 }}>
-                <Eyebrow style={{ fontSize: 9, marginBottom: 6 }}>Strong evidence</Eyebrow>
+                <Eyebrow style={{ fontSize: 9, marginBottom: 6 }}>No flags</Eyebrow>
                 <Text style={styles.statValue}>{strongCount}</Text>
-                <View style={{ marginTop: 8 }}>
-                  <EvidenceSpectrum strength={strongCount > 0 ? 5 : 0} />
-                </View>
               </View>
               <View style={styles.statDivider} />
               <View style={{ flex: 1, paddingHorizontal: 8 }}>
@@ -464,9 +461,6 @@ export default function ProductDetailScreen() {
               <View style={{ flex: 1, paddingLeft: 8 }}>
                 <Eyebrow style={{ fontSize: 9, marginBottom: 6 }}>Limited / Uncertain</Eyebrow>
                 <Text style={styles.statValue}>{flaggedCount}</Text>
-                <View style={{ marginTop: 8 }}>
-                  <EvidenceSpectrum strength={flaggedCount > 0 ? 1 : 0} />
-                </View>
               </View>
             </View>
           </View>

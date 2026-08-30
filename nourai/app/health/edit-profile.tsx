@@ -199,7 +199,7 @@ function InfoRow({ label, value, border }: { label: string; value: string; borde
 const s = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.bone,
+    backgroundColor: Colors.surface,
   },
   header: {
     paddingHorizontal: Layout.screenPaddingHorizontal,
@@ -294,7 +294,7 @@ const s = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.boneCard,
+    backgroundColor: Colors.surfaceCard,
     borderWidth: 1,
     borderColor: Colors.borderHairline,
     borderRadius: Radius.md,
@@ -313,7 +313,7 @@ const s = StyleSheet.create({
     color: Colors.ink,
   },
   cardTitleActive: {
-    color: Colors.bone,
+    color: Colors.surface,
   },
   cardDesc: {
     fontFamily: Fonts.sans,
@@ -336,7 +336,7 @@ const s = StyleSheet.create({
   checkMark: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.sm,
-    color: Colors.bone,
+    color: Colors.surface,
   },
   pillGrid: {
     flexDirection: 'row',
@@ -349,7 +349,7 @@ const s = StyleSheet.create({
     borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: Colors.borderHairline,
-    backgroundColor: Colors.boneCard,
+    backgroundColor: Colors.surfaceCard,
   },
   pillActive: {
     backgroundColor: Colors.ink,
@@ -364,12 +364,12 @@ const s = StyleSheet.create({
     color: Colors.ink,
   },
   pillTextActive: {
-    color: Colors.bone,
+    color: Colors.surface,
   },
   errorText: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
-    color: Colors.accentAlert,
+    color: Colors.alert,
     textAlign: 'center',
     marginBottom: Spacing.md,
   },

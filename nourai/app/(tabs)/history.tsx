@@ -59,9 +59,10 @@ export default function HistoryScreen() {
       <View style={styles.search}>
         <Text style={styles.searchIcon}>⌕</Text>
         <TextInput value={query} onChangeText={setQuery} placeholder="Search your history" placeholderTextColor={Colors.inkTertiary} style={styles.searchInput} />
-        <Pressable hitSlop={10} style={styles.filterButton}>
+        {/* Decorative — no separate filter panel exists; FilterPills below is the real filter UI. */}
+        <View style={styles.filterButton}>
           <FilterIcon />
-        </Pressable>
+        </View>
       </View>
       <FilterPills options={filters} selected={filter} onSelect={setFilter} />
       {Object.entries(groups).map(([day, items]) => (
@@ -73,13 +74,15 @@ export default function HistoryScreen() {
               const score = item.grade === 'A' ? 91 : item.grade === 'B' ? 82 : item.grade === 'C' ? 70 : 58;
               return (
                 <View key={item.id} style={styles.row}>
-                  <ScoreListRow
-                    imageUrl={item.imageUri}
-                    title={item.title}
-                    subtitle={`${item.meta} · ${time}`}
-                    score={score}
-                    onPress={() => item.productId && router.push(`/product/${item.productId}` as never)}
-                  />
+                  <View style={{ flex: 1 }}>
+                    <ScoreListRow
+                      imageUrl={item.imageUri}
+                      title={item.title}
+                      subtitle={`${item.meta} · ${time}`}
+                      score={score}
+                      onPress={() => item.productId && router.push(`/product/${item.productId}` as never)}
+                    />
+                  </View>
                 </View>
               );
             }

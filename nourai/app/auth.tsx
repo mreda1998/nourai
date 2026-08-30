@@ -284,7 +284,7 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.bone,
+    backgroundColor: Colors.surface,
   },
   container: {
     paddingHorizontal: Layout.screenPaddingHorizontal,
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
   stepDotActiveText: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.sm,
-    color: Colors.bone,
+    color: Colors.surface,
   },
   stepDotInactive: {
     width: scale(8),
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   input: {
-    backgroundColor: Colors.boneCard,
+    backgroundColor: Colors.surfaceCard,
     borderWidth: 1,
     borderColor: Colors.borderHairline,
     borderRadius: Radius.pill,
@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
   error: {
     fontFamily: Fonts.sans,
     fontSize: FontSizes.body,
-    color: Colors.accentAlert,
+    color: Colors.alert,
     textAlign: 'center',
     marginBottom: Spacing.md,
   },
@@ -414,7 +414,7 @@ const styles = StyleSheet.create({
   submitButtonText: {
     fontFamily: Fonts.sansSemiBold,
     fontSize: FontSizes.body,
-    color: Colors.bone,
+    color: Colors.surface,
     textTransform: 'uppercase',
     letterSpacing: 1.5,
   },
