@@ -28,13 +28,15 @@ export interface ScreenProps {
   scroll?: boolean;
   contentStyle?: StyleProp<ViewStyle>;
   footer?: ReactNode;
+  /** Render `title` only in the collapsed nav bar (the screen draws its own heading). */
+  hideLargeTitle?: boolean;
   refreshing?: boolean;
   onRefresh?: () => void;
 }
 
 export function Screen({
   children, title, eyebrow, subtitle, back, onBack, right, hero, tabbed = false, night = false,
-  scroll = true, contentStyle, footer, refreshing, onRefresh,
+  scroll = true, contentStyle, footer, hideLargeTitle = false, refreshing, onRefresh,
 }: ScreenProps) {
   const insets = useSafeAreaInsets();
   const y = useSharedValue(0);
@@ -70,8 +72,8 @@ export function Screen({
     </View>
   ) : null;
 
-  const largeTitle = title ? (
-    <View style={{ paddingHorizontal: Layout.gutter, paddingTop: hero ? 24 : 4, paddingBottom: 20 }}>
+  const largeTitle = title && !hero && !hideLargeTitle ? (
+    <View style={{ paddingHorizontal: Layout.gutter, paddingTop: 4, paddingBottom: 20 }}>
       {eyebrow ? <Txt variant="overline" tone={night ? 'inverse2' : 'secondary'} style={{ marginBottom: 6 }}>{eyebrow}</Txt> : null}
       <Txt variant="largeTitle" tone={night ? 'inverse' : 'primary'} accessibilityRole="header">{title}</Txt>
       {subtitle ? <Txt variant="subhead" tone={night ? 'inverse2' : 'secondary'} style={{ marginTop: 6 }}>{subtitle}</Txt> : null}

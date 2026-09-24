@@ -1,281 +1,164 @@
 import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import Animated, { FadeInUp } from 'react-native-reanimated';
-import Svg, { Path, Circle, Line } from 'react-native-svg';
-import { SectionHead } from '@/components/elory';
-import { Colors, Fonts, FontSizes, scale, Radius } from '@/constants/theme';
-import { supabase } from '@/lib/supabase';
+import { ActivityIndicator, View } from 'react-native';
+import { router } from 'expo-router';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import Svg, { Circle, Line, Path } from 'react-native-svg';
+import { Clock, UtensilsCrossed } from 'lucide-react-native';
+import { Palette } from '@/constants/theme';
 import { api, CircadianScheduleItem } from '@/services/api';
+import { accessToken } from '@/lib/stack-sync';
 import { useAppState } from '@/context/app-state';
+import { Card, EmptyState, EvidenceMeter, ListGroup, Pill, Screen, Section, Txt } from '@/components/ui';
 
-const PHASE_MARKERS = [
-  { h: 6,  label: 'Cortisol peak' },
+const PHASES = [
+  { h: 6, label: 'Cortisol peak' },
   { h: 10, label: 'Insulin sensitive' },
-  { h: 14, label: 'Post-prandial dip' },
-  { h: 18, label: 'Temp peak' },
+  { h: 14, label: 'Afternoon dip' },
+  { h: 18, label: 'Temperature peak' },
   { h: 22, label: 'Melatonin onset' },
 ];
 
-const LOCAL_WINDOW_TIMES = {
-  morning: '08:00',
-  afternoon: '13:00',
-  evening: '19:00',
-  night: '22:00',
-};
+const LOCAL_TIME = { morning: '08:00', afternoon: '13:00', evening: '19:00', night: '22:00' } as const;
 
-function localCircadianSchedule(
-  stack: ReturnType<typeof useAppState>['stack'],
-): CircadianScheduleItem[] {
+function localSchedule(stack: ReturnType<typeof useAppState>['stack']): CircadianScheduleItem[] {
   const seen = new Set<string>();
-  return stack.flatMap((product) => {
-    const timeOfDay = product.timeOfDay ?? 'morning';
-    const time = LOCAL_WINDOW_TIMES[timeOfDay];
-    const ingredientNames = product.ingredients.length > 0 ? product.ingredients : [product.name];
-    return ingredientNames
-      .filter((name) => {
-        const key = `${time}:${name.toLowerCase()}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .map((name) => ({
-        time,
-        ingredient_name: name,
-        note: 'Using your logged time. Evidence-backed timing has not been synced for this ingredient yet.',
-        with_food: false,
-        synergy: false,
-        evidence_dots: 1,
-      }));
+  return stack.flatMap((p) => {
+    const time = LOCAL_TIME[p.timeOfDay ?? 'morning'];
+    return (p.ingredients.length ? p.ingredients : [p.name])
+      .filter((n) => { const k = `${time}:${n.toLowerCase()}`; if (seen.has(k)) return false; seen.add(k); return true; })
+      .map((n) => ({ time, ingredient_name: n, note: 'Using the time you logged. Researched timing isn’t available for this ingredient yet.', with_food: false, synergy: false, evidence_dots: 1 }));
   }).sort((a, b) => a.time.localeCompare(b.time));
 }
 
-function Timeline({ items }: { items: CircadianScheduleItem[] }) {
-  const W = 300;
-  const H = 64;
-  const baselineY = 42;
-  const cortisol = 'M 0 42 Q 40 12 80 26 Q 140 46 180 36 Q 230 26 260 36 Q 290 42 300 42';
-  const melatonin = 'M 0 20 Q 60 38 120 42 Q 180 44 230 38 Q 270 24 300 8';
-
-  return (
-    <View>
-      <Svg width={W} height={H}>
-        <Line x1={0} y1={baselineY} x2={W} y2={baselineY} stroke="rgba(18,51,50,0.12)" strokeWidth={0.5} />
-        <Path d={cortisol} stroke={Colors.sand} strokeWidth={1.4} fill="none" opacity={0.85} />
-        <Path d={melatonin} stroke={Colors.sage} strokeWidth={1.4} fill="none" opacity={0.65} strokeDasharray="3 3" />
-        {items.map((d, i) => {
-          const [h, m] = d.time.split(':').map(Number);
-          const x = ((h + m / 60) / 24) * W;
-          return (
-            <React.Fragment key={i}>
-              <Line x1={x} y1={baselineY} x2={x} y2={baselineY + 10} stroke={Colors.ink} strokeWidth={1} />
-              <Circle cx={x} cy={baselineY} r={3} fill={d.synergy ? Colors.sage : Colors.sand} />
-            </React.Fragment>
-          );
-        })}
-      </Svg>
-      <View style={styles.timeLabels}>
-        {['00', '06', '12', '18', '24'].map((h) => (
-          <Text key={h} style={styles.timeLabel}>{h}</Text>
-        ))}
-      </View>
-      <View style={styles.legend}>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendLine, { backgroundColor: Colors.sand }]} />
-          <Text style={styles.legendText}>Cortisol</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendLine, { backgroundColor: Colors.sage }]} />
-          <Text style={styles.legendText}>Melatonin</Text>
-        </View>
-      </View>
-      <View style={styles.phaseRow}>
-        {PHASE_MARKERS.map((m) => (
-          <View key={m.label} style={styles.phaseItem}>
-            <Text style={styles.phaseTime}>{String(m.h).padStart(2, '0')}:00</Text>
-            <Text style={styles.phaseLabel}>{m.label}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function EvidenceDots({ count }: { count: number }) {
-  return (
-    <View style={{ flexDirection: 'row', gap: 3 }}>
-      {[1, 2, 3, 4].map((i) => (
-        <View
-          key={i}
-          style={{
-            width: 5, height: 5, borderRadius: 3,
-            backgroundColor: i <= count ? Colors.sand : 'transparent',
-            borderWidth: 1, borderColor: Colors.sand,
-          }}
-        />
-      ))}
-    </View>
-  );
+function format(time: string) {
+  const [h, m] = time.split(':').map(Number);
+  const d = new Date(); d.setHours(h, m || 0, 0, 0);
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
 export default function CircadianScreen() {
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { stack } = useAppState();
   const [schedule, setSchedule] = useState<CircadianScheduleItem[]>([]);
   const [chronotype, setChronotype] = useState('moderate_morning');
   const [loading, setLoading] = useState(true);
-  const [emptyReason, setEmptyReason] = useState<string | null>(null);
+  const [reason, setReason] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
+      const fallback = localSchedule(stack);
       try {
-        const { data } = await supabase.auth.getSession();
-        const token = data.session?.access_token;
-        if (!token) {
-          setSchedule(localCircadianSchedule(stack));
-          setEmptyReason(stack.length > 0 ? 'local_only' : 'stack_empty');
-          return;
-        }
+        const token = await accessToken();
+        if (!token) { setSchedule(fallback); setReason(stack.length ? 'local_only' : 'stack_empty'); return; }
         const res = await api.getCircadian(token);
-        const fallback = localCircadianSchedule(stack);
-        setSchedule(res.schedule.length > 0 ? res.schedule : fallback);
+        setSchedule(res.schedule.length ? res.schedule : fallback);
         setChronotype(res.chronotype);
-        setEmptyReason(res.schedule.length > 0 ? (res.empty_reason ?? null) : (fallback.length > 0 ? 'local_only' : res.empty_reason ?? null));
+        setReason(res.schedule.length ? (res.empty_reason ?? null) : fallback.length ? 'local_only' : res.empty_reason ?? null);
       } catch {
-        const fallback = localCircadianSchedule(stack);
         setSchedule(fallback);
-        setEmptyReason(fallback.length > 0 ? 'local_only' : 'stack_empty');
+        setReason(fallback.length ? 'local_only' : 'stack_empty');
       } finally {
         setLoading(false);
       }
     })();
   }, [stack]);
 
-  const chronotypeLabel = chronotype.replace(/_/g, ' ');
-
   return (
-    <View style={styles.root}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + scale(48) }]}
-      >
-        {/* Editorial header */}
-        <View style={{ paddingTop: insets.top + scale(12), paddingHorizontal: scale(24), paddingBottom: scale(20) }}>
-          <View style={styles.headerRow}>
-            <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="rgba(18,51,50,0.6)" strokeWidth={2}>
-                <Path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-              <Text style={styles.backText}>Back</Text>
-            </Pressable>
-            <View style={styles.atelierBadge}>
-              <Text style={styles.atelierBadgeText}>ELORY PREMIUM</Text>
-            </View>
-          </View>
-          <Text style={styles.eyebrow}>Premium · Chronobiology</Text>
-          <Text style={styles.title}>Your {'\n'}<Text style={{ fontStyle: 'italic' }}>circadian{'\n'}</Text>protocol.</Text>
-        </View>
+    <Screen back title="Timing protocol" subtitle={`Tuned to your chronotype: ${chronotype.replace(/_/g, ' ')}`}>
+      {loading ? <ActivityIndicator color={Palette.accent} style={{ marginTop: 32 }} /> : !schedule.length ? (
+        <EmptyState
+          icon={Clock}
+          title={reason === 'timing_data_pending' ? 'Timing research in progress' : 'Nothing to schedule yet'}
+          message={reason === 'timing_data_pending' ? 'We’re still researching timing for your ingredients.' : 'Add products to your stack to build a daily sequence.'}
+          action="Go to stack"
+          onAction={() => router.push('/(tabs)/stack' as never)}
+        />
+      ) : (
+        <>
+          <Card padding={18}>
+            <Txt variant="overline" tone="secondary">Your 24-hour rhythm</Txt>
+            <Timeline items={schedule} />
+          </Card>
 
-        <View style={{ paddingHorizontal: scale(24) }}>
-          <Animated.View entering={FadeInUp.duration(300)}>
-            <Text style={styles.subtitle}>
-              Tuned to your chronotype:{' '}
-              <Text style={{ color: Colors.sand }}>{chronotypeLabel}</Text>.
-            </Text>
-            <View style={styles.subtitleDivider} />
-          </Animated.View>
+          {reason === 'local_only' ? (
+            <Card variant="sunken" padding={14} style={{ marginTop: 12 }}>
+              <Txt variant="footnote" tone="secondary">Preview based on the times you logged. Sign in to sync your stack and get researched timing.</Txt>
+            </Card>
+          ) : null}
 
-          {loading ? (
-            <ActivityIndicator color={Colors.sand} style={{ marginVertical: scale(32) }} />
-          ) : emptyReason === 'stack_empty' || schedule.length === 0 ? (
-            <Animated.View entering={FadeInUp.delay(80).duration(300)}>
-              <Text style={styles.pendingText}>
-                Add products to today's stack to build your circadian sequence.
-              </Text>
-            </Animated.View>
-          ) : emptyReason === 'timing_data_pending' && schedule.length === 0 ? (
-            <Animated.View entering={FadeInUp.delay(80).duration(300)}>
-              <Text style={styles.pendingText}>
-                Timing data is being researched — check back soon.
-              </Text>
-            </Animated.View>
-          ) : (
-            <>
-              <Animated.View entering={FadeInUp.delay(80).duration(300)} style={styles.timelineCard}>
-                <Text style={styles.sectionEyebrow}>24h biological phase</Text>
-                <Timeline items={schedule} />
-              </Animated.View>
-
-              {emptyReason === 'local_only' ? (
-                <Text style={[styles.pendingText, { marginBottom: scale(18) }]}>
-                  Local preview: sign in to sync this stack and unlock researched timing rules.
-                </Text>
-              ) : null}
-
-              <SectionHead label="Today's sequence" dark />
-
+          <Section title="Today’s sequence">
+            <ListGroup>
               {schedule.map((item, i) => (
-                <Animated.View
-                  key={i}
-                  entering={FadeInUp.delay(i * 50 + 160).duration(280)}
-                  style={[styles.doseRow, i < schedule.length - 1 && styles.doseRowBorder]}
-                >
-                  <Text style={[styles.doseTime, item.synergy && { color: Colors.sand }]}>{item.time}</Text>
-                  <View style={styles.doseInfo}>
-                    <Text style={styles.doseName}>{item.ingredient_name}</Text>
-                    <Text style={styles.doseNote}>{item.note}</Text>
-                    {item.synergy && <Text style={styles.synergyTag}>Evidence-timed</Text>}
+                <Animated.View key={`${item.time}-${item.ingredient_name}-${i}`} entering={FadeInDown.duration(350).delay(i * 40)} style={{ flexDirection: 'row', gap: 14, padding: 16 }}>
+                  <View style={{ width: 70 }}>
+                    <Txt variant="numeral" tone={item.synergy ? 'accent' : 'primary'}>{format(item.time)}</Txt>
                   </View>
-                  <EvidenceDots count={item.evidence_dots} />
+                  <View style={{ flex: 1 }}>
+                    <Txt variant="headline">{item.ingredient_name}</Txt>
+                    <Txt variant="footnote" tone="secondary" style={{ marginTop: 3 }}>{item.note}</Txt>
+                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                      {item.synergy ? <Pill label="Evidence-timed" tone="strong" /> : null}
+                      {item.with_food ? <Pill label="With food" icon={UtensilsCrossed} /> : null}
+                    </View>
+                  </View>
+                  <EvidenceMeter strength={Math.min(5, Math.round(item.evidence_dots * 1.25))} showLabel={false} width={44} />
                 </Animated.View>
               ))}
-            </>
-          )}
-        </View>
-      </ScrollView>
+            </ListGroup>
+          </Section>
+        </>
+      )}
+    </Screen>
+  );
+}
+
+function Timeline({ items }: { items: CircadianScheduleItem[] }) {
+  const [w, setW] = useState(0);
+  const H = 90;
+  const base = 62;
+  const sx = (h: number) => (h / 24) * w;
+  const cortisol = `M 0 ${base} C ${sx(4)} ${base} ${sx(6)} 14 ${sx(8)} 22 S ${sx(16)} 48 ${sx(24)} ${base}`;
+  const melatonin = `M 0 24 C ${sx(4)} 40 ${sx(8)} ${base} ${sx(12)} ${base} S ${sx(20)} 40 ${sx(24)} 16`;
+  return (
+    <View onLayout={(e) => setW(e.nativeEvent.layout.width)} style={{ marginTop: 14 }}>
+      {w > 0 ? (
+        <Svg width={w} height={H}>
+          <Line x1={0} y1={base} x2={w} y2={base} stroke={Palette.hairline} strokeWidth={1} />
+          <Path d={cortisol} stroke={Palette.gold} strokeWidth={2} fill="none" />
+          <Path d={melatonin} stroke={Palette.accent} strokeWidth={2} fill="none" strokeDasharray="4 4" />
+          {items.map((d, i) => {
+            const [h, m] = d.time.split(':').map(Number);
+            const x = sx(h + (m || 0) / 60);
+            return <Circle key={i} cx={x} cy={base} r={5} fill={d.synergy ? Palette.strong : Palette.surface} stroke={Palette.ink} strokeWidth={1.5} />;
+          })}
+        </Svg>
+      ) : <View style={{ height: H }} />}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+        {['12am', '6am', '12pm', '6pm', '12am'].map((t, i) => <Txt key={i} variant="caption" tone="tertiary">{t}</Txt>)}
+      </View>
+      <View style={{ flexDirection: 'row', gap: 16, marginTop: 14 }}>
+        <Legend color={Palette.gold} label="Cortisol" />
+        <Legend color={Palette.accent} label="Melatonin" dashed />
+        <Legend color={Palette.strong} label="Evidence-timed dose" dot />
+      </View>
+      <View style={{ marginTop: 16, gap: 6 }}>
+        {PHASES.map((p) => (
+          <View key={p.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Txt variant="footnote" tone="secondary">{p.label}</Txt>
+            <Txt variant="footnoteStrong">{format(`${p.h}:00`)}</Txt>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.surface },
-  scroll: {},
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: scale(24) },
-  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  backText: { fontFamily: Fonts.sansSemiBold, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'rgba(18,51,50,0.6)' },
-  atelierBadge: { paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(18,51,50,0.22)', borderRadius: 999 },
-  atelierBadgeText: { fontFamily: Fonts.sansSemiBold, fontSize: 9, letterSpacing: 1.8, textTransform: 'uppercase', color: Colors.sand },
-  eyebrow: { fontFamily: Fonts.sansSemiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, color: 'rgba(18,51,50,0.45)', marginBottom: scale(10) },
-  title: { fontFamily: Fonts.serif, fontSize: scale(38), lineHeight: scale(40), color: Colors.ink, letterSpacing: -0.5 },
-  subtitle: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, lineHeight: FontSizes.subtitle * 1.5, color: 'rgba(18,51,50,0.75)', paddingBottom: scale(20) },
-  subtitleDivider: { height: 1, backgroundColor: 'rgba(18,51,50,0.12)', marginBottom: scale(24) },
-  sectionEyebrow: { fontFamily: Fonts.sansSemiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, color: 'rgba(18,51,50,0.45)', marginBottom: scale(14) },
-  timelineCard: { backgroundColor: 'rgba(18,51,50,0.03)', borderWidth: 1, borderColor: 'rgba(18,51,50,0.08)', borderRadius: Radius.lg, padding: scale(16), marginBottom: scale(28) },
-  timeLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: scale(6) },
-  timeLabel: { fontFamily: Fonts.sansSemiBold, fontSize: 9, color: 'rgba(18,51,50,0.35)', letterSpacing: 0.5 },
-  legend: { flexDirection: 'row', gap: scale(16), marginTop: scale(14) },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: scale(6) },
-  legendLine: { width: scale(16), height: 1.5 },
-  legendText: { fontFamily: Fonts.sans, fontSize: 9, color: 'rgba(18,51,50,0.45)' },
-  phaseRow: { flexDirection: 'row', flexWrap: 'wrap', gap: scale(8), marginTop: scale(14) },
-  phaseItem: { flexDirection: 'row', gap: 3, alignItems: 'center' },
-  phaseTime: { fontFamily: Fonts.sansSemiBold, fontSize: 8, color: 'rgba(18,51,50,0.35)', letterSpacing: 0.6 },
-  phaseLabel: { fontFamily: Fonts.sans, fontSize: 8, color: Colors.sand, opacity: 0.8 },
-  doseRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: scale(16), gap: scale(14) },
-  doseRowBorder: { borderBottomWidth: 1, borderBottomColor: 'rgba(18,51,50,0.08)' },
-  doseTime: { fontFamily: Fonts.serif, fontSize: scale(20), color: Colors.ink, width: scale(52) },
-  doseInfo: { flex: 1 },
-  doseName: { fontFamily: Fonts.serif, fontSize: FontSizes.title, color: Colors.ink, marginBottom: scale(3) },
-  doseNote: { fontFamily: Fonts.sans, fontSize: FontSizes.caption, color: 'rgba(18,51,50,0.5)', lineHeight: FontSizes.caption * 1.4 },
-  synergyTag: { fontFamily: Fonts.sansSemiBold, fontSize: 9, letterSpacing: 1.4, textTransform: 'uppercase', color: Colors.sand, marginTop: scale(5) },
-  pendingText: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, color: 'rgba(18,51,50,0.5)', lineHeight: FontSizes.subtitle * 1.5 },
-});
+function Legend({ color, label, dashed, dot }: { color: string; label: string; dashed?: boolean; dot?: boolean }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      {dot ? <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: color }} /> : (
+        <View style={{ width: 16, height: 2, backgroundColor: dashed ? 'transparent' : color, borderTopWidth: dashed ? 2 : 0, borderStyle: 'dashed', borderColor: color }} />
+      )}
+      <Txt variant="caption" tone="secondary">{label}</Txt>
+    </View>
+  );
+}

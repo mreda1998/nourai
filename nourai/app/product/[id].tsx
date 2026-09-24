@@ -157,6 +157,7 @@ export default function ProductDetailScreen() {
     <Screen
       back
       title={product.name}
+      hideLargeTitle
       right={askRight}
       footer={
         <View style={{ flexDirection: 'row', gap: 10 }}>

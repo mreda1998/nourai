@@ -1,382 +1,69 @@
-import { useState } from 'react';
-import { useRouter } from 'expo-router';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useEffect, useState } from 'react';
+import { Linking, Switch } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AlertOctagon, Bell, FlaskConical, Lightbulb, Settings, Sparkles, Timer } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
+import { Palette } from '@/constants/theme';
+import { ListGroup, ListRow, Screen, Section, Txt } from '@/components/ui';
 
-import {
-  Colors,
-  Fonts,
-  Spacing,
-  Radius,
-  FontSizes,
-  Layout,
-  scale,
-  verticalScale,
-} from '@/constants/theme';
+const KEY = '@elory_notification_prefs';
 
-interface NotificationSetting {
-  id: string;
-  name: string;
-  description: string;
-  enabled: boolean;
-}
+const TYPES: { id: string; title: string; subtitle: string; Icon: LucideIcon; default: boolean }[] = [
+  { id: 'product_recalls', title: 'Product recalls', subtitle: 'When something in your stack is recalled', Icon: AlertOctagon, default: true },
+  { id: 'ingredient_updates', title: 'New research', subtitle: 'Findings about ingredients you use', Icon: FlaskConical, default: true },
+  { id: 'stack_reminders', title: 'Stack reminders', subtitle: 'A nudge at the times you take things', Icon: Timer, default: false },
+  { id: 'health_tips', title: 'Tips for you', subtitle: 'Based on your health profile', Icon: Lightbulb, default: true },
+  { id: 'new_features', title: 'What’s new', subtitle: 'App updates and features', Icon: Sparkles, default: false },
+];
+
+type Prefs = { master: boolean } & Record<string, boolean>;
+const DEFAULTS: Prefs = { master: true, ...Object.fromEntries(TYPES.map((t) => [t.id, t.default])) } as Prefs;
 
 export default function NotificationsScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const [prefs, setPrefs] = useState<Prefs>(DEFAULTS);
 
-  const [notifications, setNotifications] = useState<NotificationSetting[]>([
-    {
-      id: 'product_recalls',
-      name: 'Product Recalls',
-      description: 'Get notified when products in your stack are recalled',
-      enabled: true,
-    },
-    {
-      id: 'ingredient_updates',
-      name: 'Ingredient Updates',
-      description: 'New research findings about ingredients you consume',
-      enabled: true,
-    },
-    {
-      id: 'stack_reminders',
-      name: 'Stack Reminders',
-      description: 'Daily reminders to log your supplement intake',
-      enabled: false,
-    },
-    {
-      id: 'health_tips',
-      name: 'Health Tips',
-      description: 'Personalized tips based on your health profile',
-      enabled: true,
-    },
-    {
-      id: 'new_features',
-      name: 'New Features',
-      description: 'Be the first to know about app updates',
-      enabled: false,
-    },
-  ]);
+  useEffect(() => {
+    AsyncStorage.getItem(KEY).then((raw) => { if (raw) setPrefs({ ...DEFAULTS, ...JSON.parse(raw) }); }).catch(() => {});
+  }, []);
 
-  const [masterEnabled, setMasterEnabled] = useState(true);
-
-  const toggleNotification = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, enabled: !n.enabled } : n))
-    );
+  const update = (patch: Partial<Prefs>) => {
+    setPrefs((p) => {
+      const next = { ...p, ...patch } as Prefs;
+      AsyncStorage.setItem(KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
   };
 
-  const toggleMaster = (value: boolean) => {
-    setMasterEnabled(value);
-    if (!value) {
-      // Disable all when master is off
-      setNotifications((prev) => prev.map((n) => ({ ...n, enabled: false })));
-    }
-  };
+  const toggle = (value: boolean, onChange: (v: boolean) => void, disabled = false) => (
+    <Switch value={value} onValueChange={onChange} disabled={disabled} trackColor={{ false: Palette.sunken, true: Palette.accent }} ios_backgroundColor={Palette.sunken} />
+  );
 
   return (
-    <View style={styles.screen}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnIcon}>‹</Text>
-        </Pressable>
-        <Text style={styles.pageTitle}>Notifications</Text>
-      </View>
+    <Screen back title="Notifications">
+      <ListGroup>
+        <ListRow icon={Bell} title="Allow notifications" subtitle="Turn everything on or off" trailing={toggle(prefs.master, (v) => update({ master: v }))} />
+      </ListGroup>
 
-      <ScrollView
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Master Toggle */}
-        <View style={styles.masterCard}>
-          <View style={styles.masterInfo}>
-            <Text style={styles.masterName}>Push Notifications</Text>
-            <Text style={styles.masterDescription}>
-              Enable or disable all notifications
-            </Text>
-          </View>
-          <Switch
-            value={masterEnabled}
-            onValueChange={toggleMaster}
-            trackColor={{ false: Colors.boneDark, true: Colors.accentHill }}
-            thumbColor={Colors.bone}
-            ios_backgroundColor={Colors.boneDark}
-          />
-        </View>
+      <Section title="What to notify me about">
+        <ListGroup>
+          {TYPES.map((t) => (
+            <ListRow
+              key={t.id}
+              icon={t.Icon}
+              title={t.title}
+              subtitle={t.subtitle}
+              trailing={toggle(prefs.master && prefs[t.id], (v) => update({ [t.id]: v }), !prefs.master)}
+            />
+          ))}
+        </ListGroup>
+        <Txt variant="footnote" tone="tertiary" style={{ marginTop: 8, paddingHorizontal: 4 }}>Preferences are saved on this device.</Txt>
+      </Section>
 
-        {/* Notification Types */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Notification Types</Text>
-
-          <View style={styles.notificationList}>
-            {notifications.map((notification, index) => (
-              <View key={notification.id}>
-                <View style={styles.notificationItem}>
-                  <View style={styles.notificationInfo}>
-                    <Text style={[
-                      styles.notificationName,
-                      !masterEnabled && styles.notificationNameDisabled,
-                    ]}>
-                      {notification.name}
-                    </Text>
-                    <Text style={[
-                      styles.notificationDescription,
-                      !masterEnabled && styles.notificationDescriptionDisabled,
-                    ]}>
-                      {notification.description}
-                    </Text>
-                  </View>
-                  <Switch
-                    value={notification.enabled && masterEnabled}
-                    onValueChange={() => toggleNotification(notification.id)}
-                    disabled={!masterEnabled}
-                    trackColor={{ false: Colors.boneDark, true: Colors.accentHill }}
-                    thumbColor={Colors.bone}
-                    ios_backgroundColor={Colors.boneDark}
-                  />
-                </View>
-                {index < notifications.length - 1 && (
-                  <View style={styles.notificationDivider} />
-                )}
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Email Preferences */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Email Preferences</Text>
-
-          <View style={styles.emailList}>
-            <View style={styles.emailItem}>
-              <View style={styles.emailInfo}>
-                <Text style={styles.emailName}>Weekly Digest</Text>
-                <Text style={styles.emailDescription}>
-                  Summary of your weekly health insights
-                </Text>
-              </View>
-              <Switch
-                value={true}
-                onValueChange={() => {}}
-                trackColor={{ false: Colors.boneDark, true: Colors.accentHill }}
-                thumbColor={Colors.bone}
-                ios_backgroundColor={Colors.boneDark}
-              />
-            </View>
-
-            <View style={styles.emailDivider} />
-
-            <View style={styles.emailItem}>
-              <View style={styles.emailInfo}>
-                <Text style={styles.emailName}>Product Updates</Text>
-                <Text style={styles.emailDescription}>
-                  News about products and ingredients
-                </Text>
-              </View>
-              <Switch
-                value={false}
-                onValueChange={() => {}}
-                trackColor={{ false: Colors.boneDark, true: Colors.accentHill }}
-                thumbColor={Colors.bone}
-                ios_backgroundColor={Colors.boneDark}
-              />
-            </View>
-
-            <View style={styles.emailDivider} />
-
-            <View style={styles.emailItem}>
-              <View style={styles.emailInfo}>
-                <Text style={styles.emailName}>Marketing</Text>
-                <Text style={styles.emailDescription}>
-                  Special offers and promotions
-                </Text>
-              </View>
-              <Switch
-                value={false}
-                onValueChange={() => {}}
-                trackColor={{ false: Colors.boneDark, true: Colors.accentHill }}
-                thumbColor={Colors.bone}
-                ios_backgroundColor={Colors.boneDark}
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* Info Note */}
-        <View style={styles.infoNote}>
-          <Text style={styles.infoNoteText}>
-            You can also manage notification permissions in your device settings.
-            Some notifications may be required for critical safety alerts.
-          </Text>
-        </View>
-      </ScrollView>
-    </View>
+      <Section>
+        <ListGroup>
+          <ListRow icon={Settings} title="Open system settings" subtitle="Manage permission for Elory in iOS Settings" onPress={() => Linking.openSettings()} />
+        </ListGroup>
+      </Section>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: Colors.bone,
-  },
-  header: {
-    paddingHorizontal: Layout.screenPaddingHorizontal,
-    paddingBottom: Spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  backBtn: {
-    width: scale(40),
-    height: scale(40),
-    borderRadius: scale(20),
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  backBtnIcon: {
-    fontSize: FontSizes.heading,
-    color: Colors.ink,
-    marginTop: -2,
-  },
-  pageTitle: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.display,
-    fontWeight: '500',
-    color: Colors.ink,
-  },
-  container: {
-    paddingHorizontal: Layout.screenPaddingHorizontal,
-    paddingBottom: verticalScale(40),
-  },
-  masterCard: {
-    backgroundColor: Colors.boneCard,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderRadius: Radius.md,
-    padding: Spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.xl,
-  },
-  masterInfo: {
-    flex: 1,
-    marginRight: Spacing.md,
-  },
-  masterName: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.title,
-    color: Colors.ink,
-    marginBottom: 4,
-  },
-  masterDescription: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.inkSecondary,
-  },
-  section: {
-    marginBottom: Spacing.xl,
-  },
-  sectionLabel: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    fontWeight: '600',
-    color: Colors.inkSecondary,
-    marginBottom: Spacing.md,
-  },
-  notificationList: {
-    backgroundColor: Colors.boneCard,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderRadius: Radius.md,
-  },
-  notificationItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.md,
-    gap: Spacing.md,
-  },
-  notificationDivider: {
-    height: 1,
-    backgroundColor: Colors.borderHairline,
-    marginHorizontal: Spacing.md,
-  },
-  notificationInfo: {
-    flex: 1,
-  },
-  notificationName: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.subtitle,
-    fontWeight: '500',
-    color: Colors.ink,
-    marginBottom: 2,
-  },
-  notificationNameDisabled: {
-    color: Colors.inkTertiary,
-  },
-  notificationDescription: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: Colors.inkSecondary,
-  },
-  notificationDescriptionDisabled: {
-    color: Colors.inkTertiary,
-  },
-  emailList: {
-    backgroundColor: Colors.boneCard,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderRadius: Radius.md,
-  },
-  emailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.md,
-    gap: Spacing.md,
-  },
-  emailDivider: {
-    height: 1,
-    backgroundColor: Colors.borderHairline,
-    marginHorizontal: Spacing.md,
-  },
-  emailInfo: {
-    flex: 1,
-  },
-  emailName: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.subtitle,
-    fontWeight: '500',
-    color: Colors.ink,
-    marginBottom: 2,
-  },
-  emailDescription: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: Colors.inkSecondary,
-  },
-  infoNote: {
-    padding: Spacing.md,
-    backgroundColor: 'rgba(0,0,0,0.02)',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-  },
-  infoNoteText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: Colors.inkTertiary,
-    lineHeight: FontSizes.caption * 1.5,
-    textAlign: 'center',
-  },
-});

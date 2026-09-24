@@ -1,41 +1,16 @@
-/**
- * Newsletter article screen.
- *
- * Design from moodboard/newsletter/newsletter.html:
- *  - Dark hero image area
- *  - Section tag, serif article title (42px), byline
- *  - Drop-cap first paragraph
- *  - Pull-quote with ink borders
- *  - Serif body 20px
- *
- * Route: /newsletter/[id]
- * Currently only the "creatine" article is populated.
- */
-
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import {
-  Pressable,
-  ImageBackground,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import React from 'react';
+import { StyleSheet, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import Svg, { Path, Circle, Line } from 'react-native-svg';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { Check } from 'lucide-react-native';
+import { Fonts, Palette, Radius } from '@/constants/theme';
+import { Imagery } from '@/constants/imagery';
+import { Card, Screen, Txt } from '@/components/ui';
 
-import {
-  Colors,
-  Fonts,
-  FontSizes,
-  Spacing,
-  Layout,
-  scale,
-  verticalScale,
-} from '@/constants/theme';
-
-// ─── Article data ──────────────────────────────────────────────────────────────
+/** Journal article. Only "creatine" has content; unknown ids fall back to it. */
 
 interface Article {
   sectionTag: string;
@@ -67,273 +42,75 @@ const ARTICLES: Record<string, Article> = {
   },
 };
 
-// ─── Decorative hero icon (molecule-style) ─────────────────────────────────────
+const TAKEAWAYS = [
+  'Creatine monohydrate remains the best-supported form.',
+  'Consistency matters more than precise timing.',
+  'Benefits extend beyond strength into cognitive energy.',
+];
 
-function MoleculeHero() {
-  return (
-    <ImageBackground source={require('@/assets/images/elory-architecture-hero.png')} style={heroStyles.container} imageStyle={{ borderRadius: 14 }}>
-      <View style={heroStyles.noise} />
-    </ImageBackground>
-  );
-}
-
-const heroStyles = StyleSheet.create({
-  container: {
-    width: '100%',
-    height: verticalScale(260),
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  noise: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: Colors.ink,
-    opacity: 0.08,
-  },
-});
-
-// ─── Back button ───────────────────────────────────────────────────────────────
-
-function BackButton() {
-  const router = useRouter();
-  return (
-    <Pressable
-      style={styles.backBtn}
-      onPress={() => router.back()}
-      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-    >
-      <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-        <Path
-          d="M19 12H5M12 19l-7-7 7-7"
-          stroke={Colors.ink}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </Svg>
-    </Pressable>
-  );
-}
-
-// ─── Screen ────────────────────────────────────────────────────────────────────
-
-export default function NewsletterArticle() {
+export default function ArticleScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const article = ARTICLES[id] ?? ARTICLES.creatine;
 
   return (
-    <View style={styles.screen}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Floating back button */}
-        <View style={[styles.navOverlay, { top: insets.top + Spacing.md }]}>
-          <BackButton />
+    <Screen
+      back
+      title={article.title}
+      hero={
+        <View style={{ height: 300 + insets.top }}>
+          <View style={{ position: 'absolute', top: -600, left: 0, right: 0, height: 600, backgroundColor: '#EDE6DA' }} />
+          <Image source={Imagery.journalCover} style={StyleSheet.absoluteFill} contentFit="cover" />
+          <LinearGradient colors={['rgba(10,29,28,0.35)', 'rgba(243,240,233,0)', Palette.canvas]} locations={[0, 0.5, 1]} style={StyleSheet.absoluteFill} />
         </View>
+      }
+    >
+      <Animated.View entering={FadeInDown.duration(500)} style={{ marginTop: -40 }}>
+        <Txt variant="overline" tone="accent">{article.sectionTag}</Txt>
+        <Txt variant="display" style={{ marginTop: 10 }}>{article.title}</Txt>
+        <View style={styles.byline}>
+          <View style={styles.avatar}><Txt variant="headline" tone="accent">{article.author.slice(0, 1)}</Txt></View>
+          <View>
+            <Txt variant="subheadStrong">{article.author}</Txt>
+            <Txt variant="footnote" tone="secondary">{article.date}</Txt>
+          </View>
+        </View>
+      </Animated.View>
 
-        {/* Article */}
-        <Animated.View entering={FadeInDown.duration(500).delay(100)} style={[styles.article, { paddingTop: insets.top + 64 }]}>
-          {/* Section tag */}
-          <Text style={styles.sectionTag}>{article.sectionTag}</Text>
-
-          {/* Title */}
-          <Text style={styles.articleTitle}>{article.title}</Text>
-
-          {/* Byline */}
-          <View style={styles.byline}>
-            <View style={styles.authorInfo}>
-              <Text style={styles.authorName}>{article.author}</Text>
-              <Text style={styles.pubDate}>{article.date}</Text>
+      <Card padding={20} style={{ marginTop: 24 }}>
+        <Txt variant="overline" tone="secondary">Key takeaways</Txt>
+        <View style={{ gap: 12, marginTop: 14 }}>
+          {TAKEAWAYS.map((t) => (
+            <View key={t} style={{ flexDirection: 'row', gap: 12 }}>
+              <View style={styles.tick}><Check size={13} color={Palette.accent} strokeWidth={2.8} /></View>
+              <Txt variant="callout" style={{ flex: 1 }}>{t}</Txt>
             </View>
-            <View style={styles.authorAvatar} />
-          </View>
+          ))}
+        </View>
+      </Card>
 
-          <Animated.View entering={FadeIn.duration(400)} style={{ marginBottom: 22 }}>
-            <MoleculeHero />
-          </Animated.View>
+      <View style={{ marginTop: 32 }}>
+        <Txt variant="body" style={styles.para}>
+          <Txt variant="display" style={styles.dropCap}>{article.intro.charAt(0)}</Txt>
+          {article.intro.slice(1)}
+        </Txt>
+        {article.body.slice(0, 2).map((p, i) => <Txt key={i} variant="body" style={styles.para}>{p}</Txt>)}
+        <View style={styles.quote}>
+          <Txt variant="title1" italic>{article.pullQuote}</Txt>
+        </View>
+        {article.body.slice(2).map((p, i) => <Txt key={i + 2} variant="body" style={styles.para}>{p}</Txt>)}
+      </View>
 
-          <View style={styles.contentsCard}>
-            <Text style={styles.contentsTitle}>In this article</Text>
-            {['Why the evidence stands out', 'Dose, timing and formulation', 'Safety and practical takeaways'].map((item, index) => (
-              <View key={item} style={[styles.contentsRow, index > 0 && styles.contentsBorder]}><Text style={styles.contentsNumber}>0{index + 1}</Text><Text style={styles.contentsText}>{item}</Text></View>
-            ))}
-          </View>
-
-          <View style={styles.takeawayCard}>
-            <Text style={styles.takeawayKicker}>Key takeaways</Text>
-            <Text style={styles.takeawayText}>•  Creatine monohydrate remains the best-supported form.</Text>
-            <Text style={styles.takeawayText}>•  Consistency matters more than precise timing.</Text>
-            <Text style={styles.takeawayText}>•  Benefits extend beyond strength into cognitive energy.</Text>
-          </View>
-
-          {/* Article body */}
-          <View style={styles.body}>
-            {/* First paragraph with drop cap */}
-            <Text style={[styles.dropCapText, styles.dropCapParagraph]}>
-              <Text style={styles.dropCap}>{article.intro.charAt(0)}</Text>
-              {article.intro.slice(1)}
-            </Text>
-
-            {/* First two body paragraphs */}
-            {article.body.slice(0, 2).map((para, i) => (
-              <Text key={i} style={styles.bodyParagraph}>{para}</Text>
-            ))}
-
-            {/* Pull quote */}
-            <View style={styles.pullQuote}>
-              <Text style={styles.pullQuoteText}>{article.pullQuote}</Text>
-            </View>
-
-            {/* Remaining body paragraphs */}
-            {article.body.slice(2).map((para, i) => (
-              <Text key={i + 2} style={styles.bodyParagraph}>{para}</Text>
-            ))}
-          </View>
-        </Animated.View>
-
-        {/* Bottom padding */}
-        <View style={{ height: Layout.bottomPadding }} />
-      </ScrollView>
-    </View>
+      <Txt variant="caption" tone="tertiary" align="center" style={{ marginTop: 16 }}>Educational content, not medical advice.</Txt>
+    </Screen>
   );
 }
 
-// ─── Styles ────────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: Colors.bone,
-  },
-
-  // Floating nav
-  navOverlay: {
-    position: 'absolute',
-    left: Spacing.md,
-  },
-  backBtn: {
-    width: scale(40),
-    height: scale(40),
-    borderRadius: scale(20),
-    backgroundColor: 'rgba(233, 230, 223, 0.92)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Article container
-  article: {
-    paddingTop: Spacing.lg,
-    paddingHorizontal: Layout.screenPaddingHorizontal,
-  },
-
-  // Section tag
-  sectionTag: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    color: Colors.inkTertiary,
-    marginBottom: 8,
-  },
-
-  // Title
-  articleTitle: {
-    fontFamily: Fonts.serif,
-    fontSize: scale(38),
-    lineHeight: scale(38) * 1.05,
-    color: Colors.ink,
-    letterSpacing: -0.5,
-    marginBottom: Spacing.md,
-  },
-
-  // Byline
-  byline: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderHairline,
-    marginBottom: Spacing.lg,
-  },
-  authorInfo: { gap: 2 },
-  authorName: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.caption,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    color: Colors.ink,
-  },
-  pubDate: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: Colors.inkSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  authorAvatar: {
-    width: scale(32),
-    height: scale(32),
-    borderRadius: scale(16),
-    backgroundColor: Colors.boneDark,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-  },
-  contentsCard: { backgroundColor: Colors.surfaceCard, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, borderRadius: 12, paddingHorizontal: 14, marginBottom: 14 },
-  contentsTitle: { fontFamily: Fonts.serifMedium, fontSize: 18, color: Colors.ink, paddingVertical: 12 },
-  contentsRow: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 11 },
-  contentsBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.borderHairline },
-  contentsNumber: { fontFamily: Fonts.serifItalic, fontSize: 10, color: Colors.accent },
-  contentsText: { fontFamily: Fonts.sans, fontSize: 9.5, color: Colors.inkSecondary },
-  takeawayCard: { borderLeftWidth: 2, borderLeftColor: Colors.accent, backgroundColor: 'rgba(15,86,82,.05)', padding: 14, marginBottom: 24 },
-  takeawayKicker: { fontFamily: Fonts.sansSemiBold, fontSize: 8, textTransform: 'uppercase', letterSpacing: 1, color: Colors.accent, marginBottom: 7 },
-  takeawayText: { fontFamily: Fonts.sans, fontSize: 9.5, color: Colors.inkSecondary, lineHeight: 15, marginBottom: 3 },
-
-  // Body
-  body: { gap: 0 },
-
-  // Drop cap first paragraph (inline approach — no CSS float in RN)
-  dropCapParagraph: {
-    marginBottom: Spacing.lg,
-  },
-  dropCapText: {
-    fontFamily: Fonts.serif,
-    fontSize: scale(19),
-    lineHeight: scale(19) * 1.65,
-    color: Colors.ink,
-  },
-  dropCap: {
-    fontFamily: Fonts.serif,
-    fontSize: scale(58),
-    lineHeight: scale(58) * 0.85,
-    color: Colors.ink,
-  },
-
-  // Regular paragraphs
-  bodyParagraph: {
-    fontFamily: Fonts.serif,
-    fontSize: scale(19),
-    lineHeight: scale(19) * 1.65,
-    color: Colors.ink,
-    marginBottom: Spacing.lg,
-  },
-
-  // Pull quote
-  pullQuote: {
-    marginVertical: Spacing.xl,
-    paddingVertical: Spacing.lg,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: Colors.borderStrong,
-  },
-  pullQuoteText: {
-    fontFamily: Fonts.serifItalic,
-    fontSize: scale(22),
-    lineHeight: scale(22) * 1.35,
-    color: Colors.ink,
-    textAlign: 'center',
-  },
+  byline: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 18 },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: Palette.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  tick: { width: 22, height: 22, borderRadius: 11, backgroundColor: Palette.accentSoft, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  para: { lineHeight: 28, marginBottom: 20 },
+  dropCap: { fontFamily: Fonts.serif, fontSize: 56, lineHeight: 56, color: Palette.accent },
+  quote: { borderLeftWidth: 3, borderLeftColor: Palette.accent, paddingLeft: 18, marginVertical: 12, marginBottom: 28, borderRadius: Radius.xs },
 });

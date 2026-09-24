@@ -11,7 +11,7 @@ export interface Product {
   ingredients: string[];
   scannedAt: Date;
   imageUri?: string | null;
-  // Stack context — set when added via AddToStackModal
+  // Stack context — set when added via AddToStackSheet
   timeOfDay?: 'morning' | 'afternoon' | 'evening' | 'night';
   protocol?: 'meal' | 'supplement' | 'skincare' | 'treatment' | 'other';
   quantity?: string;

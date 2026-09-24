@@ -1,23 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import Animated, { FadeInUp } from 'react-native-reanimated';
-import Svg, { Path, Rect } from 'react-native-svg';
-import { SectionHead } from '@/components/elory';
-import { Colors, Fonts, FontSizes, scale, Radius } from '@/constants/theme';
-import { supabase } from '@/lib/supabase';
+import { ActivityIndicator, View } from 'react-native';
+import { router } from 'expo-router';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import Svg, { Rect } from 'react-native-svg';
+import { Layers3 } from 'lucide-react-native';
+import { Palette } from '@/constants/theme';
 import { api, ExposureCategory, ExposureDay } from '@/services/api';
+import { accessToken } from '@/lib/stack-sync';
 import { useAppState } from '@/context/app-state';
+import { Card, EmptyState, Screen, Section, Txt } from '@/components/ui';
 
-const BAR_COLORS = [Colors.alert, Colors.sand, 'rgba(18,51,50,0.18)'];
+const BAR_COLORS = [Palette.weak, Palette.gold, Palette.ink4];
 
 const LOCAL_EXPOSURE_RULES: Record<string, string[]> = {
   'Added caffeine': ['caffeine', 'guarana', 'yerba mate', 'green tea extract'],
@@ -100,48 +93,33 @@ function localExposureLedger(stack: ReturnType<typeof useAppState>['stack']) {
   };
 }
 
-function StackedBarChart({ data }: { data: ExposureDay[] }) {
-  const W = 300;
-  const H = 100;
-  const padX = 0;
-  const padY = 6;
-  const gap = 2;
-  const barW = (W - padX * 2 - gap * (data.length - 1)) / data.length;
-  const availH = H - padY * 2;
-
+function StackedBars({ data }: { data: ExposureDay[] }) {
+  const [w, setW] = useState(0);
+  const H = 120;
+  const gap = 4;
+  const barW = data.length ? (w - gap * (data.length - 1)) / data.length : 0;
   return (
-    <Svg width={W} height={H}>
-      {data.map((day, i) => {
-        const segments = [day.high, day.moderate, day.low];
-        const x = padX + i * (barW + gap);
-        let stackY = H - padY;
-
-        return segments.map((seg, j) => {
-          const segH = Math.max(seg * availH * 0.7, 0);
-          stackY -= segH;
-          const y = stackY;
-          stackY -= 1; // small gap between layers
-          return (
-            <Rect
-              key={`${i}-${j}`}
-              x={x}
-              y={y}
-              width={barW}
-              height={segH}
-              fill={BAR_COLORS[j]}
-              rx={1}
-              opacity={j === 2 ? 0.4 : j === 0 ? 0.55 : 1}
-            />
-          );
-        });
-      })}
-    </Svg>
+    <View onLayout={(e) => setW(e.nativeEvent.layout.width)}>
+      {w > 0 ? (
+        <Svg width={w} height={H}>
+          {data.map((day, i) => {
+            let y = H;
+            return [day.high, day.moderate, day.low].map((seg, j) => {
+              const h = Math.max(seg * H * 0.32, seg > 0 ? 2 : 0);
+              y -= h;
+              const rect = <Rect key={`${i}-${j}`} x={i * (barW + gap)} y={y} width={barW} height={h} rx={3} fill={BAR_COLORS[j]} />;
+              y -= seg > 0 ? 2 : 0;
+              return rect;
+            });
+          })}
+          {data.map((_, i) => <Rect key={`b${i}`} x={i * (barW + gap)} y={H - 2} width={barW} height={2} rx={1} fill={Palette.hairline} />)}
+        </Svg>
+      ) : <View style={{ height: H }} />}
+    </View>
   );
 }
 
 export default function ExposureScreen() {
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { stack } = useAppState();
   const [chart, setChart] = useState<ExposureDay[]>([]);
   const [categories, setCategories] = useState<ExposureCategory[]>([]);
@@ -151,292 +129,63 @@ export default function ExposureScreen() {
 
   useEffect(() => {
     (async () => {
+      const local = localExposureLedger(stack);
+      const apply = (r: { chart: ExposureDay[]; categories: ExposureCategory[]; summary: string; caveat: string }) => {
+        setChart(r.chart); setCategories(r.categories); setSummary(r.summary); setCaveat(r.caveat);
+      };
       try {
-        const { data } = await supabase.auth.getSession();
-        const token = data.session?.access_token;
-        const local = localExposureLedger(stack);
-        if (!token) {
-          setChart(local.chart);
-          setCategories(local.categories);
-          setSummary(local.summary);
-          setCaveat(local.caveat);
-          return;
-        }
+        const token = await accessToken();
+        if (!token) { apply(local); return; }
         const res = await api.getExposureLedger(token);
-        if (res.categories.length > 0 || stack.length === 0) {
-          setChart(res.chart);
-          setCategories(res.categories);
-          setSummary(res.summary);
-          setCaveat(res.caveat);
-        } else {
-          setChart(local.chart);
-          setCategories(local.categories);
-          setSummary(local.summary);
-          setCaveat(local.caveat);
-        }
-      } catch {
-        const local = localExposureLedger(stack);
-        setChart(local.chart);
-        setCategories(local.categories);
-        setSummary(local.summary);
-        setCaveat(local.caveat);
-      } finally {
-        setLoading(false);
-      }
+        apply(res.categories.length > 0 || stack.length === 0 ? res : local);
+      } catch { apply(local); } finally { setLoading(false); }
     })();
   }, [stack]);
 
   return (
-    <View style={styles.root}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + scale(48) }]}
-      >
-        {/* Editorial header */}
-        <View style={{ paddingTop: insets.top + scale(12), paddingHorizontal: scale(24), paddingBottom: scale(20) }}>
-          <View style={styles.headerRow}>
-            <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="rgba(18,51,50,0.6)" strokeWidth={2}>
-                <Path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-              <Text style={styles.backText}>Back</Text>
-            </Pressable>
-            <View style={styles.atelierBadge}>
-              <Text style={styles.atelierBadgeText}>ELORY PREMIUM</Text>
+    <Screen back title="Exposure ledger" subtitle="Additives and synthetics across everything you use">
+      {loading ? <ActivityIndicator color={Palette.accent} style={{ marginTop: 32 }} /> : !categories.length ? (
+        <EmptyState icon={Layers3} title="Nothing flagged" message={summary || 'No additive signals found in your stack today.'} action={stack.length ? undefined : 'Go to stack'} onAction={() => router.push('/(tabs)/stack' as never)} />
+      ) : (
+        <>
+          <Card padding={20}>
+            <Txt variant="callout">{summary}</Txt>
+            <Txt variant="overline" tone="secondary" style={{ marginTop: 20, marginBottom: 12 }}>Last 14 days</Txt>
+            <StackedBars data={chart} />
+            <View style={{ flexDirection: 'row', gap: 16, marginTop: 12 }}>
+              {[['Higher', BAR_COLORS[0]], ['Moderate', BAR_COLORS[1]], ['Lower', BAR_COLORS[2]]].map(([l, c]) => (
+                <View key={l} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 9, height: 9, borderRadius: 3, backgroundColor: c }} />
+                  <Txt variant="caption" tone="secondary">{l}</Txt>
+                </View>
+              ))}
             </View>
-          </View>
-          <Text style={styles.eyebrow}>Premium · Cumulative Exposure</Text>
-          <Text style={styles.title}>Exposure{'\n'}<Text style={{ fontStyle: 'italic' }}>ledger.</Text></Text>
-        </View>
+          </Card>
 
-        <View style={{ paddingHorizontal: scale(24) }}>
-          {loading ? (
-            <ActivityIndicator color={Colors.sand} style={{ marginVertical: scale(32) }} />
-          ) : categories.length === 0 ? (
-            <Animated.View entering={FadeInUp.duration(300)}>
-              <Text style={styles.subtitle}>{summary || 'No label-exposure signals found in your current stack.'}</Text>
-              {caveat ? <Text style={styles.caveat}>{caveat}</Text> : null}
-            </Animated.View>
-          ) : (
-            <>
-              {/* Subtitle */}
-              <Animated.View entering={FadeInUp.duration(300)}>
-                <Text style={styles.subtitle}>{summary}</Text>
-                {caveat ? <Text style={styles.caveat}>{caveat}</Text> : null}
-                <View style={styles.subtitleDivider} />
-              </Animated.View>
-
-              {/* Chart */}
-              <Animated.View entering={FadeInUp.delay(80).duration(300)}>
-                <Text style={styles.sectionEyebrow}>Last 14 days</Text>
-                <View style={styles.chartCard}>
-                  <StackedBarChart data={chart} />
-                  <View style={styles.chartBorder} />
-                </View>
-
-                {/* Chart legend */}
-                <View style={styles.chartLegend}>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: Colors.alert, opacity: 0.55 }]} />
-                    <Text style={styles.legendText}>Higher</Text>
-                  </View>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: Colors.sand }]} />
-                    <Text style={styles.legendText}>Moderate</Text>
-                  </View>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: 'rgba(18,51,50,0.3)' }]} />
-                    <Text style={styles.legendText}>Lower</Text>
-                  </View>
-                </View>
-              </Animated.View>
-
-              {/* Category breakdown */}
-              <SectionHead label="By category · today" dark />
-
-              {categories.map((cat, i) => (
-                <Animated.View
-                  key={cat.name}
-                  entering={FadeInUp.delay(i * 50 + 180).duration(280)}
-                  style={[styles.catRow, i < categories.length - 1 && styles.catRowBorder]}
-                >
-                  <View style={styles.catHeader}>
-                    <Text style={styles.catName}>{cat.name}</Text>
-                    <View style={styles.catRight}>
-                      <Text style={styles.catItems}>{cat.sources} sources</Text>
-                      <Text style={[styles.catDelta, {
-                        color: cat.delta.startsWith('+') || cat.delta === 'new' ? Colors.alert : Colors.sage,
-                      }]}>
-                        {cat.delta}
-                      </Text>
+          <Section title="By category" caption="Today">
+            <View style={{ gap: 12 }}>
+              {categories.map((c, i) => (
+                <Animated.View key={c.name} entering={FadeInDown.duration(350).delay(i * 50)}>
+                  <Card padding={18}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <Txt variant="headline" style={{ flex: 1 }}>{c.name}</Txt>
+                      <Txt variant="footnoteStrong" tone={c.alert ? 'weak' : 'secondary'}>
+                        {c.sources} source{c.sources === 1 ? '' : 's'}{c.delta && c.delta !== 'local' ? ` · ${c.delta}` : ''}
+                      </Txt>
                     </View>
-                  </View>
-                  <View style={styles.loadTrack}>
-                    <View
-                      style={[
-                        styles.loadFill,
-                        {
-                          width: `${Math.round(cat.load * 100)}%` as any,
-                          backgroundColor: cat.alert ? Colors.alert : Colors.sand,
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text style={styles.catNote}>{cat.note}</Text>
+                    <View style={{ height: 6, borderRadius: 3, backgroundColor: Palette.hairline, marginTop: 12, overflow: 'hidden' }}>
+                      <View style={{ height: 6, borderRadius: 3, width: `${Math.max(4, Math.round(c.load * 100))}%`, backgroundColor: c.alert ? Palette.weak : Palette.gold }} />
+                    </View>
+                    <Txt variant="footnote" tone="secondary" style={{ marginTop: 10 }}>{c.note}</Txt>
+                  </Card>
                 </Animated.View>
               ))}
-            </>
-          )}
-        </View>
-      </ScrollView>
-    </View>
+            </View>
+          </Section>
+
+          {caveat ? <Txt variant="caption" tone="tertiary" style={{ marginTop: 20 }}>{caveat}</Txt> : null}
+        </>
+      )}
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.surface },
-  scroll: {},
-
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: scale(24),
-  },
-  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  backText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: 11,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    color: 'rgba(18,51,50,0.6)',
-  },
-  atelierBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(18,51,50,0.22)',
-    borderRadius: 999,
-  },
-  atelierBadgeText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: 9,
-    letterSpacing: 1.8,
-    textTransform: 'uppercase',
-    color: Colors.sand,
-  },
-  eyebrow: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 1.4,
-    color: 'rgba(18,51,50,0.45)',
-    marginBottom: scale(10),
-  },
-  title: {
-    fontFamily: Fonts.serif,
-    fontSize: scale(38),
-    lineHeight: scale(40),
-    color: Colors.ink,
-    letterSpacing: -0.5,
-  },
-
-  subtitle: {
-    fontFamily: Fonts.serifItalic,
-    fontSize: FontSizes.subtitle,
-    lineHeight: FontSizes.subtitle * 1.5,
-    color: 'rgba(18,51,50,0.75)',
-    paddingBottom: scale(20),
-  },
-  subtitleDivider: {
-    height: 1,
-    backgroundColor: 'rgba(18,51,50,0.12)',
-    marginBottom: scale(24),
-  },
-  caveat: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    lineHeight: FontSizes.caption * 1.45,
-    color: 'rgba(18,51,50,0.45)',
-    marginBottom: scale(18),
-  },
-
-  sectionEyebrow: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 1.4,
-    color: 'rgba(18,51,50,0.45)',
-    marginBottom: scale(12),
-  },
-  chartCard: {
-    alignItems: 'center',
-    paddingBottom: scale(8),
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(18,51,50,0.15)',
-    marginBottom: scale(12),
-  },
-  chartBorder: {},
-  chartLegend: {
-    flexDirection: 'row',
-    gap: scale(16),
-    marginBottom: scale(28),
-  },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: scale(5) },
-  legendDot: { width: scale(6), height: scale(6), borderRadius: scale(3) },
-  legendText: {
-    fontFamily: Fonts.sans,
-    fontSize: 9,
-    color: 'rgba(18,51,50,0.4)',
-  },
-
-  catRow: {
-    paddingVertical: scale(16),
-    gap: scale(10),
-  },
-  catRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(18,51,50,0.08)',
-  },
-  catHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-  },
-  catName: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.title,
-    color: Colors.ink,
-  },
-  catRight: {
-    flexDirection: 'row',
-    gap: scale(10),
-    alignItems: 'baseline',
-  },
-  catItems: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: 'rgba(18,51,50,0.4)',
-    letterSpacing: 0.8,
-  },
-  catDelta: {
-    fontFamily: Fonts.serifItalic,
-    fontSize: FontSizes.title,
-  },
-  catNote: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    lineHeight: FontSizes.caption * 1.4,
-    color: 'rgba(18,51,50,0.42)',
-  },
-  loadTrack: {
-    height: 2,
-    backgroundColor: 'rgba(18,51,50,0.1)',
-    borderRadius: 1,
-    overflow: 'hidden',
-  },
-  loadFill: {
-    height: '100%',
-    borderRadius: 1,
-  },
-});

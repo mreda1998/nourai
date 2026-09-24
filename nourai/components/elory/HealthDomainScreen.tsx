@@ -1,46 +1,97 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { router } from 'expo-router';
+import { Check, SlidersHorizontal } from 'lucide-react-native';
 import { api, HealthDomainResponse } from '@/services/api';
-import { Colors, Fonts, Radius } from '@/constants/theme';
-import { EloryScreen, ScreenHeader } from './EloryScreen';
-import { EvidenceSpectrum } from './EvidenceSpectrum';
-import { ScoreRing } from './ScoreRing';
+import { Palette } from '@/constants/theme';
+import { scoreQualifier } from '@/utils/grade';
+import { Button, Card, EvidenceMeter, IconButton, ListGroup, ListRow, ScoreGauge, Screen, Section, Txt } from '@/components/ui';
 
 export interface HealthDomainConfig {
   key: 'skin' | 'sleep' | 'gut' | 'hormonal' | 'hair' | 'fitness';
   title: string;
-  score: number;
-  qualifier: string;
-  metrics: { label: string; value: number }[];
+  /** @deprecated placeholder values — no longer displayed. */
+  score?: number;
+  /** @deprecated */
+  qualifier?: string;
+  /** @deprecated */
+  metrics?: { label: string; value: number }[];
+  /** General, non-personal factors known to matter for this domain. */
   factors: { name: string; note: string; strength: number; status: string }[];
   recommendations: string[];
 }
 
+/**
+ * Health domain detail. Shows the user's real domain score from the API, or
+ * an honest empty state — never placeholder numbers.
+ */
 export function HealthDomainScreen({ config }: { config: HealthDomainConfig }) {
   const [remote, setRemote] = useState<HealthDomainResponse | null>(null);
-  useEffect(() => { api.getHealthDomain(config.key).then(setRemote).catch(() => {}); }, [config.key]);
-  const score = remote?.score ?? config.score;
-  const qualifier = remote?.qualifier ?? config.qualifier;
-  const factors = remote?.factors?.length ? remote.factors.map((item) => ({ name: item.ingredient_name, note: item.direction === 'benefit' ? 'Supports this domain' : item.direction === 'harm' ? 'Worth monitoring' : 'Mixed signal', strength: item.strength === 'Strong' ? 5 : item.strength === 'Moderate' ? 3 : 2, status: item.strength })) : config.factors;
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.getHealthDomain(config.key).then(setRemote).catch(() => setRemote(null)).finally(() => setLoading(false));
+  }, [config.key]);
+
+  const personal = remote?.factors?.length ? remote.factors : null;
+  const name = config.title.replace(/ health$/i, '').toLowerCase();
 
   return (
-    <EloryScreen header={<ScreenHeader back title={config.title} right={<Pressable onPress={() => router.push('/health/edit-profile' as never)}><Text style={styles.edit}>Edit</Text></Pressable>} />}>
-      <View style={styles.overview}>
-        <ScoreRing score={score} qualifier={qualifier} size={121} />
-        <View style={styles.metrics}>{config.metrics.slice(0, 4).map((metric, index) => <View key={metric.label} style={[styles.metric, index > 1 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.borderHairline }]}><Text style={styles.metricValue}>{metric.value}</Text><Text style={styles.metricLabel}>{metric.label}</Text></View>)}</View>
-      </View>
-      <View style={styles.scoreNote}><Text style={styles.scoreNoteTitle}>Your {config.title.toLowerCase()} score is {qualifier.toLowerCase()}.</Text><Text style={styles.scoreNoteText}>Based on your profile, daily stack and the evidence behind each active ingredient.</Text></View>
+    <Screen back title={config.title} right={<IconButton icon={SlidersHorizontal} label="Edit health profile" onPress={() => router.push('/health/edit-profile' as never)} />}>
+      <Card padding={20} style={{ alignItems: 'center' }}>
+        {loading ? <View style={{ height: 180, justifyContent: 'center' }}><ActivityIndicator color={Palette.accent} /></View> : remote ? (
+          <>
+            <ScoreGauge score={remote.score} size={220} label={`${config.title} score`} qualifier={remote.qualifier || scoreQualifier(remote.score)} />
+            <Txt variant="subhead" tone="secondary" align="center" style={{ marginTop: -6 }}>
+              Based on your profile, your stack and the evidence behind each ingredient.
+            </Txt>
+          </>
+        ) : (
+          <View style={{ paddingVertical: 12, alignItems: 'center' }}>
+            <Txt variant="title2" align="center">Not enough data yet</Txt>
+            <Txt variant="subhead" tone="secondary" align="center" style={{ marginTop: 8 }}>
+              Add products that affect {name} to your stack and Elory will score this area for you.
+            </Txt>
+            <Button label="Add products" size="md" fullWidth={false} style={{ marginTop: 16 }} onPress={() => router.push('/(tabs)/explore' as never)} />
+          </View>
+        )}
+      </Card>
 
-      <Text style={styles.sectionTitle}>Top factors</Text>
-      <View style={styles.factorCard}>{factors.slice(0, 4).map((factor, index) => <View key={`${factor.name}-${index}`} style={[styles.factor, index > 0 && styles.factorBorder]}><View style={styles.factorIcon}><Text style={styles.factorLetter}>{factor.name.slice(0, 1)}</Text></View><View style={{ flex: 1 }}><Text style={styles.factorName}>{factor.name}</Text><Text style={styles.factorNote}>{factor.note}</Text></View><View style={{ alignItems: 'flex-end' }}><EvidenceSpectrum strength={factor.strength} max={5} /><Text style={styles.factorStatus}>{factor.status}</Text></View></View>)}</View>
+      {personal ? (
+        <Section title="From your stack" caption={`Ingredients affecting your ${name}`}>
+          <ListGroup>
+            {personal.map((f, i) => (
+              <ListRow
+                key={`${f.ingredient_name}-${i}`}
+                title={f.ingredient_name}
+                subtitle={f.direction === 'benefit' ? 'Supports this area' : f.direction === 'harm' ? 'Worth monitoring' : 'Mixed signal'}
+                trailing={<EvidenceMeter strength={f.strength === 'Strong' ? 5 : f.strength === 'Moderate' ? 3 : 2} showLabel={false} width={48} />}
+              />
+            ))}
+          </ListGroup>
+        </Section>
+      ) : null}
 
-      <View style={styles.sectionRow}><Text style={styles.sectionTitle}>Recommendations</Text><Text style={styles.link}>View plan</Text></View>
-      {config.recommendations.map((item, index) => <View key={item} style={styles.recommendation}><View style={styles.number}><Text style={styles.numberText}>0{index + 1}</Text></View><Text style={styles.recommendationText}>{item}</Text><Text style={styles.arrow}>›</Text></View>)}
-    </EloryScreen>
+      <Section title={`What matters for ${name}`} caption="General evidence, not personal results">
+        <ListGroup>
+          {config.factors.map((f) => (
+            <ListRow key={f.name} title={f.name} subtitle={f.note} trailing={<EvidenceMeter strength={f.strength} showLabel={false} width={48} />} />
+          ))}
+        </ListGroup>
+      </Section>
+
+      <Section title="Evidence-based habits">
+        <Card padding={6}>
+          {config.recommendations.map((r, i) => (
+            <View key={r} style={{ flexDirection: 'row', gap: 12, padding: 14, borderTopWidth: i ? 0.5 : 0, borderTopColor: Palette.hairline }}>
+              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: Palette.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
+                <Check size={14} color={Palette.accent} strokeWidth={2.6} />
+              </View>
+              <Txt variant="callout" style={{ flex: 1 }}>{r}</Txt>
+            </View>
+          ))}
+        </Card>
+      </Section>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  edit: { fontFamily: Fonts.sansMedium, color: Colors.accent, fontSize: 10 }, overview: { flexDirection: 'row', alignItems: 'center', gap: 18, marginTop: 7, marginBottom: 16 }, metrics: { flex: 1, flexDirection: 'row', flexWrap: 'wrap' }, metric: { width: '50%', minHeight: 52, alignItems: 'center', justifyContent: 'center' }, metricValue: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 19 }, metricLabel: { fontFamily: Fonts.sans, color: Colors.inkSecondary, fontSize: 7.5, marginTop: 2, textAlign: 'center' }, scoreNote: { backgroundColor: Colors.surfaceCard, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, padding: 13, marginBottom: 22 }, scoreNoteTitle: { fontFamily: Fonts.serifItalic, fontSize: 16, color: Colors.ink }, scoreNoteText: { fontFamily: Fonts.sans, color: Colors.inkSecondary, fontSize: 9, lineHeight: 13, marginTop: 4 }, sectionTitle: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 21, marginBottom: 7 }, factorCard: { backgroundColor: Colors.surfaceCard, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, paddingHorizontal: 12, marginBottom: 23 }, factor: { minHeight: 67, flexDirection: 'row', gap: 10, alignItems: 'center' }, factorBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.borderHairline }, factorIcon: { width: 37, height: 37, borderRadius: 19, backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }, factorLetter: { fontFamily: Fonts.serifItalic, color: Colors.accent, fontSize: 16 }, factorName: { fontFamily: Fonts.sansMedium, color: Colors.ink, fontSize: 10.5 }, factorNote: { fontFamily: Fonts.sans, color: Colors.inkSecondary, fontSize: 8.5, marginTop: 2 }, factorStatus: { fontFamily: Fonts.sans, color: Colors.inkSecondary, fontSize: 7.5, marginTop: 4 }, sectionRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }, link: { fontFamily: Fonts.sansMedium, color: Colors.accent, fontSize: 9 }, recommendation: { minHeight: 65, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.borderHairline, flexDirection: 'row', alignItems: 'center', gap: 11 }, number: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: Colors.borderHairline, alignItems: 'center', justifyContent: 'center' }, numberText: { fontFamily: Fonts.serifItalic, color: Colors.accent, fontSize: 11 }, recommendationText: { flex: 1, fontFamily: Fonts.sansMedium, color: Colors.ink, fontSize: 10.5, lineHeight: 14 }, arrow: { color: Colors.inkSecondary, fontSize: 22 },
-});

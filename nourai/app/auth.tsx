@@ -1,518 +1,190 @@
-import { useState } from 'react';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import React, { useRef, useState } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TextInputProps, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as AppleAuthentication from 'expo-apple-authentication';
-
-import {
-  Colors,
-  Fonts,
-  Spacing,
-  Radius,
-  FontSizes,
-  Layout,
-  scale,
-  verticalScale,
-} from '@/constants/theme';
+import { AlertCircle, Eye, EyeOff, MailCheck, X } from 'lucide-react-native';
+import { Fonts, Palette, Radius } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
+import { Button, EmptyState, IconButton, PressableScale, Txt } from '@/components/ui';
 
-type AuthMode = 'signin' | 'signup';
+type Mode = 'signin' | 'signup';
 
 export default function AuthScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { signIn, signUp, signInWithApple } = useAuth();
   const { name: prefillName } = useLocalSearchParams<{ name?: string }>();
-
-  const [mode, setMode] = useState<AuthMode>(prefillName ? 'signup' : 'signin');
+  const [mode, setMode] = useState<Mode>(prefillName ? 'signup' : 'signin');
   const [name, setName] = useState(prefillName ?? '');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [pendingConfirmation, setPendingConfirmation] = useState(false);
+  const [pending, setPending] = useState(false);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
 
-  const handleSubmit = async () => {
+  const leave = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
+  const guest = () => router.replace('/(tabs)');
+
+  const submit = async () => {
     setError('');
-    setIsLoading(true);
-
+    if (mode === 'signup' && !name.trim()) { setError('Please enter your name.'); return; }
+    if (!email.trim() || !password) { setError('Enter your email and password.'); return; }
+    setLoading(true);
     try {
       if (mode === 'signup') {
-        if (!name.trim()) {
-          setError('Please enter your name');
-          setIsLoading(false);
-          return;
-        }
-        const { needsEmailConfirmation } = await signUp(email, password, name);
-        if (needsEmailConfirmation) {
-          setPendingConfirmation(true);
-          return;
-        }
+        const { needsEmailConfirmation } = await signUp(email.trim(), password, name.trim());
+        if (needsEmailConfirmation) { setPending(true); return; }
       } else {
-        await signIn(email, password);
+        await signIn(email.trim(), password);
       }
       router.replace('/(tabs)');
     } catch (err: any) {
       setError(err?.message ?? 'Something went wrong. Please try again.');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleSkip = () => {
-    router.replace('/(tabs)');
+  const apple = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await signInWithApple();
+      router.replace('/(tabs)');
+    } catch (err: any) {
+      if (err?.code !== 'ERR_REQUEST_CANCELED') setError(err?.message ?? 'Apple sign-in failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // ── Email confirmation pending screen ──────────────────────────────────────
-  if (pendingConfirmation) {
+  if (pending) {
     return (
-      <View style={[styles.screen, styles.confirmScreen]}>
-        <Animated.View entering={FadeIn.duration(400)} style={styles.confirmContent}>
-          <Text style={styles.logo}>ELORY</Text>
-          <Text style={styles.confirmTitle}>Check your email</Text>
-          <Text style={styles.confirmBody}>
-            We sent a confirmation link to{'\n'}
-            <Text style={styles.confirmEmail}>{email}</Text>
-          </Text>
-          <Text style={styles.confirmHint}>
-            Click the link in the email to activate your account, then sign in below.
-          </Text>
-          <Pressable
-            style={styles.submitButton}
-            onPress={() => {
-              setPendingConfirmation(false);
-              setMode('signin');
-              setPassword('');
-            }}
-          >
-            <Text style={styles.submitButtonText}>Go to Sign In</Text>
-          </Pressable>
-          <Pressable style={styles.toggleMode} onPress={() => router.replace('/(tabs)')}>
-            <Text style={styles.toggleModeText}>
-              <Text style={styles.toggleModeLink}>Continue as Guest</Text>
-            </Text>
-          </Pressable>
-        </Animated.View>
+      <View style={[styles.screen, { paddingTop: insets.top, justifyContent: 'center', padding: 20 }]}>
+        <EmptyState
+          icon={MailCheck}
+          title="Check your email"
+          message={`We sent a confirmation link to ${email}. Open it to activate your account, then sign in.`}
+        />
+        <Button label="Go to sign in" onPress={() => { setPending(false); setMode('signin'); setPassword(''); }} />
+        <Button label="Continue as guest" variant="tertiary" onPress={guest} style={{ marginTop: 6 }} />
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={[
-          styles.container,
-          { paddingTop: insets.top + verticalScale(60) },
-        ]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Header */}
-        {mode === 'signup' ? (
-          <Pressable style={styles.backHeader} onPress={() => router.back()} hitSlop={12}>
-            <Text style={styles.backHeaderIcon}>‹</Text>
-          </Pressable>
-        ) : (
-          <View style={styles.header}>
-            <Text style={styles.logo}>ELORY</Text>
-            <Text style={styles.tagline}>Evidence, made personal.</Text>
-          </View>
-        )}
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={{ paddingTop: insets.top + 6, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between' }}>
+        <IconButton icon={X} label="Close" onPress={leave} />
+      </View>
+      <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 16, paddingBottom: insets.bottom + 24 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <Animated.View key={mode} entering={FadeInDown.duration(450)}>
+          <Txt variant="largeTitle">{mode === 'signin' ? 'Welcome back' : 'Create your account'}</Txt>
+          <Txt variant="callout" tone="secondary" style={{ marginTop: 8 }}>
+            {mode === 'signin' ? 'Sign in to sync your stack, history and profile.' : 'Save your profile and unlock Ask Elory.'}
+          </Txt>
+        </Animated.View>
 
-        {/* Auth Form */}
-        <View style={styles.form}>
-          <Text style={styles.formTitle}>
-            {mode === 'signin' ? 'Welcome Back' : 'Create your account'}
-          </Text>
-
-          {mode === 'signup' && (
-            <Text style={styles.signupSubtitle}>
-              Join Elory to unlock personalized, evidence-based recommendations.
-            </Text>
-          )}
-
-          {mode === 'signup' && (
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Your name"
-                placeholderTextColor={Colors.inkTertiary}
-                value={name}
-                onChangeText={setName}
-                autoCapitalize="words"
-              />
-            </View>
-          )}
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Email</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="you@example.com"
-              placeholderTextColor={Colors.inkTertiary}
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              autoComplete="email"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter password"
-              placeholderTextColor={Colors.inkTertiary}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoComplete="password"
-            />
-          </View>
-
-          {error ? (
-            <Animated.View entering={FadeIn.duration(300)}>
-              <Text style={styles.error}>{error}</Text>
-            </Animated.View>
-          ) : null}
-
-          <Pressable
-            style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={isLoading}
-          >
-            <Text style={styles.submitButtonText}>
-              {isLoading
-                ? 'Please wait...'
-                : mode === 'signin'
-                ? 'Sign In'
-                : 'Create Account'}
-            </Text>
-          </Pressable>
-
-          {/* Toggle Mode */}
-          <Pressable
-            style={styles.toggleMode}
-            onPress={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
-          >
-            <Text style={styles.toggleModeText}>
-              {mode === 'signin'
-                ? "Don't have an account? "
-                : 'Already have an account? '}
-              <Text style={styles.toggleModeLink}>
-                {mode === 'signin' ? 'Sign Up' : 'Sign In'}
-              </Text>
-            </Text>
-          </Pressable>
-
-          {/* Step indicator — signup is step 1 of the account → personalize funnel */}
-          {mode === 'signup' && (
-            <View style={styles.stepDots}>
-              <View style={styles.stepDotActive}>
-                <Text style={styles.stepDotActiveText}>1</Text>
-              </View>
-              <View style={styles.stepDotLine} />
-              <View style={styles.stepDotInactive} />
-              <View style={styles.stepDotLine} />
-              <View style={styles.stepDotInactive} />
-            </View>
-          )}
-
-          {/* Divider */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* Apple Sign-In — iOS only */}
-          {Platform.OS === 'ios' && (
+        {Platform.OS === 'ios' ? (
+          <View style={{ marginTop: 28 }}>
             <AppleAuthentication.AppleAuthenticationButton
-              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+              buttonType={mode === 'signin' ? AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN : AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP}
               buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-              cornerRadius={100}
-              style={styles.appleButton}
-              onPress={async () => {
-                setError('');
-                setIsLoading(true);
-                try {
-                  await signInWithApple();
-                  router.replace('/(tabs)');
-                } catch (err: any) {
-                  if (err?.code !== 'ERR_REQUEST_CANCELED') {
-                    setError(err?.message ?? 'Apple Sign-In failed. Please try again.');
-                  }
-                } finally {
-                  setIsLoading(false);
-                }
-              }}
+              cornerRadius={Radius.lg}
+              style={{ height: 56 }}
+              onPress={apple}
             />
-          )}
+            <View style={styles.divider}>
+              <View style={styles.rule} />
+              <Txt variant="footnote" tone="tertiary">or with email</Txt>
+              <View style={styles.rule} />
+            </View>
+          </View>
+        ) : <View style={{ height: 28 }} />}
 
-          {/* Skip Button */}
-          <Pressable style={styles.skipButton} onPress={handleSkip}>
-            <Text style={styles.skipButtonText}>Continue as Guest</Text>
-          </Pressable>
-
-          {/* Terms */}
-          <Text style={styles.terms}>
-            By continuing, you agree to our{' '}
-            <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
-            <Text style={styles.termsLink}>Privacy Policy</Text>
-          </Text>
+        <View style={{ gap: 12 }}>
+          {mode === 'signup' ? (
+            <Field label="Name" value={name} onChangeText={setName} placeholder="Your first name" autoCapitalize="words" textContentType="givenName" returnKeyType="next" onSubmitEditing={() => emailRef.current?.focus()} />
+          ) : null}
+          <Field ref={emailRef} label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" autoCapitalize="none" keyboardType="email-address" autoComplete="email" textContentType="emailAddress" returnKeyType="next" onSubmitEditing={() => passwordRef.current?.focus()} />
+          <Field
+            ref={passwordRef}
+            label="Password"
+            value={password}
+            onChangeText={setPassword}
+            placeholder={mode === 'signup' ? 'At least 8 characters' : 'Your password'}
+            secureTextEntry={!showPassword}
+            autoComplete={mode === 'signup' ? 'new-password' : 'password'}
+            textContentType={mode === 'signup' ? 'newPassword' : 'password'}
+            returnKeyType="go"
+            onSubmitEditing={submit}
+            trailing={
+              <PressableScale haptic={false} hitSlop={10} onPress={() => setShowPassword((v) => !v)} accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}>
+                {showPassword ? <EyeOff size={20} color={Palette.ink3} /> : <Eye size={20} color={Palette.ink3} />}
+              </PressableScale>
+            }
+          />
         </View>
+
+        {error ? (
+          <Animated.View entering={FadeIn} style={styles.error}>
+            <AlertCircle size={18} color={Palette.weak} />
+            <Txt variant="footnote" tone="weak" style={{ flex: 1 }}>{error}</Txt>
+          </Animated.View>
+        ) : null}
+
+        <Button label={mode === 'signin' ? 'Sign in' : 'Create account'} loading={loading} onPress={submit} style={{ marginTop: 20 }} />
+
+        <PressableScale haptic="selection" onPress={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(''); }} style={{ alignItems: 'center', paddingVertical: 16 }}>
+          <Txt variant="subhead" tone="secondary">
+            {mode === 'signin' ? 'New to Elory? ' : 'Already have an account? '}
+            <Txt variant="subheadStrong" tone="accent">{mode === 'signin' ? 'Create an account' : 'Sign in'}</Txt>
+          </Txt>
+        </PressableScale>
+
+        <Button label="Continue as guest" variant="tertiary" onPress={guest} />
+
+        <Txt variant="caption" tone="tertiary" align="center" style={{ marginTop: 20, paddingHorizontal: 20 }}>
+          By continuing you agree to Elory’s Terms of Service and Privacy Policy.
+        </Txt>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
+const Field = React.forwardRef<TextInput, TextInputProps & { label: string; trailing?: React.ReactNode }>(
+  function Field({ label, trailing, ...props }, ref) {
+    const [focused, setFocused] = useState(false);
+    return (
+      <View style={[styles.field, focused && { borderColor: Palette.accent }]}>
+        <Txt variant="caption" tone={focused ? 'accent' : 'secondary'}>{label}</Txt>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <TextInput
+            ref={ref}
+            placeholderTextColor={Palette.ink4}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            style={styles.input}
+            accessibilityLabel={label}
+            {...props}
+          />
+          {trailing}
+        </View>
+      </View>
+    );
+  },
+);
+
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-  },
-  container: {
-    paddingHorizontal: Layout.screenPaddingHorizontal,
-    paddingBottom: verticalScale(40),
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: verticalScale(48),
-  },
-  backHeader: {
-    width: scale(40),
-    height: scale(40),
-    borderRadius: scale(20),
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: verticalScale(32),
-  },
-  backHeaderIcon: {
-    fontSize: FontSizes.heading,
-    color: Colors.ink,
-    marginTop: -2,
-  },
-  logo: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: scale(18),
-    letterSpacing: 6,
-    color: Colors.ink,
-    marginBottom: Spacing.sm,
-  },
-  tagline: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.inkSecondary,
-    letterSpacing: 1,
-  },
-  form: {
-    flex: 1,
-  },
-  formTitle: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.heading,
-    color: Colors.ink,
-    marginBottom: Spacing.xl,
-    textAlign: 'center',
-  },
-  signupSubtitle: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.inkSecondary,
-    textAlign: 'center',
-    lineHeight: FontSizes.body * 1.5,
-    marginTop: -Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  stepDots: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: Spacing.xl,
-  },
-  stepDotActive: {
-    width: scale(22),
-    height: scale(22),
-    borderRadius: scale(11),
-    backgroundColor: Colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepDotActiveText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.sm,
-    color: Colors.surface,
-  },
-  stepDotInactive: {
-    width: scale(8),
-    height: scale(8),
-    borderRadius: scale(4),
-    backgroundColor: Colors.borderHairline,
-  },
-  stepDotLine: {
-    width: scale(24),
-    height: 1,
-    backgroundColor: Colors.borderHairline,
-    marginHorizontal: Spacing.sm,
-  },
-  inputGroup: {
-    marginBottom: Spacing.lg,
-  },
-  inputLabel: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    color: Colors.inkSecondary,
-    marginBottom: Spacing.sm,
-  },
-  input: {
-    backgroundColor: Colors.surfaceCard,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: verticalScale(16),
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.subtitle,
-    color: Colors.ink,
-  },
-  error: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.alert,
-    textAlign: 'center',
-    marginBottom: Spacing.md,
-  },
-  submitButton: {
-    backgroundColor: Colors.accent,
-    paddingVertical: verticalScale(18),
-    borderRadius: Radius.pill,
-    alignItems: 'center',
-    marginTop: Spacing.md,
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.body,
-    color: Colors.surface,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-  },
-  toggleMode: {
-    marginTop: Spacing.lg,
-    alignItems: 'center',
-  },
-  toggleModeText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.inkSecondary,
-  },
-  toggleModeLink: {
-    fontFamily: Fonts.sansSemiBold,
-    color: Colors.ink,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: Spacing.xl,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.borderHairline,
-  },
-  dividerText: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.inkTertiary,
-    paddingHorizontal: Spacing.md,
-  },
-  appleButton: {
-    width: '100%',
-    height: verticalScale(52),
-    marginBottom: Spacing.md,
-  },
-  skipButton: {
-    borderWidth: 1,
-    borderColor: Colors.ink,
-    paddingVertical: verticalScale(16),
-    borderRadius: Radius.pill,
-    alignItems: 'center',
-  },
-  skipButtonText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: FontSizes.body,
-    color: Colors.ink,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  terms: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    color: Colors.inkTertiary,
-    textAlign: 'center',
-    marginTop: Spacing.xl,
-    lineHeight: FontSizes.caption * 1.6,
-  },
-  termsLink: {
-    color: Colors.inkSecondary,
-    textDecorationLine: 'underline',
-  },
-  confirmScreen: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  confirmContent: {
-    paddingHorizontal: Layout.screenPaddingHorizontal,
-    alignItems: 'center',
-    width: '100%',
-  },
-  confirmTitle: {
-    fontFamily: Fonts.serif,
-    fontSize: FontSizes.display,
-    color: Colors.ink,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.lg,
-    textAlign: 'center',
-  },
-  confirmBody: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.bodyLarge,
-    color: Colors.inkSecondary,
-    textAlign: 'center',
-    lineHeight: FontSizes.bodyLarge * 1.6,
-    marginBottom: Spacing.lg,
-  },
-  confirmEmail: {
-    fontFamily: Fonts.sansSemiBold,
-    color: Colors.ink,
-  },
-  confirmHint: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.body,
-    color: Colors.inkTertiary,
-    textAlign: 'center',
-    lineHeight: FontSizes.body * 1.6,
-    marginBottom: Spacing.xl * 2,
-  },
+  screen: { flex: 1, backgroundColor: Palette.canvas },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 24 },
+  rule: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: Palette.hairline },
+  field: { borderRadius: Radius.lg, borderCurve: 'continuous', backgroundColor: Palette.surface, borderWidth: 1.5, borderColor: 'transparent', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 },
+  input: { flex: 1, fontFamily: Fonts.sans, fontSize: 17, color: Palette.ink, paddingVertical: 4 },
+  error: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, padding: 14, borderRadius: Radius.md, backgroundColor: Palette.weakSoft },
 });

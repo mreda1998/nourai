@@ -1,223 +1,70 @@
 import React from 'react';
-import {
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import Svg, { Path, Line } from 'react-native-svg';
-import { Colors, Fonts, FontSizes, Radius, scale } from '@/constants/theme';
+import { StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { ChevronRight, Clock, Crown, Dna, GitCompareArrows, Layers3, MessageCircle, Newspaper } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
+import { Palette, Radius } from '@/constants/theme';
+import { Imagery } from '@/constants/imagery';
+import { PressableScale, Screen, Txt } from '@/components/ui';
 
-const FEATURES = [
-  {
-    eyebrow: 'Conversational AI',
-    title: 'Ask Elory.',
-    description: 'Chat with your stack. Ask about timing, interactions, and evidence.',
-    route: '/ask-elory',
-  },
-  {
-    eyebrow: 'Chronobiology',
-    title: 'Circadian Protocol.',
-    description: 'Your personalised dosing sequence aligned to your biological clock.',
-    route: '/circadian',
-  },
-  {
-    eyebrow: 'Interactions',
-    title: 'Conflict Map.',
-    description: 'Visualise synergies and competitions across your active compounds.',
-    route: '/conflict-map',
-  },
-  {
-    eyebrow: 'Cumulative Exposure',
-    title: 'Exposure Ledger.',
-    description: 'Track synthetic loads across food, supplements, and cosmetics over time.',
-    route: '/exposure',
-  },
-  {
-    eyebrow: 'Science Brief',
-    title: 'Evidence Pulse.',
-    description: 'Weekly digest of new research relevant to your stack.',
-    route: '/pulse',
-  },
-  {
-    eyebrow: 'Gray Zone Research',
-    title: 'Peptides.',
-    description: 'Research dossiers for 20+ peptides — regulatory status, admin routes, and cycle protocols.',
-    route: '/peptides',
-  },
+const FEATURES: { title: string; kicker: string; description: string; route: string; Icon: LucideIcon }[] = [
+  { title: 'Ask Elory', kicker: 'Conversation', description: 'Ask about timing, interactions and evidence — answered with your stack in mind.', route: '/ask-elory', Icon: MessageCircle },
+  { title: 'Timing protocol', kicker: 'Chronobiology', description: 'A dosing sequence aligned to your body clock.', route: '/circadian', Icon: Clock },
+  { title: 'Interaction map', kicker: 'Synergies & conflicts', description: 'See which compounds help — or compete with — each other.', route: '/conflict-map', Icon: GitCompareArrows },
+  { title: 'Exposure ledger', kicker: 'Cumulative load', description: 'Track synthetic exposure across food, supplements and skincare.', route: '/exposure', Icon: Layers3 },
+  { title: 'Evidence pulse', kicker: 'Weekly brief', description: 'New research relevant to what you take.', route: '/pulse', Icon: Newspaper },
+  { title: 'Peptides', kicker: 'Research dossiers', description: 'Regulatory status, routes and cycle protocols for 20+ peptides.', route: '/peptides', Icon: Dna },
 ];
 
-function ArrowIcon() {
+export default function AtelierScreen() {
+  const insets = useSafeAreaInsets();
   return (
-    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="rgba(18,51,50,0.45)" strokeWidth={1.8}>
-      <Path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
-
-function DiamondIcon() {
-  return (
-    <Svg width={8} height={8} viewBox="0 0 12 12" fill={Colors.sand}>
-      <Path d="M6 0 L12 6 L6 12 L0 6 Z" />
-    </Svg>
-  );
-}
-
-export default function PremiumScreen() {
-  const router = useRouter();
-
-  return (
-    <SafeAreaView style={styles.root}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.badge}>
-            <DiamondIcon />
-            <Text style={styles.badgeText}>Atelier</Text>
+    <Screen
+      night
+      back
+      title="Atelier"
+      hero={
+        <View style={{ height: 340 + insets.top }}>
+          <View style={{ position: 'absolute', top: -600, left: 0, right: 0, height: 600, backgroundColor: Palette.night }} />
+          <Image source={Imagery.atelier} style={StyleSheet.absoluteFill} contentFit="cover" />
+          <LinearGradient colors={['rgba(10,29,28,0.35)', 'rgba(10,29,28,0.55)', Palette.night]} locations={[0, 0.55, 1]} style={StyleSheet.absoluteFill} />
+          <View style={{ position: 'absolute', left: 20, right: 20, bottom: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Crown size={16} color={Palette.gold} strokeWidth={2} />
+              <Txt variant="overline" tone="gold">Elory Premium</Txt>
+            </View>
+            <Txt variant="display" tone="inverse" style={{ marginTop: 10 }}>Atelier</Txt>
+            <Txt variant="callout" tone="inverse2" style={{ marginTop: 8 }}>
+              Tools that read your stack, your timing and the evidence — then tell you something real.
+            </Txt>
           </View>
         </View>
-
-        {/* Title block */}
-        <View style={styles.titleBlock}>
-          <Text style={styles.eyebrow}>Premium · Intelligence</Text>
-          <Text style={styles.title}>Elory Premium.</Text>
-          <Text style={styles.subtitle}>
-            Intelligence tools that know your stack. Each feature reads your compounds,
-            your timing, and the evidence — then tells you something real.
-          </Text>
-        </View>
-
-        {/* Divider */}
-        <View style={styles.divider} />
-
-        {/* Feature cards */}
-        <View style={styles.cards}>
-          {FEATURES.map((f, i) => (
-            <Pressable
-              key={f.route}
-              onPress={() => router.push(f.route as any)}
-              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-            >
-              <View style={styles.cardTop}>
-                <Text style={styles.cardEyebrow}>{f.eyebrow}</Text>
-                <ArrowIcon />
+      }
+    >
+      <View style={{ gap: 12, marginTop: 20 }}>
+        {FEATURES.map((f, i) => (
+          <Animated.View key={f.route} entering={FadeInDown.duration(500).delay(i * 60)}>
+            <PressableScale onPress={() => router.push(f.route as never)} style={styles.card} accessibilityLabel={f.title}>
+              <View style={styles.icon}><f.Icon size={22} color={Palette.gold} strokeWidth={1.7} /></View>
+              <View style={{ flex: 1 }}>
+                <Txt variant="caption" tone="inverse3">{f.kicker}</Txt>
+                <Txt variant="title2" tone="inverse" style={{ marginTop: 2 }}>{f.title}</Txt>
+                <Txt variant="footnote" tone="inverse2" style={{ marginTop: 4 }}>{f.description}</Txt>
               </View>
-              <Text style={styles.cardTitle}>{f.title}</Text>
-              <Text style={styles.cardDescription}>{f.description}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </ScrollView>
-
-    </SafeAreaView>
+              <ChevronRight size={20} color={Palette.nightInk3} />
+            </PressableScale>
+          </Animated.View>
+        ))}
+      </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-  },
-  scroll: {
-    paddingHorizontal: scale(24),
-    paddingTop: scale(16),
-    paddingBottom: scale(48),
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: scale(28),
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: 'rgba(18,51,50,0.22)',
-    borderRadius: 999,
-  },
-  badgeText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: 9,
-    letterSpacing: 1.8,
-    textTransform: 'uppercase',
-    color: Colors.sand,
-  },
-  titleBlock: {
-    marginBottom: scale(28),
-  },
-  eyebrow: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 1.4,
-    color: 'rgba(18,51,50,0.45)',
-    marginBottom: scale(10),
-  },
-  title: {
-    fontFamily: Fonts.serifItalic,
-    fontSize: scale(42),
-    lineHeight: scale(44),
-    color: Colors.ink,
-    marginBottom: scale(14),
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontFamily: Fonts.serifItalic,
-    fontSize: FontSizes.subtitle,
-    lineHeight: FontSizes.subtitle * 1.55,
-    color: 'rgba(18,51,50,0.65)',
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(18,51,50,0.15)',
-    marginBottom: scale(24),
-  },
-  cards: {
-    gap: scale(12),
-  },
-  card: {
-    backgroundColor: 'rgba(18,51,50,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(18,51,50,0.1)',
-    borderRadius: Radius.lg,
-    padding: scale(20),
-  },
-  cardPressed: {
-    backgroundColor: 'rgba(18,51,50,0.08)',
-  },
-  cardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: scale(8),
-  },
-  cardEyebrow: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: 9,
-    textTransform: 'uppercase',
-    letterSpacing: 1.4,
-    color: 'rgba(18,51,50,0.45)',
-  },
-  cardTitle: {
-    fontFamily: Fonts.serifItalic,
-    fontSize: scale(22),
-    lineHeight: scale(26),
-    color: Colors.ink,
-    marginBottom: scale(6),
-  },
-  cardDescription: {
-    fontFamily: Fonts.sans,
-    fontSize: FontSizes.caption,
-    lineHeight: FontSizes.caption * 1.55,
-    color: 'rgba(18,51,50,0.5)',
-  },
+  card: { flexDirection: 'row', alignItems: 'center', gap: 16, padding: 18, borderRadius: Radius.xl, borderCurve: 'continuous', backgroundColor: Palette.nightRaised, borderWidth: StyleSheet.hairlineWidth, borderColor: Palette.nightHairline },
+  icon: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(201,164,101,0.12)', alignItems: 'center', justifyContent: 'center' },
 });

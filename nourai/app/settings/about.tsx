@@ -1,93 +1,47 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
-import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Linking, View } from 'react-native';
 import Constants from 'expo-constants';
-import { Colors } from '@/constants/theme';
+import { FileText, LifeBuoy, ShieldCheck } from 'lucide-react-native';
+import { Palette } from '@/constants/theme';
+import { Card, ListGroup, ListRow, Screen, Section, Txt } from '@/components/ui';
+
+const STANDARDS = [
+  ['Evidence first', 'Every ingredient is graded on peer-reviewed research, weighted by study quality.'],
+  ['Belief vs. reality', 'We show what people think an ingredient does next to what the data supports.'],
+  ['No paid placement', 'Brands can’t buy scores, rankings or visibility.'],
+];
 
 export default function AboutScreen() {
-  const insets = useSafeAreaInsets();
   const version = Constants.expoConfig?.version ?? '—';
-
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
-          <Text style={styles.backArrow}>‹</Text>
-        </Pressable>
-        <Text style={styles.title}>About Elory</Text>
-        <View style={styles.backBtn} />
-      </View>
+    <Screen back title="About Elory">
+      <Card padding={24} style={{ alignItems: 'center' }}>
+        <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: Palette.accent, alignItems: 'center', justifyContent: 'center' }}>
+          <Txt variant="largeTitle" tone="inverse" italic>E</Txt>
+        </View>
+        <Txt variant="title1" style={{ marginTop: 16 }}>Elory</Txt>
+        <Txt variant="subhead" tone="secondary" style={{ marginTop: 4 }}>Evidence over opinion.</Txt>
+        <Txt variant="caption" tone="tertiary" style={{ marginTop: 8 }}>Version {version}</Txt>
+      </Card>
 
-      <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.appName}>ELORY</Text>
-        <Text style={styles.tagline}>Evidence over opinions.</Text>
-        <Text style={styles.version}>Version {version}</Text>
+      <Section title="Our standards">
+        <Card padding={6}>
+          {STANDARDS.map(([t, d], i) => (
+            <View key={t} style={{ padding: 14, borderTopWidth: i ? 0.5 : 0, borderTopColor: Palette.hairline }}>
+              <Txt variant="headline">{t}</Txt>
+              <Txt variant="footnote" tone="secondary" style={{ marginTop: 3 }}>{d}</Txt>
+            </View>
+          ))}
+        </Card>
+      </Section>
 
-        <View style={styles.divider} />
-
-        <Pressable
-          style={styles.linkRow}
-          onPress={() => Linking.openURL('https://elory.app/terms')}
-        >
-          <Text style={styles.linkText}>Terms of Service</Text>
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.linkRow}
-          onPress={() => Linking.openURL('https://elory.app/privacy')}
-        >
-          <Text style={styles.linkText}>Privacy Policy</Text>
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.linkRow}
-          onPress={() => Linking.openURL('mailto:support@elory.app')}
-        >
-          <Text style={styles.linkText}>Contact Support</Text>
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
-      </ScrollView>
-    </View>
+      <Section title="Legal & support">
+        <ListGroup>
+          <ListRow icon={FileText} title="Terms of Service" onPress={() => Linking.openURL('https://elory.app/terms')} />
+          <ListRow icon={ShieldCheck} title="Privacy Policy" onPress={() => Linking.openURL('https://elory.app/privacy')} />
+          <ListRow icon={LifeBuoy} title="Contact support" subtitle="support@elory.app" onPress={() => Linking.openURL('mailto:support@elory.app')} />
+        </ListGroup>
+      </Section>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bone },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#D4CFC7',
-  },
-  backBtn: { width: 32 },
-  backArrow: { fontSize: 28, color: '#2C2C2C', lineHeight: 32 },
-  title: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 22, color: '#2C2C2C' },
-  body: { padding: 24, alignItems: 'center' },
-  appName: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 36, color: '#2C2C2C', marginTop: 16 },
-  tagline: { fontFamily: 'Manrope_400Regular', fontSize: 14, color: '#5C5752', marginTop: 6 },
-  version: { fontFamily: 'Manrope_400Regular', fontSize: 13, color: '#9C9690', marginTop: 4 },
-  divider: {
-    width: '100%',
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#D4CFC7',
-    marginVertical: 24,
-  },
-  linkRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#D4CFC7',
-  },
-  linkText: { fontFamily: 'Manrope_400Regular', fontSize: 15, color: '#2C2C2C' },
-  chevron: { fontSize: 20, color: '#9C9690' },
-});
