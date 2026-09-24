@@ -1,100 +1,58 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { Colors, Fonts } from '@/constants/theme';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { Crown, GitCompareArrows, MessageCircle, Clock, Newspaper, X } from 'lucide-react-native';
+import { Palette, Radius } from '@/constants/theme';
+import { Button, IconButton, Txt } from '@/components/ui';
 
-interface Props {
-  featureName?: string;
-}
+const PERKS = [
+  { Icon: MessageCircle, text: 'Ask Elory — answers grounded in your stack' },
+  { Icon: GitCompareArrows, text: 'Interaction map across every product' },
+  { Icon: Clock, text: 'Timing protocol for your routine' },
+  { Icon: Newspaper, text: 'Weekly evidence brief' },
+];
 
-export function PremiumLock({ featureName = 'This feature' }: Props) {
+/** Paywall overlay for premium routes. In dev builds it offers a preview. */
+export function PremiumLock({ featureName }: { featureName?: string }) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [bypassed, setBypassed] = useState(false);
-
-  // In development builds, unlock immediately without requiring a subscription.
   if (bypassed) return null;
 
-  const handleUnlock = () => {
-    if (__DEV__) {
-      setBypassed(true);
-    } else {
-      router.push('/settings/subscription');
-    }
-  };
-
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      <BlurView
-        tint="light"
-        intensity={72}
-        style={[StyleSheet.absoluteFill, styles.container]}
-      >
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>ELORY PREMIUM</Text>
+    <View style={StyleSheet.absoluteFill}>
+      <BlurView tint="dark" intensity={40} style={StyleSheet.absoluteFill} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,29,28,0.55)' }]} />
+      <View style={{ position: 'absolute', top: insets.top + 8, left: 16 }}>
+        <IconButton icon={X} label="Close" variant="night" onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)' as never))} />
+      </View>
+      <Animated.View entering={FadeInDown.springify().damping(18)} style={[styles.card, { marginBottom: insets.bottom + 16 }]}>
+        <View style={styles.crown}><Crown size={22} color={Palette.gold} strokeWidth={2} /></View>
+        <Txt variant="overline" tone="gold" style={{ marginTop: 16 }}>Elory Premium</Txt>
+        <Txt variant="title1" tone="inverse" style={{ marginTop: 8 }}>{featureName ? `${featureName} is part of Premium` : 'Go deeper with Atelier'}</Txt>
+        <View style={{ gap: 12, marginTop: 20 }}>
+          {PERKS.map(({ Icon, text }) => (
+            <View key={text} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Icon size={18} color={Palette.nightInk2} strokeWidth={1.8} />
+              <Txt variant="subhead" tone="inverse2" style={{ flex: 1 }}>{text}</Txt>
+            </View>
+          ))}
         </View>
-        <Text style={styles.title}>{featureName} is an{'\n'}Elory Premium feature.</Text>
-        <Text style={styles.sub}>
-          Unlock circadian dosing, conflict maps, exposure tracking and more.
-        </Text>
-        <Pressable style={styles.cta} onPress={handleUnlock}>
-          <Text style={styles.ctaText}>
-            {__DEV__ ? 'Preview feature' : 'Unlock Premium'}
-          </Text>
-        </Pressable>
-      </BlurView>
+        <Button
+          label={__DEV__ ? 'Preview (dev build)' : 'See plans'}
+          variant="night"
+          style={{ marginTop: 24 }}
+          onPress={() => (__DEV__ ? setBypassed(true) : router.push('/settings/subscription'))}
+        />
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-  },
-  badge: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: Colors.borderHairline,
-    borderRadius: 999,
-    marginBottom: 20,
-  },
-  badgeText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: 11,
-    letterSpacing: 1.8,
-    textTransform: 'uppercase',
-    color: Colors.sand,
-  },
-  title: {
-    fontFamily: Fonts.serifItalic,
-    fontSize: 28,
-    lineHeight: 34,
-    color: Colors.ink,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  sub: {
-    fontFamily: Fonts.sans,
-    fontSize: 14,
-    lineHeight: 21,
-    color: Colors.inkSecondary,
-    textAlign: 'center',
-    marginBottom: 32,
-  },
-  cta: {
-    backgroundColor: Colors.accent,
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 999,
-  },
-  ctaText: {
-    fontFamily: Fonts.sansSemiBold,
-    fontSize: 11,
-    letterSpacing: 1.8,
-    textTransform: 'uppercase',
-    color: Colors.accentInk,
-  },
+  card: { position: 'absolute', left: 16, right: 16, bottom: 0, padding: 24, borderRadius: Radius.xxl, borderCurve: 'continuous', backgroundColor: Palette.nightRaised, borderWidth: StyleSheet.hairlineWidth, borderColor: Palette.nightHairline },
+  crown: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(201,164,101,0.14)', alignItems: 'center', justifyContent: 'center' },
 });

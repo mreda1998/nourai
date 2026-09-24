@@ -1,31 +1,123 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import {
+  Bell, BookOpen, ChevronRight, CircleUserRound, Crown, Grid2x2, History, Info, KeyRound, Settings, ShieldCheck, SlidersHorizontal,
+} from 'lucide-react-native';
 import { useAuth } from '@/context/auth-context';
-import { Colors, Fonts, Radius } from '@/constants/theme';
-import { BrandMark, EloryScreen, ScoreRing } from '@/components/elory';
+import { usePurchases } from '@/context/purchases-context';
+import { Palette, Radius } from '@/constants/theme';
+import { Imagery } from '@/constants/imagery';
+import { Button, Card, IconButton, ListGroup, ListRow, PressableScale, Screen, Section, Txt } from '@/components/ui';
 
-const menu = [
-  { title: 'Longevity domains', note: 'Skin, sleep, gut, hormonal, hair and fitness', route: '/domains' },
-  { title: 'Edit health profile', note: 'Goals, concerns and personal context', route: '/health/edit-profile' },
-  { title: 'Subscription', note: 'Elory Premium and billing', route: '/settings/subscription' },
-  { title: 'Notifications', note: 'Evidence alerts and reminders', route: '/settings/notifications' },
-  { title: 'Privacy & data', note: 'Permissions and account controls', route: '/settings/privacy' },
-  { title: 'About Elory', note: 'Our evidence standards', route: '/settings/about' },
-];
+const label = (s: string) => s.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 
-export default function ProfileHubScreen() {
+export default function YouScreen() {
   const { user, onboardingProfile, isSignedIn } = useAuth();
-  const name = user?.name || 'Your profile';
+  const { isPremium } = usePurchases();
+  const name = user?.name?.trim() || (isSignedIn ? 'Elory member' : 'Guest');
+  const goals = onboardingProfile?.goals ?? [];
+  const focus = onboardingProfile?.focusAreas ?? [];
+  const concerns = onboardingProfile?.healthConcerns ?? [];
+
   return (
-    <EloryScreen header={<View style={styles.header}><BrandMark compact /><Pressable onPress={() => router.push('/settings/account' as never)}><Text style={styles.settings}>⚙</Text></Pressable></View>}>
-      <View style={styles.identity}><View style={styles.avatar}><Text style={styles.avatarText}>{name.slice(0, 1).toUpperCase()}</Text></View><View><Text style={styles.name}>{name}</Text><Text style={styles.email}>{user?.email || (isSignedIn ? 'Elory member' : 'Guest profile')}</Text></View></View>
-      <Pressable style={styles.healthCard} onPress={() => router.push('/domains' as never)}><ScoreRing score={78} qualifier="Good" size={92} /><View style={{ flex: 1 }}><Text style={styles.healthTitle}>Your health profile</Text><Text style={styles.healthCopy}>{onboardingProfile?.goals?.length || 3} goals selected · 6 longevity domains</Text><Text style={styles.healthLink}>Open full profile  →</Text></View></Pressable>
-      <Text style={styles.section}>Profile & settings</Text>
-      <View style={styles.menu}>{menu.map((item, index) => <Pressable key={item.title} style={[styles.row, index > 0 && styles.rowBorder]} onPress={() => router.push(item.route as never)}><View style={styles.rowIcon}><Text style={styles.rowIconText}>{index + 1}</Text></View><View style={{ flex: 1 }}><Text style={styles.rowTitle}>{item.title}</Text><Text style={styles.rowNote}>{item.note}</Text></View><Text style={styles.arrow}>›</Text></Pressable>)}</View>
-      {!isSignedIn ? <Pressable style={styles.signIn} onPress={() => router.push('/auth' as never)}><Text style={styles.signInText}>Sign in to sync your profile</Text></Pressable> : null}
-    </EloryScreen>
+    <Screen tabbed right={<IconButton icon={Settings} label="Account settings" onPress={() => router.push('/settings/account' as never)} />}>
+      {/* Identity */}
+      <View style={{ alignItems: 'center', marginTop: -4 }}>
+        <View style={styles.avatar}>
+          {user?.avatarUrl ? <Image source={{ uri: user.avatarUrl }} style={StyleSheet.absoluteFill} /> : <Txt variant="largeTitle" tone="accent">{name.slice(0, 1).toUpperCase()}</Txt>}
+        </View>
+        <Txt variant="title1" style={{ marginTop: 14 }}>{name}</Txt>
+        <Txt variant="subhead" tone="secondary" style={{ marginTop: 2 }}>{user?.email ?? 'Not signed in'}</Txt>
+      </View>
+
+      {!isSignedIn ? (
+        <Card padding={18} style={{ marginTop: 24 }}>
+          <Txt variant="headline">Save your stack and history</Txt>
+          <Txt variant="footnote" tone="secondary" style={{ marginTop: 4 }}>Create an account to sync across devices and use Ask Elory.</Txt>
+          <Button label="Sign in or create account" size="md" style={{ marginTop: 14 }} onPress={() => router.push('/auth' as never)} />
+        </Card>
+      ) : null}
+
+      {/* Membership */}
+      <PressableScale onPress={() => router.push((isPremium ? '/(premium)/atelier' : '/settings/subscription') as never)} style={styles.premium} accessibilityLabel={isPremium ? 'Open Atelier' : 'Explore Elory Premium'}>
+        <Image source={Imagery.atelier} style={StyleSheet.absoluteFill} contentFit="cover" />
+        <LinearGradient colors={['rgba(10,29,28,0.55)', 'rgba(10,29,28,0.92)']} style={StyleSheet.absoluteFill} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Crown size={16} color={Palette.gold} strokeWidth={2} />
+          <Txt variant="overline" tone="gold">{isPremium ? 'Premium member' : 'Elory Premium'}</Txt>
+        </View>
+        <Txt variant="title1" tone="inverse" style={{ marginTop: 10 }}>{isPremium ? 'Your Atelier' : 'Go deeper with Atelier'}</Txt>
+        <Txt variant="footnote" tone="inverse2" style={{ marginTop: 6, maxWidth: 280 }}>
+          Ask Elory, interaction maps, timing protocols and a weekly evidence brief — built around your stack.
+        </Txt>
+        <View style={styles.premiumCta}>
+          <Txt variant="footnoteStrong" tone="inverse">{isPremium ? 'Open' : 'See plans'}</Txt>
+          <ChevronRight size={16} color={Palette.nightInk} />
+        </View>
+      </PressableScale>
+
+      {/* Health profile */}
+      <Section title="Health profile" action="Edit" onAction={() => router.push('/health/edit-profile' as never)}>
+        <Card padding={18}>
+          {goals.length || focus.length ? (
+            <>
+              {goals.length ? <TagBlock title="Goals" items={goals} /> : null}
+              {focus.length ? <TagBlock title="Focus areas" items={focus} /> : null}
+              {concerns.length ? <TagBlock title="Health context" items={concerns} /> : null}
+            </>
+          ) : (
+            <>
+              <Txt variant="headline">Personalise your analysis</Txt>
+              <Txt variant="footnote" tone="secondary" style={{ marginTop: 4 }}>Tell Elory your goals and concerns so every product is scored for you.</Txt>
+              <Button label="Set up profile" size="md" variant="secondary" style={{ marginTop: 14 }} onPress={() => router.push('/health/edit-profile' as never)} />
+            </>
+          )}
+        </Card>
+        <ListGroup style={{ marginTop: 12 }}>
+          <ListRow icon={Grid2x2} title="Longevity domains" subtitle="Skin, sleep, gut, hormonal, hair and fitness" onPress={() => router.push('/domains' as never)} />
+          <ListRow icon={History} title="History" subtitle="Everything you’ve scanned and searched" onPress={() => router.push('/(tabs)/history' as never)} />
+          <ListRow icon={BookOpen} title="Journal" onPress={() => router.push('/(tabs)/journal' as never)} />
+        </ListGroup>
+      </Section>
+
+      <Section title="Settings">
+        <ListGroup>
+          <ListRow icon={CircleUserRound} title="Account" onPress={() => router.push('/settings/account' as never)} />
+          <ListRow icon={Crown} title="Subscription" value={isPremium ? 'Premium' : 'Free'} onPress={() => router.push('/settings/subscription' as never)} />
+          <ListRow icon={Bell} title="Notifications" onPress={() => router.push('/settings/notifications' as never)} />
+          <ListRow icon={KeyRound} title="Permissions" onPress={() => router.push('/settings/permissions' as never)} />
+          <ListRow icon={ShieldCheck} title="Privacy & data" onPress={() => router.push('/settings/privacy' as never)} />
+          <ListRow icon={Info} title="About Elory" subtitle="Our evidence standards" onPress={() => router.push('/settings/about' as never)} />
+        </ListGroup>
+      </Section>
+
+      <Txt variant="caption" tone="tertiary" align="center" style={{ marginTop: 28 }}>Elory · Evidence over opinion</Txt>
+    </Screen>
   );
 }
 
-const styles = StyleSheet.create({ header: { height: 54, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, settings: { color: Colors.ink, fontSize: 17 }, identity: { flexDirection: 'row', alignItems: 'center', gap: 13, marginTop: 8, marginBottom: 20 }, avatar: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#D7C3A7', alignItems: 'center', justifyContent: 'center' }, avatarText: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 25 }, name: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 25 }, email: { fontFamily: Fonts.sans, color: Colors.inkSecondary, fontSize: 9.5, marginTop: 2 }, healthCard: { minHeight: 125, flexDirection: 'row', alignItems: 'center', gap: 15, backgroundColor: Colors.surfaceCard, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, borderRadius: Radius.lg, padding: 15, marginBottom: 25 }, healthTitle: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 19 }, healthCopy: { fontFamily: Fonts.sans, color: Colors.inkSecondary, fontSize: 9, lineHeight: 13, marginTop: 4 }, healthLink: { fontFamily: Fonts.sansMedium, color: Colors.accent, fontSize: 9, marginTop: 8 }, section: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 21, marginBottom: 8 }, menu: { backgroundColor: Colors.surfaceCard, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, borderRadius: Radius.md, paddingHorizontal: 13 }, row: { minHeight: 63, flexDirection: 'row', alignItems: 'center', gap: 10 }, rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.borderHairline }, rowIcon: { width: 31, height: 31, borderRadius: 16, backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }, rowIconText: { fontFamily: Fonts.serifItalic, color: Colors.accent, fontSize: 11 }, rowTitle: { fontFamily: Fonts.sansMedium, color: Colors.ink, fontSize: 10.5 }, rowNote: { fontFamily: Fonts.sans, color: Colors.inkSecondary, fontSize: 8, marginTop: 2 }, arrow: { color: Colors.inkSecondary, fontSize: 20 }, signIn: { height: 46, marginTop: 16, borderRadius: Radius.pill, backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center' }, signInText: { fontFamily: Fonts.sansMedium, color: Colors.accentInk, fontSize: 10 }, });
+function TagBlock({ title, items }: { title: string; items: string[] }) {
+  return (
+    <View style={{ marginBottom: 14 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <SlidersHorizontal size={13} color={Palette.ink3} />
+        <Txt variant="overline" tone="secondary">{title}</Txt>
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+        {items.map((g) => (
+          <View key={g} style={styles.tag}><Txt variant="footnoteStrong" tone="accent">{label(g)}</Txt></View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  avatar: { width: 88, height: 88, borderRadius: 44, overflow: 'hidden', backgroundColor: Palette.accentSoft, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: Palette.surface },
+  premium: { marginTop: 24, borderRadius: Radius.xxl, borderCurve: 'continuous', overflow: 'hidden', padding: 22, backgroundColor: Palette.night },
+  premiumCta: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 16, paddingHorizontal: 14, height: 34, borderRadius: 17, backgroundColor: 'rgba(244,241,234,0.14)' },
+  tag: { paddingHorizontal: 12, height: 30, borderRadius: 15, justifyContent: 'center', backgroundColor: Palette.accentSoft },
+});

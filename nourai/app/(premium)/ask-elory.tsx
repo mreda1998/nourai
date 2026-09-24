@@ -1,257 +1,221 @@
-import { useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import Animated, { FadeInUp } from 'react-native-reanimated';
-import Svg, { Path } from 'react-native-svg';
-import { supabase } from '@/lib/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+import Animated, {
+  FadeIn, FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
+} from 'react-native-reanimated';
+import { ArrowUp, ArrowUpRight, Sparkles, SquarePen, X } from 'lucide-react-native';
 import { api } from '@/services/api';
-import { Colors, Fonts, FontSizes, scale, Radius } from '@/constants/theme';
+import { accessToken } from '@/lib/stack-sync';
+import { Fonts, Palette, Radius } from '@/constants/theme';
 import { useAppState } from '@/context/app-state';
 import { useAuth } from '@/context/auth-context';
 import { DOMAINS, computeRadarScores } from '@/constants/domains';
+import { IconButton, PressableScale, Txt } from '@/components/ui';
 
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
+interface Message { id: string; role: 'user' | 'assistant'; content: string }
+
+function suggestions(stackNames: string[]) {
+  const first = stackNames[0];
+  return [
+    first ? `Is ${first} worth taking?` : 'What should I look for in a magnesium supplement?',
+    stackNames.length > 1 ? 'Do any of my products conflict?' : 'Is creatine safe to take every day?',
+    'What’s the best time of day to take my stack?',
+  ];
 }
-
-const PROMPTS = [
-  'Why did my sleep score drop this week?',
-  'Can I take ashwagandha with SSRIs?',
-  'Walk me through my current stack synergies.',
-];
 
 export default function AskEloryScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { stack, meals } = useAppState();
-  const { onboardingProfile } = useAuth();
+  const { onboardingProfile, isSignedIn } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const scroll = useRef<ScrollView>(null);
 
-  const stackContext = useMemo(() => {
-    const allProducts = [...stack, ...meals];
-    const scores = computeRadarScores(allProducts);
+  const context = useMemo(() => {
+    const all = [...stack, ...meals];
+    const scores = computeRadarScores(all);
     return {
-      products: allProducts.map((p) => ({
-        name: p.name,
-        brand: p.brand,
-        category: p.category,
-        grade: p.grade,
-        ingredients: p.ingredients,
-      })),
-      domain_scores: Object.fromEntries(
-        DOMAINS.map((domain, index) => [domain, scores[index] ?? 50]),
-      ),
+      products: all.map((p) => ({ name: p.name, brand: p.brand, category: p.category, grade: p.grade, ingredients: p.ingredients })),
+      domain_scores: Object.fromEntries(DOMAINS.map((d, i) => [d, scores[i] ?? 50])),
       goals: onboardingProfile?.goals ?? [],
     };
   }, [stack, meals, onboardingProfile?.goals]);
 
   useEffect(() => {
-    loadHistory();
+    (async () => {
+      try {
+        const token = await accessToken();
+        if (!token) return;
+        const res = await api.getChatHistory(token, 50, 0);
+        setMessages(res.messages.map((m) => ({ id: m.id, role: m.role, content: m.content })));
+      } catch { /* start fresh */ }
+    })();
   }, []);
 
-  async function getToken(): Promise<string | null> {
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token ?? null;
-  }
+  useEffect(() => { setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 60); }, [messages.length, sending]);
 
-  async function loadHistory() {
-    setLoading(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const res = await api.getChatHistory(token, 50, 0);
-      setMessages(res.messages.map(m => ({ id: m.id, role: m.role, content: m.content })));
-    } catch {
-      // Non-fatal — show empty state
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleSend() {
-    const text = input.trim();
+  const send = async (text = input.trim()) => {
     if (!text || sending) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setInput('');
-
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: text };
-    setMessages(prev => [...prev, userMsg]);
+    const userMsg: Message = { id: `${Date.now()}`, role: 'user', content: text };
+    setMessages((prev) => [...prev, userMsg]);
     setSending(true);
-
     try {
-      const token = await getToken();
+      const token = await accessToken();
       if (!token) {
-        const assistantMsg: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: 'Sign in to use Ask Elory. Your local stack can be previewed in the other tools, but chat needs a synced account so answers can use your saved stack and history.',
-        };
-        setMessages(prev => [...prev, assistantMsg]);
+        setMessages((prev) => [...prev, { id: `${Date.now()}a`, role: 'assistant', content: 'Sign in to chat with Elory — answers use your saved stack and history, so they need an account.' }]);
         return;
       }
-      const history = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }));
-      const res = await api.sendChatMessage(token, history, stackContext);
-      const assistantMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: res.message };
-      setMessages(prev => [...prev, assistantMsg]);
+      const history = [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }));
+      const res = await api.sendChatMessage(token, history, context);
+      setMessages((prev) => [...prev, { id: `${Date.now()}a`, role: 'assistant', content: res.message }]);
     } catch {
-      setMessages(prev => prev.filter(m => m.id !== userMsg.id));
+      setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
       setInput(text);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setSending(false);
     }
-  }
+  };
 
-  async function handleNewConversation() {
-    try {
-      const token = await getToken();
-      if (!token) return;
-      await api.deleteChatHistory(token);
-      setMessages([]);
-    } catch {
-      // Non-fatal
-    }
-  }
+  const reset = async () => {
+    setMessages([]);
+    try { const t = await accessToken(); if (t) await api.deleteChatHistory(t); } catch { /* non-fatal */ }
+  };
+
+  const empty = messages.length === 0;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      {/* Header */}
-      <View style={{ paddingTop: insets.top + scale(12), paddingHorizontal: scale(24), paddingBottom: scale(20) }}>
-        <View style={styles.headerRow}>
-          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="rgba(18,51,50,0.6)" strokeWidth={2}>
-              <Path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-            <Text style={styles.backText}>Back</Text>
-          </Pressable>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Pressable onPress={handleNewConversation}>
-              <Text style={styles.newConvoBtn}>New</Text>
-            </Pressable>
-            <View style={styles.atelierBadge}>
-              <Text style={styles.atelierBadgeText}>ELORY PREMIUM</Text>
-            </View>
-          </View>
+    <View style={{ flex: 1, backgroundColor: Palette.canvas }}>
+      <LinearGradient
+        colors={['rgba(15,86,82,0)', 'rgba(15,86,82,0.10)', 'rgba(201,164,101,0.16)']}
+        locations={[0.45, 0.8, 1]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
+        <IconButton icon={X} label="Close" onPress={() => router.back()} />
+        <View style={{ alignItems: 'center' }}>
+          <Txt variant="headline">Ask Elory</Txt>
+          <Txt variant="caption" tone="tertiary">{stack.length ? `Knows your ${stack.length} product${stack.length === 1 ? '' : 's'}` : 'Evidence-based answers'}</Txt>
         </View>
-        <Text style={styles.eyebrow}>Premium · Conversational</Text>
-        <Text style={styles.title}>Ask Elory.</Text>
+        <IconButton icon={SquarePen} label="New conversation" onPress={reset} />
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + scale(100) }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {loading && (
-          <ActivityIndicator color={Colors.sand} style={{ marginVertical: scale(24) }} />
-        )}
-
-        {/* Suggested prompts — only when no history */}
-        {!loading && messages.length === 0 && (
-          <Animated.View entering={FadeInUp.duration(320)} style={{ gap: scale(8), marginBottom: scale(24) }}>
-            {PROMPTS.map((p, i) => (
-              <Pressable key={i} style={styles.promptCard} onPress={() => setInput(p)}>
-                <Text style={styles.promptText}>— {p}</Text>
-              </Pressable>
-            ))}
-          </Animated.View>
-        )}
-
-        {/* Message thread */}
-        {messages.map((msg) =>
-          msg.role === 'user' ? (
-            <Animated.View key={msg.id} entering={FadeInUp.duration(200)} style={{ marginBottom: scale(20) }}>
-              <View style={styles.userBubble}>
-                <Text style={styles.userBubbleText}>{msg.content}</Text>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView ref={scroll} contentContainerStyle={{ padding: 20, paddingBottom: 24, flexGrow: 1 }} keyboardDismissMode="interactive" showsVerticalScrollIndicator={false}>
+          {empty ? (
+            <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+              <Animated.View entering={FadeIn.duration(600)} style={{ alignItems: 'center', marginBottom: 32 }}>
+                <Orb />
+                <Txt variant="largeTitle" align="center" style={{ marginTop: 24 }}>What would you{'\n'}like to know?</Txt>
+                <Txt variant="subhead" tone="secondary" align="center" style={{ marginTop: 10, maxWidth: 300 }}>
+                  Ask about ingredients, timing, interactions or your stack. Answers cite the evidence.
+                </Txt>
+              </Animated.View>
+              <View style={{ gap: 10 }}>
+                {suggestions(stack.map((s) => s.name)).map((s, i) => (
+                  <Animated.View key={s} entering={FadeInUp.duration(500).delay(200 + i * 90)}>
+                    <PressableScale onPress={() => send(s)} style={styles.suggestion} accessibilityLabel={s}>
+                      <Txt variant="callout" style={{ flex: 1 }}>{s}</Txt>
+                      <ArrowUpRight size={18} color={Palette.ink3} />
+                    </PressableScale>
+                  </Animated.View>
+                ))}
               </View>
-            </Animated.View>
+              {!isSignedIn ? <Txt variant="footnote" tone="tertiary" align="center" style={{ marginTop: 16 }}>Sign in required to send messages.</Txt> : null}
+            </View>
           ) : (
-            <Animated.View key={msg.id} entering={FadeInUp.duration(200)} style={{ gap: scale(10), marginBottom: scale(20) }}>
-              <View style={styles.eloryMeta}>
-                <View style={styles.eloryAvatar}>
-                  <Text style={styles.eloryAvatarText}>E</Text>
-                </View>
-                <Text style={styles.eloryLabel}>Elory</Text>
-              </View>
-              <Text style={styles.eloryText}>{msg.content}</Text>
-            </Animated.View>
-          )
-        )}
-
-        {sending && (
-          <View style={styles.eloryMeta}>
-            <View style={styles.eloryAvatar}>
-              <Text style={styles.eloryAvatarText}>E</Text>
+            <View style={{ gap: 14 }}>
+              {messages.map((m) => m.role === 'user' ? (
+                <Animated.View key={m.id} entering={FadeInDown.duration(300)} style={styles.userBubble}>
+                  <Txt variant="callout" tone="inverse">{m.content}</Txt>
+                </Animated.View>
+              ) : (
+                <Animated.View key={m.id} entering={FadeIn.duration(400)} style={styles.assistant}>
+                  <View style={styles.assistantHead}>
+                    <View style={styles.mark}><Sparkles size={12} color={Palette.onAccent} strokeWidth={2.4} /></View>
+                    <Txt variant="footnoteStrong" tone="accent">Elory</Txt>
+                  </View>
+                  <Txt variant="body" selectable>{m.content}</Txt>
+                </Animated.View>
+              ))}
+              {sending ? <Typing /> : null}
             </View>
-            <ActivityIndicator size="small" color={Colors.sand} />
-          </View>
-        )}
-      </ScrollView>
+          )}
+        </ScrollView>
 
-      {/* Input bar */}
-      <View style={[styles.inputBar, { paddingBottom: insets.bottom + scale(12) }]}>
-        <View style={styles.inputPill}>
-          <TextInput
-            style={styles.input}
-            placeholder="Ask about your stack…"
-            placeholderTextColor="rgba(18,51,50,0.3)"
-            value={input}
-            onChangeText={setInput}
-            multiline
-            onSubmitEditing={handleSend}
-          />
-          <Pressable style={[styles.sendBtn, sending && { opacity: 0.5 }]} onPress={handleSend}>
-            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={Colors.surface} strokeWidth={2}>
-              <Path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </Pressable>
+        <View style={[styles.composerWrap, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <View style={styles.composer}>
+            <TextInput
+              value={input}
+              onChangeText={setInput}
+              placeholder="Ask anything…"
+              placeholderTextColor={Palette.ink3}
+              style={styles.input}
+              multiline
+              maxLength={2000}
+            />
+            <PressableScale
+              onPress={() => send()}
+              disabled={!input.trim() || sending}
+              accessibilityLabel="Send"
+              pressedScale={0.88}
+              style={[styles.send, { backgroundColor: input.trim() ? Palette.accent : Palette.ink4 }]}
+            >
+              <ArrowUp size={19} color={Palette.onAccent} strokeWidth={2.6} />
+            </PressableScale>
+          </View>
+          <Txt variant="caption" tone="tertiary" align="center" style={{ marginTop: 8 }}>Not medical advice. Check with a clinician before changing treatment.</Txt>
         </View>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
+function Orb() {
+  const s = useSharedValue(1);
+  useEffect(() => { s.value = withRepeat(withSequence(withTiming(1.08, { duration: 1600 }), withTiming(1, { duration: 1600 })), -1); }, []);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: s.value }] }));
+  return (
+    <Animated.View style={[{ width: 76, height: 76, borderRadius: 38, overflow: 'hidden' }, style]}>
+      <LinearGradient colors={[Palette.accent, '#4E9A86', Palette.gold]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <Sparkles size={30} color={Palette.onAccent} strokeWidth={1.8} />
+      </LinearGradient>
+    </Animated.View>
+  );
+}
+
+function Typing() {
+  return (
+    <View style={[styles.assistant, { flexDirection: 'row', gap: 6, alignSelf: 'flex-start', paddingVertical: 16 }]} accessibilityLabel="Elory is typing">
+      {[0, 1, 2].map((i) => <Dot key={i} delay={i * 160} />)}
+    </View>
+  );
+}
+
+function Dot({ delay }: { delay: number }) {
+  const o = useSharedValue(0.3);
+  useEffect(() => { o.value = withDelay(delay, withRepeat(withSequence(withTiming(1, { duration: 380 }), withTiming(0.3, { duration: 380 })), -1)); }, []);
+  const style = useAnimatedStyle(() => ({ opacity: o.value }));
+  return <Animated.View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: Palette.accent }, style]} />;
+}
+
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.surface },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: scale(24) },
-  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  backText: { fontFamily: Fonts.sansSemiBold, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'rgba(18,51,50,0.6)' },
-  newConvoBtn: { fontFamily: Fonts.sansSemiBold, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'rgba(18,51,50,0.4)' },
-  atelierBadge: { paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(18,51,50,0.22)', borderRadius: 999 },
-  atelierBadgeText: { fontFamily: Fonts.sansSemiBold, fontSize: 9, letterSpacing: 1.8, textTransform: 'uppercase', color: Colors.sand },
-  eyebrow: { fontFamily: Fonts.sansSemiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, color: 'rgba(18,51,50,0.45)', marginBottom: scale(10) },
-  title: { fontFamily: Fonts.serifItalic, fontSize: scale(40), lineHeight: scale(42), color: Colors.ink, letterSpacing: -0.5 },
-  scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: scale(24), paddingTop: scale(4) },
-  promptCard: { padding: scale(14), borderWidth: 1, borderColor: 'rgba(18,51,50,0.1)', borderRadius: Radius.md },
-  promptText: { fontFamily: Fonts.serifItalic, fontSize: FontSizes.subtitle, color: 'rgba(18,51,50,0.8)', lineHeight: FontSizes.subtitle * 1.4 },
-  userBubble: { backgroundColor: Colors.ink, borderRadius: Radius.lg, paddingHorizontal: scale(16), paddingVertical: scale(12), alignSelf: 'flex-end', maxWidth: '85%' },
-  userBubbleText: { fontFamily: Fonts.serif, fontSize: FontSizes.title, lineHeight: FontSizes.title * 1.4, color: Colors.surface },
-  eloryMeta: { flexDirection: 'row', alignItems: 'center', gap: scale(8), marginBottom: scale(8) },
-  eloryAvatar: { width: scale(22), height: scale(22), borderRadius: 999, backgroundColor: Colors.sand, alignItems: 'center', justifyContent: 'center' },
-  eloryAvatarText: { fontFamily: Fonts.serifItalic, fontSize: 12, color: Colors.surface },
-  eloryLabel: { fontFamily: Fonts.sansSemiBold, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, color: 'rgba(18,51,50,0.4)' },
-  eloryText: { fontFamily: Fonts.serif, fontSize: FontSizes.title, lineHeight: FontSizes.title * 1.5, color: Colors.ink, marginBottom: scale(20) },
-  inputBar: { paddingHorizontal: scale(16), paddingTop: scale(8) },
-  inputPill: { flexDirection: 'row', alignItems: 'center', gap: scale(8), paddingLeft: scale(20), paddingRight: scale(6), paddingVertical: scale(6), borderRadius: 999, backgroundColor: 'rgba(18,51,50,0.08)', borderWidth: 1, borderColor: 'rgba(18,51,50,0.12)' },
-  input: { flex: 1, fontFamily: Fonts.sans, fontSize: FontSizes.body, color: Colors.ink, maxHeight: scale(80), paddingVertical: scale(6) },
-  sendBtn: { width: scale(36), height: scale(36), borderRadius: 999, backgroundColor: Colors.sand, alignItems: 'center', justifyContent: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8 },
+  suggestion: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingVertical: 16, borderRadius: Radius.xl, borderCurve: 'continuous', backgroundColor: 'rgba(252,251,248,0.9)', borderWidth: StyleSheet.hairlineWidth, borderColor: Palette.hairline },
+  userBubble: { alignSelf: 'flex-end', maxWidth: '82%', backgroundColor: Palette.accent, paddingHorizontal: 16, paddingVertical: 11, borderRadius: 22, borderBottomRightRadius: 6, borderCurve: 'continuous' },
+  assistant: { alignSelf: 'stretch', backgroundColor: Palette.surface, padding: 16, borderRadius: 22, borderBottomLeftRadius: 6, borderCurve: 'continuous', borderWidth: StyleSheet.hairlineWidth, borderColor: Palette.hairline },
+  assistantHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  mark: { width: 20, height: 20, borderRadius: 10, backgroundColor: Palette.accent, alignItems: 'center', justifyContent: 'center' },
+  composerWrap: { paddingHorizontal: 16, paddingTop: 8 },
+  composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, minHeight: 54, borderRadius: 27, backgroundColor: Palette.surface, paddingLeft: 18, paddingRight: 7, paddingVertical: 7, borderWidth: StyleSheet.hairlineWidth, borderColor: Palette.hairline, shadowColor: '#0A1D1C', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: 0, height: 6 } },
+  input: { flex: 1, fontFamily: Fonts.sans, fontSize: 17, color: Palette.ink, maxHeight: 120, paddingTop: 9, paddingBottom: 9 },
+  send: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
 });

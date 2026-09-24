@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#E9E6DF"
+      "backgroundColor": "#F3F0E9"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -25,7 +25,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#E9E6DF"
+        "backgroundColor": "#F3F0E9"
       },
       "package": "com.elory.app",
       "permissions": [

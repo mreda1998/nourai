@@ -1,103 +1,307 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { api, IngredientDetail } from '@/services/api';
-import { Colors, Fonts, Radius } from '@/constants/theme';
-import { EloryScreen, EvidenceSpectrum, ScreenHeader, SpectrumBar } from '@/components/elory';
+import {
+  AlertTriangle, ArrowDown, Ban, CircleSlash, Pill as PillIcon, Quote, ShieldCheck, Sparkles,
+} from 'lucide-react-native';
+import { api, IngredientDetail, IngredientEvidenceRecord } from '@/services/api';
+import { Palette, Radius } from '@/constants/theme';
+import { evidenceStrength, strengthLabel, strengthTone, toneColor, Tone } from '@/utils/grade';
+import {
+  Button, Card, ContributorBar, EmptyState, EvidenceMeter, IconButton, ListGroup, ListRow, Pill,
+  ProductImage, Screen, Section, SegmentedControl, SkeletonCard, Txt,
+} from '@/components/ui';
 
-type Tab = 'Overview' | 'Evidence' | 'Mechanism' | 'Safety';
-const tabs: Tab[] = ['Overview', 'Evidence', 'Mechanism', 'Safety'];
+type Tab = 'evidence' | 'mechanism' | 'safety';
 
 export default function IngredientScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [data, setData] = useState<IngredientDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>('Overview');
+  const [tab, setTab] = useState<Tab>('evidence');
 
   useEffect(() => {
     if (!id) return;
+    setLoading(true);
     api.getIngredientWithFallback(id).then(setData).catch(() => setData(null)).finally(() => setLoading(false));
   }, [id]);
 
-  if (loading) return <View style={styles.center}><ActivityIndicator color={Colors.accent} /></View>;
-  if (!data) return <EloryScreen header={<ScreenHeader back title="Ingredient" />}><Text style={styles.empty}>Ingredient details are not available yet.</Text></EloryScreen>;
+  const askRight = <IconButton icon={Sparkles} label="Ask Elory about this ingredient" onPress={() => router.push('/(premium)/ask-elory' as never)} />;
 
-  const evidenceCount = data.evidence.length;
-  const established = data.evidence.filter((item) => item.confidence === 'high');
-  const emerging = data.evidence.filter((item) => item.confidence === 'moderate');
-  const preliminary = data.evidence.filter((item) => item.confidence === 'low');
+  if (loading) return <Screen back right={askRight}><SkeletonCard lines={2} /><SkeletonCard lines={5} /></Screen>;
+  if (!data) {
+    return (
+      <Screen back>
+        <EmptyState icon={CircleSlash} title="Not reviewed yet" message="Our research team hasn’t published a review of this ingredient yet." action="Go back" onAction={() => router.back()} />
+      </Screen>
+    );
+  }
+
+  const strength = evidenceStrength(data.evidence_level);
+  const high = data.evidence.filter((e) => e.confidence === 'high').length;
+  const moderate = data.evidence.filter((e) => e.confidence === 'moderate').length;
+  const low = data.evidence.filter((e) => e.confidence === 'low').length;
 
   return (
-    <EloryScreen header={<ScreenHeader back title="Ingredient intelligence" />}>
-      <View style={styles.lead}>
-        <View style={styles.icon}><StructureImage uri={data.structure_image_url} size={62} /></View>
-        <View style={{ flex: 1 }}><Text style={styles.category}>{data.category || 'Active ingredient'}</Text><Text style={styles.title}>{data.canonical_name}</Text></View>
+    <Screen back title={data.canonical_name} right={askRight}>
+      {/* Identity */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: -6 }}>
+        <View style={styles.structure}>
+          {data.structure_image_url
+            ? <Image source={{ uri: data.structure_image_url }} style={{ width: 60, height: 60 }} contentFit="contain" />
+            : <Molecule />}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Txt variant="overline" tone="secondary">{data.category || 'Active ingredient'}</Txt>
+          <View style={{ marginTop: 10, alignItems: 'flex-start' }}>
+            <EvidenceMeter strength={strength} width={96} />
+          </View>
+        </View>
       </View>
-      <View style={styles.tabs}>{tabs.map((item) => <Pressable key={item} style={[styles.tab, tab === item && styles.tabActive]} onPress={() => setTab(item)}><Text style={[styles.tabText, tab === item && styles.tabTextActive]}>{item}</Text></Pressable>)}</View>
 
-      {tab === 'Overview' ? <Overview data={data} established={established.length} emerging={emerging.length} preliminary={preliminary.length} /> : null}
-      {tab === 'Evidence' ? <Evidence data={data} /> : null}
-      {tab === 'Mechanism' ? <Mechanism data={data} /> : null}
-      {tab === 'Safety' ? <Safety data={data} /> : null}
+      {/* Belief vs reality — the product's core idea, given the hero slot. */}
+      <Animated.View entering={FadeInDown.duration(600)}>
+        <BeliefReality data={data} strength={strength} />
+      </Animated.View>
 
-      <Pressable style={styles.researchButton} onPress={() => router.push(`/research/${data.id}` as never)}><Text style={styles.researchButtonText}>View all {evidenceCount || ''} research studies  →</Text></Pressable>
-      <Text style={styles.disclaimer}>Evidence summaries are educational and are not a substitute for medical advice.</Text>
-    </EloryScreen>
+      {data.description ? (
+        <Section title="What it is">
+          <Txt variant="body" tone="secondary">{data.description}</Txt>
+        </Section>
+      ) : null}
+
+      <SegmentedControl
+        style={{ marginTop: 32 }}
+        options={[
+          { key: 'evidence', label: `Evidence${data.evidence.length ? ` ${data.evidence.length}` : ''}` },
+          { key: 'mechanism', label: 'How it works' },
+          { key: 'safety', label: 'Safety' },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+
+      {tab === 'evidence' ? (
+        <View style={{ marginTop: 16 }}>
+          {data.evidence.length ? (
+            <>
+              <Card padding={16} style={{ flexDirection: 'row' }}>
+                <Count value={high} label="High confidence" tone="strong" />
+                <Count value={moderate} label="Moderate" tone="moderate" />
+                <Count value={low} label="Low" tone="weak" />
+              </Card>
+              <View style={{ gap: 12, marginTop: 12 }}>
+                {data.evidence.slice(0, 5).map((e, i) => <StudyCard key={e.id} study={e} index={i} />)}
+              </View>
+              <Button label={`See all ${data.evidence.length} studies`} variant="secondary" style={{ marginTop: 16 }} onPress={() => router.push(`/research/${data.id}` as never)} />
+            </>
+          ) : (
+            <EmptyState title="Research in progress" message="We’re still reviewing studies on this ingredient. Check back soon." />
+          )}
+        </View>
+      ) : null}
+
+      {tab === 'mechanism' ? (
+        <View style={{ marginTop: 16 }}>
+          {data.mechanism_image_url ? (
+            <View style={styles.mechImage}><Image source={{ uri: data.mechanism_image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={300} /></View>
+          ) : null}
+          <Card padding={20}>
+            <Txt variant="overline" tone="secondary">Mechanism</Txt>
+            <Txt variant="callout" style={{ marginTop: 8 }}>
+              {data.mechanism_summary || 'The precise mechanism is still being characterised in human studies.'}
+            </Txt>
+          </Card>
+          {data.biodomain_scores.length ? (
+            <Section title="Where it acts" caption="Strength of effect by body system">
+              <Card padding={18} style={{ paddingVertical: 6 }}>
+                {data.biodomain_scores.slice(0, 6).map((d, i) => (
+                  <ContributorBar
+                    key={d.biodomain}
+                    label={d.biodomain}
+                    value={d.direction === 'harm' ? 30 : Math.round(d.magnitude * 100)}
+                    valueLabel={d.direction === 'benefit' ? 'Benefit' : d.direction === 'harm' ? 'Risk' : d.direction === 'mixed' ? 'Mixed' : 'Neutral'}
+                    delay={i * 70}
+                  />
+                ))}
+              </Card>
+            </Section>
+          ) : null}
+        </View>
+      ) : null}
+
+      {tab === 'safety' ? <Safety data={data} /> : null}
+
+      {/* Found in */}
+      {data.found_in.length ? (
+        <Section title="Found in" caption={`${data.found_in.length} product${data.found_in.length === 1 ? '' : 's'} in our library`}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
+            {data.found_in.slice(0, 12).map((p) => (
+              <Card key={p.id} padding={14} style={{ width: 148 }} onPress={() => router.push(`/product/${p.id}` as never)} accessibilityLabel={p.name}>
+                <ProductImage uri={p.image_url} category={p.category} size={52} />
+                <Txt variant="caption" tone="secondary" numberOfLines={1} style={{ marginTop: 12 }}>{p.brand || p.category}</Txt>
+                <Txt variant="subheadStrong" numberOfLines={2} style={{ minHeight: 40 }}>{p.name}</Txt>
+                {p.amount ? <Txt variant="caption" tone="accent" style={{ marginTop: 4 }}>{p.amount}</Txt> : null}
+              </Card>
+            ))}
+          </ScrollView>
+        </Section>
+      ) : null}
+
+      <Txt variant="caption" tone="tertiary" align="center" style={{ marginTop: 32, paddingHorizontal: 24 }}>
+        Evidence summaries are educational and not a substitute for medical advice.
+      </Txt>
+    </Screen>
   );
 }
 
-function Overview({ data, established, emerging, preliminary }: { data: IngredientDetail; established: number; emerging: number; preliminary: number }) {
-  const strength = data.evidence_level?.toLowerCase().includes('strong') ? 5 : data.evidence_level?.toLowerCase().includes('moderate') ? 4 : 3;
-  return <>
-    <View style={styles.spectrumCard}><View style={styles.spectrumTop}><Text style={styles.spectrumLabel}>Overall evidence</Text><EvidenceSpectrum strength={strength} max={5} label={data.evidence_level || 'Moderate'} /></View><View style={{ marginTop: 13 }}><SpectrumBar gradient position={1 - strength / 5} /></View><View style={styles.gradientLabels}><Text style={styles.gradientText}>Strong established</Text><Text style={styles.gradientText}>Preliminary emerging</Text><Text style={styles.gradientText}>Weak / Contested</Text></View></View>
-    <View style={styles.summaryCard}><Text style={styles.cardKicker}>What it is</Text><Text style={styles.summary}>{data.description || `${data.canonical_name} is an ingredient reviewed through Elory’s evidence framework.`}</Text></View>
-    <Text style={styles.sectionTitle}>What the research says</Text>
-    <ResearchSignal tone="established" label="Established" count={established} text={data.evidence_reality || data.evidence[0]?.finding || 'Evidence supports its core use when dose and formulation are appropriate.'} />
-    <ResearchSignal tone="emerging" label="Emerging" count={emerging} text={data.evidence[1]?.finding || 'Additional benefits are promising, but the body of evidence is still developing.'} />
-    <ResearchSignal tone="uncertain" label="Still uncertain" count={preliminary} text={data.common_belief || 'Long-term outcomes and individual response can vary.'} />
-  </>;
+// ─── Belief vs reality ────────────────────────────────────────────────────────
+
+function BeliefReality({ data, strength }: { data: IngredientDetail; strength: number }) {
+  const belief = data.common_belief;
+  const reality = data.evidence_reality || data.evidence.find((e) => e.confidence === 'high')?.finding || null;
+  if (!belief && !reality) return null;
+  const tone = strengthTone(strength);
+  return (
+    <View style={{ marginTop: 24 }}>
+      {belief ? (
+        <Card variant="sunken" padding={20} radius={Radius.xl}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Quote size={16} color={Palette.ink3} strokeWidth={2} />
+            <Txt variant="overline" tone="secondary">What people believe</Txt>
+          </View>
+          <Txt variant="title2" italic tone="secondary" style={{ marginTop: 10 }}>{belief}</Txt>
+        </Card>
+      ) : null}
+      {belief && reality ? (
+        <View style={styles.connector}>
+          <View style={styles.connectorDot}><ArrowDown size={14} color={Palette.onAccent} strokeWidth={2.4} /></View>
+        </View>
+      ) : null}
+      {reality ? (
+        <Card padding={20} radius={Radius.xl} style={{ borderWidth: 1.5, borderColor: toneColor(tone) }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <ShieldCheck size={16} color={toneColor(tone)} strokeWidth={2} />
+              <Txt variant="overline" color={toneColor(tone)}>What the evidence shows</Txt>
+            </View>
+          </View>
+          <Txt variant="title2" style={{ marginTop: 10 }}>{reality}</Txt>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
+            <Pill label={strengthLabel(strength)} tone={tone} />
+            {data.evidence.length ? <Txt variant="footnote" tone="secondary">{data.evidence.length} studies reviewed</Txt> : null}
+          </View>
+        </Card>
+      ) : null}
+    </View>
+  );
 }
 
-function Evidence({ data }: { data: IngredientDetail }) {
-  return <View style={{ marginTop: 18 }}><Text style={styles.sectionTitle}>Evidence snapshot</Text>{data.evidence.slice(0, 6).map((item) => <View key={item.id} style={styles.study}><View style={styles.studyTop}><Text style={styles.studyType}>{(item.study_type || 'Study').replaceAll('_', ' ')}</Text><Text style={styles.studyYear}>{item.year || ''}</Text></View><Text style={styles.studyFinding}>{item.finding}</Text><EvidenceSpectrum strength={item.confidence === 'high' ? 5 : item.confidence === 'moderate' ? 3 : 2} max={5} label={item.confidence} /></View>)}</View>;
+// ─── Evidence ─────────────────────────────────────────────────────────────────
+
+const DIRECTION: Record<IngredientEvidenceRecord['direction'], { label: string; tone: Tone }> = {
+  benefit: { label: 'Benefit', tone: 'strong' },
+  risk: { label: 'Risk', tone: 'weak' },
+  mixed: { label: 'Mixed', tone: 'moderate' },
+  neutral: { label: 'No effect', tone: 'neutral' },
+};
+
+function StudyCard({ study, index }: { study: IngredientEvidenceRecord; index: number }) {
+  const dir = DIRECTION[study.direction] ?? DIRECTION.neutral;
+  const meta = [
+    study.study_type?.replaceAll('_', ' '),
+    study.sample_size ? `n = ${study.sample_size.toLocaleString()}` : null,
+    study.year,
+  ].filter(Boolean).join(' · ');
+  return (
+    <Animated.View entering={FadeInDown.duration(400).delay(index * 60)}>
+      <Card padding={18}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Pill label={dir.label} tone={dir.tone} />
+          <Txt variant="caption" tone="tertiary" style={{ textTransform: 'capitalize' }}>{study.confidence} confidence</Txt>
+        </View>
+        <Txt variant="callout" style={{ marginTop: 12 }}>{study.finding}</Txt>
+        {meta ? <Txt variant="footnote" tone="secondary" style={{ marginTop: 10, textTransform: 'capitalize' }}>{meta}</Txt> : null}
+        {study.journal ? <Txt variant="caption" tone="tertiary" numberOfLines={1} style={{ marginTop: 2 }}>{study.journal}</Txt> : null}
+      </Card>
+    </Animated.View>
+  );
 }
 
-function Mechanism({ data }: { data: IngredientDetail }) {
-  return <View style={{ marginTop: 18 }}><Text style={styles.sectionTitle}>How it works</Text><View style={styles.diagram}><StructureImage uri={data.structure_image_url} size={104} /><View style={styles.diagramRule} /><Text style={styles.diagramLabel}>{data.structure_image_url ? 'Chemical structure' : 'Cellular pathway'}</Text></View><View style={styles.summaryCard}><Text style={styles.summary}>{data.mechanism_summary || 'The precise mechanism is still being characterized in human studies.'}</Text></View>{data.biodomain_scores.slice(0, 4).map((domain) => <View key={domain.biodomain} style={styles.domainRow}><Text style={styles.domainName}>{domain.biodomain}</Text><EvidenceSpectrum strength={Math.max(1, Math.round(domain.magnitude * 5))} max={5} label={domain.direction} /></View>)}</View>;
+function Count({ value, label, tone }: { value: number; label: string; tone: Tone }) {
+  return (
+    <View style={{ flex: 1, alignItems: 'center' }}>
+      <Txt variant="metric" color={toneColor(tone)}>{value}</Txt>
+      <Txt variant="caption" tone="secondary" style={{ marginTop: 2 }}>{label}</Txt>
+    </View>
+  );
 }
+
+// ─── Safety ───────────────────────────────────────────────────────────────────
 
 function Safety({ data }: { data: IngredientDetail }) {
-  return <View style={{ marginTop: 18 }}><Text style={styles.sectionTitle}>Dose & safety</Text><View style={styles.safetyGrid}><SafetyItem label="Typical range" value={data.typical_dose_range || 'Varies by use'} /><SafetyItem label="Daily guidance" value={data.recommended_daily || 'Follow label'} /><SafetyItem label="Upper limit" value={data.upper_limit || 'Not established'} /></View><Text style={styles.cardKicker}>Possible side effects</Text>{(data.side_effects.length ? data.side_effects : ['No common side effects are documented in this record.']).map((item) => <Text key={item} style={styles.bullet}>•  {item}</Text>)}{data.drug_interactions.length ? <><Text style={[styles.cardKicker, { marginTop: 20 }]}>Interactions</Text>{data.drug_interactions.map((item) => <Text key={item} style={styles.bullet}>•  {item}</Text>)}</> : null}</View>;
+  const doses = [
+    { label: 'Typical range', value: data.typical_dose_range },
+    { label: 'Daily guidance', value: data.recommended_daily },
+    { label: 'Upper limit', value: data.upper_limit },
+  ];
+  return (
+    <View style={{ marginTop: 16 }}>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {doses.map((d) => (
+          <Card key={d.label} padding={14} style={{ flex: 1, minHeight: 96 }}>
+            <Txt variant="caption" tone="secondary">{d.label}</Txt>
+            <Txt variant="headline" style={{ marginTop: 8 }} tone={d.value ? 'primary' : 'tertiary'}>{d.value || 'Not set'}</Txt>
+          </Card>
+        ))}
+      </View>
+
+      {data.us_regulatory_status || data.wada_status ? (
+        <Section title="Regulatory status">
+          <ListGroup>
+            {data.us_regulatory_status ? <ListRow icon={ShieldCheck} title="United States" subtitle={data.us_regulatory_status} /> : null}
+            {data.wada_status ? <ListRow icon={Ban} title="WADA (sport)" subtitle={data.wada_status} /> : null}
+            {data.admin_routes?.length ? <ListRow icon={PillIcon} title="Routes" subtitle={data.admin_routes.join(', ')} /> : null}
+          </ListGroup>
+        </Section>
+      ) : null}
+
+      <Section title="Possible side effects">
+        {data.side_effects.length ? (
+          <ListGroup>{data.side_effects.map((s) => <ListRow key={s} icon={AlertTriangle} iconTint={Palette.moderate} title={s} />)}</ListGroup>
+        ) : <Txt variant="subhead" tone="secondary">No common side effects documented.</Txt>}
+      </Section>
+
+      {data.drug_interactions.length ? (
+        <Section title="Interactions" caption="Check with a clinician if you take any of these">
+          <ListGroup>{data.drug_interactions.map((s) => <ListRow key={s} icon={PillIcon} iconTint={Palette.weak} title={s} />)}</ListGroup>
+        </Section>
+      ) : null}
+
+      {data.contraindications.length ? (
+        <Section title="Avoid if">
+          <ListGroup>{data.contraindications.map((s) => <ListRow key={s} icon={Ban} iconTint={Palette.weak} title={s} />)}</ListGroup>
+        </Section>
+      ) : null}
+    </View>
+  );
 }
 
-function SafetyItem({ label, value }: { label: string; value: string }) { return <View style={styles.safetyItem}><Text style={styles.safetyLabel}>{label}</Text><Text style={styles.safetyValue}>{value}</Text></View>; }
-
-function ResearchSignal({ tone, label, count, text }: { tone: string; label: string; count: number; text: string }) {
-  const color = tone === 'established' ? Colors.accent : tone === 'emerging' ? '#B77922' : Colors.inkTertiary;
-  return <View style={styles.signal}><View style={[styles.signalIcon, { borderColor: color }]}><View style={[styles.signalDot, { backgroundColor: color }]} /></View><View style={{ flex: 1 }}><View style={styles.signalTop}><Text style={[styles.signalLabel, { color }]}>{label}</Text>{count ? <Text style={styles.signalCount}>{count} studies</Text> : null}</View><Text style={styles.signalText}>{text}</Text></View></View>;
-}
-
-function StructureImage({ uri, size }: { uri: string | null; size: number }) {
-  if (!uri) return <Molecule large={size > 60} />;
-  return <Image source={{ uri }} style={{ width: size, height: size }} contentFit="contain" />;
-}
-
-function Molecule({ large = false }: { large?: boolean }) {
-  const size = large ? 104 : 48;
-  return <Svg width={size} height={size} viewBox="0 0 60 60" fill="none" stroke={Colors.accent} strokeWidth={1.2}><Circle cx={13} cy={18} r={5} /><Circle cx={43} cy={14} r={5} /><Circle cx={31} cy={43} r={5} /><Path d="M18 18l20-3M16 22l12 17M40 19l-7 19" /><Path d="M10 12l4-7M47 10l5-6M34 48l4 7" /></Svg>;
+function Molecule() {
+  return (
+    <Svg width={40} height={40} viewBox="0 0 60 60" fill="none" stroke={Palette.accent} strokeWidth={2}>
+      <Circle cx={13} cy={18} r={5} /><Circle cx={43} cy={14} r={5} /><Circle cx={31} cy={43} r={5} />
+      <Path d="M18 18l20-3M16 22l12 17M40 19l-7 19" />
+    </Svg>
+  );
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' }, empty: { fontFamily: Fonts.serif, fontSize: 20, color: Colors.inkSecondary, textAlign: 'center', marginTop: 80 },
-  lead: { flexDirection: 'row', gap: 14, alignItems: 'center', marginTop: 4, marginBottom: 18 }, icon: { width: 62, height: 62, borderRadius: 31, backgroundColor: '#E1E9E2', alignItems: 'center', justifyContent: 'center' }, category: { fontFamily: Fonts.sansSemiBold, textTransform: 'uppercase', letterSpacing: 1, color: Colors.inkSecondary, fontSize: 8, marginBottom: 3 }, title: { fontFamily: Fonts.serif, color: Colors.ink, fontSize: 31, lineHeight: 32 },
-  tabs: { flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.borderHairline }, tab: { flex: 1, alignItems: 'center', paddingVertical: 10, marginBottom: -1 }, tabActive: { borderBottomWidth: 2, borderBottomColor: Colors.accent }, tabText: { fontFamily: Fonts.sansMedium, fontSize: 9, color: Colors.inkSecondary }, tabTextActive: { color: Colors.accent },
-  spectrumCard: { marginTop: 18, backgroundColor: Colors.surfaceCard, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, padding: 15 }, spectrumTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, spectrumLabel: { fontFamily: Fonts.serifMedium, fontSize: 17, color: Colors.ink }, gradientLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 }, gradientText: { fontFamily: Fonts.sans, fontSize: 7.5, color: Colors.inkSecondary },
-  summaryCard: { marginTop: 14, padding: 15, borderRadius: Radius.md, backgroundColor: Colors.surfaceCard, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline }, cardKicker: { fontFamily: Fonts.sansSemiBold, fontSize: 8, textTransform: 'uppercase', letterSpacing: 1, color: Colors.inkSecondary, marginBottom: 7 }, summary: { fontFamily: Fonts.serif, color: Colors.ink, fontSize: 17, lineHeight: 23 }, sectionTitle: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 22, marginTop: 23, marginBottom: 7 },
-  signal: { flexDirection: 'row', gap: 12, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.borderHairline }, signalIcon: { width: 30, height: 30, borderRadius: 15, borderWidth: 1, alignItems: 'center', justifyContent: 'center' }, signalDot: { width: 8, height: 8, borderRadius: 4 }, signalTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }, signalLabel: { fontFamily: Fonts.sansSemiBold, textTransform: 'uppercase', letterSpacing: .8, fontSize: 8.5 }, signalCount: { fontFamily: Fonts.sans, color: Colors.inkSecondary, fontSize: 7.5 }, signalText: { fontFamily: Fonts.sans, color: Colors.inkSecondary, fontSize: 10, lineHeight: 15 },
-  researchButton: { height: 47, marginTop: 22, borderRadius: Radius.pill, backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center' }, researchButtonText: { fontFamily: Fonts.sansMedium, fontSize: 10, color: Colors.accentInk }, disclaimer: { fontFamily: Fonts.sans, color: Colors.inkTertiary, fontSize: 7.5, lineHeight: 11, textAlign: 'center', marginTop: 12, paddingHorizontal: 30 },
-  study: { backgroundColor: Colors.surfaceCard, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, borderRadius: Radius.md, padding: 14, marginBottom: 9 }, studyTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 7 }, studyType: { fontFamily: Fonts.sansSemiBold, textTransform: 'uppercase', color: Colors.inkSecondary, fontSize: 7.5 }, studyYear: { fontFamily: Fonts.sans, color: Colors.inkSecondary, fontSize: 8 }, studyFinding: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 16, lineHeight: 20, marginBottom: 10 },
-  diagram: { alignItems: 'center', paddingVertical: 24 }, diagramRule: { width: 1, height: 25, backgroundColor: Colors.borderHairline }, diagramLabel: { fontFamily: Fonts.sansSemiBold, fontSize: 8, color: Colors.inkSecondary, textTransform: 'uppercase', letterSpacing: .8, marginTop: 5 }, domainRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.borderHairline }, domainName: { fontFamily: Fonts.sansMedium, fontSize: 10.5, color: Colors.ink },
-  safetyGrid: { flexDirection: 'row', gap: 8, marginBottom: 22 }, safetyItem: { flex: 1, minHeight: 85, borderRadius: Radius.md, backgroundColor: Colors.surfaceCard, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, padding: 10 }, safetyLabel: { fontFamily: Fonts.sansSemiBold, fontSize: 7.5, color: Colors.inkSecondary, textTransform: 'uppercase', letterSpacing: .6 }, safetyValue: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 15, marginTop: 8 }, bullet: { fontFamily: Fonts.sans, color: Colors.inkSecondary, fontSize: 10.5, lineHeight: 16, marginBottom: 5 },
+  structure: { width: 76, height: 76, borderRadius: 38, backgroundColor: Palette.surface, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: Palette.hairline },
+  connector: { alignItems: 'center', height: 20, justifyContent: 'center', zIndex: 2 },
+  connectorDot: { width: 30, height: 30, borderRadius: 15, backgroundColor: Palette.accent, alignItems: 'center', justifyContent: 'center', marginVertical: -8, borderWidth: 3, borderColor: Palette.canvas },
+  mechImage: { height: 220, borderRadius: Radius.xl, borderCurve: 'continuous', overflow: 'hidden', backgroundColor: Palette.sunken, marginBottom: 12 },
 });

@@ -1,166 +1,281 @@
-import React, { useCallback, useState } from 'react';
-import { ImageBackground, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import Svg, { Circle, Path } from 'react-native-svg';
-import { Colors, Fonts, Radius } from '@/constants/theme';
-import { useAppState } from '@/context/app-state';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { ArrowUpRight, Moon, ScanLine, Search, Sparkles, Sun, Sunrise, Sunset } from 'lucide-react-native';
+import { Layout, Palette, Radius } from '@/constants/theme';
+import { greeting, Imagery, todayHero } from '@/constants/imagery';
+import { useAppState, type Product } from '@/context/app-state';
 import { useAuth } from '@/context/auth-context';
 import { api, DailyScoreResponse, ScanHistoryItem } from '@/services/api';
-import { BrandMark, EloryScreen, FactorBar, ProductThumb, ScoreRing } from '@/components/elory';
+import { gradeToScore, scoreQualifier } from '@/utils/grade';
+import {
+  Button, Card, ContributorBar, IconButton, PressableScale, ProductImage, ScoreBadge,
+  ScoreGauge, Screen, Section, Skeleton, Txt,
+} from '@/components/ui';
 
-const hero = require('@/assets/images/elory-architecture-hero.png');
+const HERO_H = 380;
 
-function Header({ name }: { name?: string }) {
+export default function TodayScreen() {
+  const { stack } = useAppState();
+  const { user } = useAuth();
+  const [score, setScore] = useState<DailyScoreResponse | null>(null);
+  const [scoreLoading, setScoreLoading] = useState(true);
+  const [recent, setRecent] = useState<ScanHistoryItem[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const firstName = user?.name?.trim().split(' ')[0];
+
+  const load = useCallback(async () => {
+    const [s, r] = await Promise.allSettled([
+      stack.length ? api.getDailyScore() : Promise.resolve(null),
+      api.getScanHistory({ limit: 8 }),
+    ]);
+    setScore(s.status === 'fulfilled' ? s.value : null);
+    setRecent(r.status === 'fulfilled' ? r.value.items : []);
+    setScoreLoading(false);
+  }, [stack.length]);
+
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const refresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
+  const hasStack = stack.length > 0;
+
   return (
-    <View style={styles.header}>
-      <View style={styles.avatar}><Text style={styles.avatarText}>{name?.slice(0, 1).toUpperCase() || 'E'}</Text></View>
-      <BrandMark compact />
-      <View style={styles.headerActions}>
-        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={Colors.ink} strokeWidth={1.6}>
-          <Path d="M18.8 4.3a6.5 6.5 0 00-13.6 0c-1.2 1.2-1.2 5.2 0 6.5v2.2a1 1 0 001 1h2v1a1 1 0 001 1h6a1 1 0 001-1v-1h2a1 1 0 001-1v-2.2c1.2-1.3 1.2-5.3 0-6.5z" />
-          <Path d="M9 20h6" strokeLinecap="round" />
-        </Svg>
-        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={Colors.ink} strokeWidth={1.6}>
-          <Path d="M3 18h2v-8H3v8M10.5 18h2v-13h-2v13M18 18h2V6h-2v12" strokeLinecap="round" strokeLinejoin="round" />
-        </Svg>
+    <Screen tabbed hero={<Hero name={firstName} />} refreshing={refreshing} onRefresh={refresh}>
+      <View style={{ marginTop: -150 }}>
+        {hasStack ? <ScoreCard score={score} loading={scoreLoading} /> : <WelcomeCard />}
+      </View>
+
+      {hasStack ? <Protocol stack={stack} /> : <HowItWorks />}
+
+      {recent.length > 0 ? (
+        <Section title="Recently scanned" action="History" onAction={() => router.push('/(tabs)/history' as never)}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
+            {recent.map((item, i) => <RecentCard key={item.id} item={item} index={i} />)}
+          </ScrollView>
+        </Section>
+      ) : null}
+
+      <Section title="From the Journal" action="All stories" onAction={() => router.push('/(tabs)/journal' as never)}>
+        <JournalFeature />
+      </Section>
+    </Screen>
+  );
+}
+
+// ─── Hero ─────────────────────────────────────────────────────────────────────
+
+function Hero({ name }: { name?: string }) {
+  const insets = useSafeAreaInsets();
+  const date = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  return (
+    <View style={{ height: HERO_H + insets.top }}>
+      {/* Extends above the fold so pull-to-refresh never reveals a seam. */}
+      <View style={{ position: 'absolute', top: -600, left: 0, right: 0, height: 600, backgroundColor: '#EDE6DA' }} />
+      <Image source={todayHero()} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="left center" transition={300} />
+      <LinearGradient
+        colors={['rgba(243,240,233,0.35)', 'rgba(243,240,233,0)', 'rgba(243,240,233,0.2)', Palette.canvas]}
+        locations={[0, 0.3, 0.7, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={{ paddingTop: insets.top + 8, paddingHorizontal: Layout.gutter }}>
+        <View style={styles.heroTop}>
+          <PressableScale onPress={() => router.push('/(tabs)/profile' as never)} accessibilityLabel="Your profile" style={styles.avatar}>
+            <Txt variant="headline" tone="accent">{(name ?? 'E').slice(0, 1).toUpperCase()}</Txt>
+          </PressableScale>
+          <IconButton icon={Sparkles} label="Ask Elory" variant="glass" onPress={() => router.push('/(premium)/ask-elory' as never)} />
+        </View>
+        <Animated.View entering={FadeInDown.duration(600).delay(80)} style={{ marginTop: 28 }}>
+          <Txt variant="overline" tone="secondary">{date}</Txt>
+          <Txt variant="display" style={{ marginTop: 8, maxWidth: 280 }}>
+            {greeting()}{name ? `,\n${name}` : ''}
+          </Txt>
+        </Animated.View>
       </View>
     </View>
   );
 }
 
-function ReturningHome({ userName }: { userName: string }) {
-  const [score, setScore] = useState<DailyScoreResponse | null>(null);
-  useFocusEffect(useCallback(() => {
-    let alive = true;
-    api.getDailyScore().then((value) => alive && setScore(value)).catch(() => {});
-    return () => { alive = false; };
-  }, []));
+// ─── Score ────────────────────────────────────────────────────────────────────
 
-  const overall = score?.overall ?? 82;
-  const categories = score?.categories?.length ? score.categories : [
-    { key: 'stack', label: 'Supplement stack', value: 86 },
-    { key: 'nutrition', label: 'Nutrition quality', value: 79 },
-    { key: 'evidence', label: 'Evidence strength', value: 83 },
+function headline(score: number | null) {
+  if (score == null) return 'Your stack at a glance';
+  if (score >= 85) return 'Your stack is in excellent balance';
+  if (score >= 70) return 'Your stack is working well';
+  if (score >= 45) return 'A few changes would help';
+  return 'Your stack needs attention';
+}
+
+function ScoreCard({ score, loading }: { score: DailyScoreResponse | null; loading: boolean }) {
+  const value = score?.overall ?? null;
+  const weakest = score?.categories?.length ? [...score.categories].sort((a, b) => a.value - b.value)[0] : null;
+  return (
+    <Animated.View entering={FadeInDown.duration(700).delay(150)}>
+      <Card padding={22} style={{ alignItems: 'stretch' }}>
+        <View style={{ alignItems: 'center', marginTop: 4 }}>
+          {loading ? (
+            <View style={{ height: 200, justifyContent: 'center' }}><Skeleton width={180} height={120} radius={60} /></View>
+          ) : (
+            <ScoreGauge score={value} size={236} label="Stack score" qualifier={score?.qualifier ?? (value != null ? scoreQualifier(value) : 'Unavailable')} />
+          )}
+        </View>
+        <Txt variant="title1" align="center" style={{ marginTop: -8 }}>{headline(value)}</Txt>
+        <Txt variant="subhead" tone="secondary" align="center" style={{ marginTop: 8, paddingHorizontal: 8 }}>
+          {value == null
+            ? 'We couldn’t calculate today’s score. Pull down to try again.'
+            : weakest && weakest.value < 70
+              ? `${weakest.label} is holding your score back. Tap it below to see why.`
+              : 'Built from product quality, evidence strength and your health profile.'}
+        </Txt>
+
+        {score?.categories?.length ? (
+          <View style={{ marginTop: 18, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Palette.hairline, paddingTop: 6 }}>
+            {score.categories.slice(0, 4).map((c, i) => (
+              <ContributorBar key={c.key} label={c.label} value={c.value} valueLabel={`${Math.round(c.value)}`} delay={250 + i * 90} onPress={() => router.push('/domains' as never)} />
+            ))}
+          </View>
+        ) : null}
+
+        <PressableScale style={styles.askPill} onPress={() => router.push('/(premium)/ask-elory' as never)} accessibilityLabel="Ask Elory about your stack">
+          <Sparkles size={17} color={Palette.accent} strokeWidth={2} />
+          <Txt variant="subhead" tone="secondary" style={{ flex: 1 }}>Ask Elory about your stack…</Txt>
+          <ArrowUpRight size={18} color={Palette.ink3} />
+        </PressableScale>
+      </Card>
+    </Animated.View>
+  );
+}
+
+// ─── First run ────────────────────────────────────────────────────────────────
+
+function WelcomeCard() {
+  return (
+    <Animated.View entering={FadeInDown.duration(700).delay(150)}>
+      <Card padding={24}>
+        <Txt variant="overline" tone="accent">Start here</Txt>
+        <Txt variant="title1" style={{ marginTop: 10 }}>Know what’s really{'\n'}in what you take.</Txt>
+        <Txt variant="subhead" tone="secondary" style={{ marginTop: 10 }}>
+          Scan any supplement, skincare or food. Elory checks every ingredient against published research — and tells you what the evidence actually supports.
+        </Txt>
+        <View style={{ gap: 10, marginTop: 22 }}>
+          <Button label="Scan your first product" icon={<ScanLine size={19} color={Palette.onAccent} />} onPress={() => router.push('/(tabs)/scan' as never)} />
+          <Button label="Search instead" variant="secondary" icon={<Search size={18} color={Palette.ink} />} onPress={() => router.push('/(tabs)/explore' as never)} />
+        </View>
+      </Card>
+    </Animated.View>
+  );
+}
+
+function HowItWorks() {
+  const steps = [
+    { n: '1', title: 'Scan or search', body: 'Barcode, label, or name — we identify the exact formulation.' },
+    { n: '2', title: 'See the evidence', body: 'Every ingredient graded on what studies show, not marketing.' },
+    { n: '3', title: 'Build your stack', body: 'Add what you use and Elory scores how it all works together.' },
   ];
-
   return (
-    <EloryScreen header={<Header name={userName} />}>
-      <Text style={styles.greeting}>Good morning, {userName}</Text>
-      <Text style={styles.intro}>Here is your longevity overview for today.</Text>
-      <View style={styles.scoreCard}>
-        <Text style={styles.cardEyebrow}>Daily Longevity Score</Text>
-        <View style={styles.scoreLead}>
-          <ScoreRing score={overall} qualifier={score?.qualifier ?? 'Excellent'} size={118} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.scoreStatement}>{overall >= 70 ? 'Your stack is in strong balance.' : 'A few small changes can help.'}</Text>
-            <Text style={styles.bodyMuted}>Built from product quality, evidence strength and your health profile.</Text>
+    <Section title="How Elory works">
+      <Card padding={6}>
+        {steps.map((s, i) => (
+          <View key={s.n} style={[styles.step, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Palette.hairline }]}>
+            <View style={styles.stepNum}><Txt variant="title2" tone="accent">{s.n}</Txt></View>
+            <View style={{ flex: 1 }}>
+              <Txt variant="headline">{s.title}</Txt>
+              <Txt variant="footnote" tone="secondary" style={{ marginTop: 3 }}>{s.body}</Txt>
+            </View>
           </View>
-        </View>
-        {categories.slice(0, 4).map((category) => <FactorBar key={category.key} label={category.label} value={category.value} />)}
-      </View>
-      <Pressable style={styles.journalCard} onPress={() => router.push('/newsletter/creatine' as never)}>
-        <ImageBackground source={hero} style={styles.journalImage} imageStyle={{ borderRadius: Radius.lg }}>
-          <View style={styles.journalOverlay} />
-          <View style={styles.journalCopy}>
-            <Text style={styles.journalKicker}>From the Elory Journal</Text>
-            <Text style={styles.journalTitle}>Omega-3s and healthy aging</Text>
-            <Text style={styles.journalLink}>Read the latest research  →</Text>
+        ))}
+      </Card>
+    </Section>
+  );
+}
+
+// ─── Protocol timeline ────────────────────────────────────────────────────────
+
+const SLOTS: { key: NonNullable<Product['timeOfDay']> | 'anytime'; label: string; Icon: typeof Sun }[] = [
+  { key: 'morning', label: 'Morning', Icon: Sunrise },
+  { key: 'afternoon', label: 'Afternoon', Icon: Sun },
+  { key: 'evening', label: 'Evening', Icon: Sunset },
+  { key: 'night', label: 'Night', Icon: Moon },
+  { key: 'anytime', label: 'Anytime', Icon: Sun },
+];
+
+function Protocol({ stack }: { stack: Product[] }) {
+  const groups = useMemo(() => SLOTS.map((slot) => ({
+    ...slot,
+    items: stack.filter((p) => (p.timeOfDay ?? 'anytime') === slot.key),
+  })).filter((g) => g.items.length), [stack]);
+
+  return (
+    <Section title="Today’s protocol" caption={`${stack.length} product${stack.length === 1 ? '' : 's'} in your stack`} action="Edit" onAction={() => router.push('/(tabs)/stack' as never)}>
+      <Card padding={18}>
+        {groups.map((g, gi) => (
+          <View key={g.key} style={{ flexDirection: 'row', gap: 14 }}>
+            <View style={{ alignItems: 'center', width: 28 }}>
+              <View style={styles.slotIcon}><g.Icon size={15} color={Palette.accent} strokeWidth={2} /></View>
+              {gi < groups.length - 1 ? <View style={styles.rail} /> : null}
+            </View>
+            <View style={{ flex: 1, paddingBottom: gi < groups.length - 1 ? 18 : 0 }}>
+              <Txt variant="overline" tone="secondary" style={{ marginTop: 7, marginBottom: 8 }}>{g.label}</Txt>
+              {g.items.map((p) => (
+                <PressableScale key={p.id} onPress={() => router.push(`/product/${p.id}` as never)} style={styles.protoRow} accessibilityLabel={p.name}>
+                  <ProductImage uri={p.imageUri} category={p.category} size={40} />
+                  <View style={{ flex: 1 }}>
+                    <Txt variant="subheadStrong" numberOfLines={1}>{p.name}</Txt>
+                    <Txt variant="footnote" tone="secondary" numberOfLines={1}>{[p.brand, p.quantity].filter(Boolean).join(' · ')}</Txt>
+                  </View>
+                  <ScoreBadge score={gradeToScore(p.grade)} size={34} />
+                </PressableScale>
+              ))}
+            </View>
           </View>
-        </ImageBackground>
-      </Pressable>
-      <Text style={styles.sectionTitle}>Quick actions</Text>
-      <View style={styles.actions}>
-        <QuickAction icon="scan" label="Scan product" onPress={() => router.push('/(tabs)/scan' as never)} />
-        <QuickAction icon="search" label="Search" onPress={() => router.push('/(tabs)/explore' as never)} />
-        <QuickAction icon="plus" label="Add to stack" onPress={() => router.push('/(tabs)/stack' as never)} />
-      </View>
-    </EloryScreen>
+        ))}
+      </Card>
+    </Section>
   );
 }
 
-function QuickAction({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
-  return (
-    <Pressable style={styles.action} onPress={onPress}>
-      <Svg width={23} height={23} viewBox="0 0 24 24" fill="none" stroke={Colors.accent} strokeWidth={1.4}>
-        {icon === 'search' ? <><Circle cx={10.5} cy={10.5} r={6.5} /><Path d="M16 16l4 4" /></> : icon === 'plus' ? <><Circle cx={12} cy={12} r={8.5} /><Path d="M12 8v8M8 12h8" /></> : <><Path d="M5 8V5h3M16 5h3v3M19 16v3h-3M8 19H5v-3" /><Path d="M4 12h16" /></>}
-      </Svg>
-      <Text style={styles.actionText}>{label}</Text>
-    </Pressable>
-  );
-}
+// ─── Rails ────────────────────────────────────────────────────────────────────
 
-function NewUserHome() {
-  const [query, setQuery] = useState('');
-  const [recent, setRecent] = useState<ScanHistoryItem[]>([]);
-  useFocusEffect(useCallback(() => {
-    let alive = true;
-    api.getScanHistory({ limit: 3 }).then((value) => alive && setRecent(value.items)).catch(() => {});
-    return () => { alive = false; };
-  }, []));
-  const search = () => query.trim() && router.push({ pathname: '/(tabs)/explore', params: { q: query.trim() } } as never);
-  const placeholders = [
-    { id: 'demo-1', product_id: 'demo-1', product_name: 'Daily face serum', product_category: 'cosmetic', scanned_at: new Date().toISOString() },
-    { id: 'demo-2', product_id: 'demo-2', product_name: 'Magnesium glycinate', product_category: 'supplement', scanned_at: new Date().toISOString() },
-  ] as ScanHistoryItem[];
-
+function RecentCard({ item, index }: { item: ScanHistoryItem; index: number }) {
   return (
-    <EloryScreen header={<Header />} contentStyle={{ paddingTop: 0 }}>
-      <ImageBackground source={hero} style={styles.hero} imageStyle={styles.heroImage}>
-        <View style={styles.heroWash} />
-        <View style={styles.heroCopy}>
-          <Text style={styles.heroTitle}>Understand.{`\n`}Don’t guess.</Text>
-          <Text style={styles.heroDek}>Scan any product. See the science behind every ingredient.</Text>
+    <Animated.View entering={FadeInDown.duration(500).delay(80 * index)}>
+      <Card padding={14} style={{ width: 156 }} onPress={() => router.push(`/product/${item.product_id}` as never)} accessibilityLabel={item.product_name}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <ProductImage uri={item.product_image_url} category={item.product_category} size={56} />
+          <ScoreBadge score={gradeToScore(item.product_grade)} size={32} />
         </View>
-      </ImageBackground>
-      <View style={styles.searchBox}>
-        <Text style={styles.searchGlyph}>⌕</Text>
-        <TextInput value={query} onChangeText={setQuery} onSubmitEditing={search} placeholder="Search products or ingredients" placeholderTextColor={Colors.inkTertiary} style={styles.searchInput} />
-      </View>
-      <Pressable style={styles.scanCard} onPress={() => router.push('/(tabs)/scan' as never)}>
-        <View style={styles.scanIcon}><Text style={{ color: '#fff', fontSize: 19 }}>⌗</Text></View>
-        <View style={{ flex: 1 }}><Text style={styles.scanTitle}>Scan a product</Text><Text style={styles.bodyMuted}>Point your camera at any barcode or label.</Text></View>
-        <Text style={styles.arrow}>›</Text>
-      </Pressable>
-      <View style={styles.sectionRow}><Text style={styles.sectionTitle}>Recently scanned</Text><Text style={styles.link}>View all</Text></View>
-      {(recent.length ? recent : placeholders).map((item) => (
-        <Pressable key={item.id} style={styles.recentRow} onPress={() => !item.id.startsWith('demo') && router.push(`/product/${item.product_id}` as never)}>
-          <ProductThumb letter={item.product_name.slice(0, 1)} imageUri={item.product_image_url} size={44} />
-          <View style={{ flex: 1 }}><Text style={styles.recentName}>{item.product_name}</Text><Text style={styles.recentMeta}>{item.product_category} · Recently scanned</Text></View>
-          <View style={styles.miniScore}><Text style={styles.miniScoreText}>{item.id === 'demo-2' ? '89' : '84'}</Text></View>
-        </Pressable>
-      ))}
-    </EloryScreen>
+        <Txt variant="caption" tone="secondary" numberOfLines={1} style={{ marginTop: 14 }}>{item.product_brand || item.product_category}</Txt>
+        <Txt variant="subheadStrong" numberOfLines={2} style={{ marginTop: 2, minHeight: 40 }}>{item.product_name}</Txt>
+      </Card>
+    </Animated.View>
   );
 }
 
-export default function HomeScreen() {
-  const { stack } = useAppState();
-  const { user } = useAuth();
-  const firstName = user?.name?.split(' ')[0] ?? 'Salung';
-  return stack.length ? <ReturningHome userName={firstName} /> : <NewUserHome />;
+function JournalFeature() {
+  return (
+    <PressableScale onPress={() => router.push('/newsletter/creatine' as never)} style={styles.journal} accessibilityLabel="Read: Creatine beyond strength">
+      <Image source={Imagery.journalCover} style={StyleSheet.absoluteFill} contentFit="cover" />
+      <LinearGradient colors={['rgba(10,29,28,0)', 'rgba(10,29,28,0.78)']} locations={[0.3, 1]} style={StyleSheet.absoluteFill} />
+      <View style={{ position: 'absolute', left: 20, right: 20, bottom: 20 }}>
+        <Txt variant="overline" tone="inverse2">Research brief · 7 min</Txt>
+        <Txt variant="title1" tone="inverse" style={{ marginTop: 8 }}>Creatine beyond strength</Txt>
+        <Txt variant="footnote" tone="inverse2" style={{ marginTop: 6 }}>What the newest trials say about memory, mood and ageing.</Txt>
+      </View>
+    </PressableScale>
+  );
 }
 
 const styles = StyleSheet.create({
-  header: { height: 54, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#D8C4A7', alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 16 },
-  headerActions: { height: 32, borderRadius: 16, borderWidth: 1, borderColor: Colors.borderHairline, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 10 },
-  greeting: { fontFamily: Fonts.serif, color: Colors.ink, fontSize: 31, lineHeight: 34, marginTop: 4 },
-  intro: { fontFamily: Fonts.sans, fontSize: 11, color: Colors.inkSecondary, marginTop: 4, marginBottom: 22 },
-  scoreCard: { backgroundColor: Colors.surfaceCard, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, padding: 17, marginBottom: 20 },
-  cardEyebrow: { fontFamily: Fonts.sansSemiBold, fontSize: 9, letterSpacing: 1.15, textTransform: 'uppercase', color: Colors.inkSecondary, marginBottom: 14 },
-  scoreLead: { flexDirection: 'row', alignItems: 'center', gap: 18, marginBottom: 16 },
-  scoreStatement: { fontFamily: Fonts.serifItalic, fontSize: 18, lineHeight: 21, color: Colors.ink, marginBottom: 7 },
-  bodyMuted: { fontFamily: Fonts.sans, color: Colors.inkSecondary, fontSize: 10.5, lineHeight: 15 },
-  journalCard: { marginBottom: 24 }, journalImage: { height: 174, justifyContent: 'flex-end' },
-  journalOverlay: { ...StyleSheet.absoluteFillObject, borderRadius: Radius.lg, backgroundColor: 'rgba(11,42,40,.25)' }, journalCopy: { padding: 17 },
-  journalKicker: { fontFamily: Fonts.sansSemiBold, fontSize: 8.5, textTransform: 'uppercase', letterSpacing: 1.1, color: '#fff', marginBottom: 6 },
-  journalTitle: { fontFamily: Fonts.serif, color: '#fff', fontSize: 23 }, journalLink: { fontFamily: Fonts.sansMedium, color: 'rgba(255,255,255,.86)', fontSize: 9.5, marginTop: 6 },
-  sectionTitle: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 21 },
-  actions: { flexDirection: 'row', gap: 8, marginTop: 10 }, action: { flex: 1, height: 84, borderRadius: Radius.md, backgroundColor: Colors.surfaceCard, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, alignItems: 'center', justifyContent: 'center', gap: 8 }, actionText: { fontFamily: Fonts.sansMedium, fontSize: 9.5, color: Colors.ink },
-  hero: { height: 344, marginHorizontal: -20, marginBottom: -19, justifyContent: 'flex-start' }, heroImage: { resizeMode: 'cover' }, heroWash: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(247,244,238,.08)' }, heroCopy: { paddingHorizontal: 20, paddingTop: 32, width: '72%' },
-  heroTitle: { fontFamily: Fonts.serif, color: Colors.ink, fontSize: 39, lineHeight: 38 }, heroDek: { fontFamily: Fonts.sans, fontSize: 11, lineHeight: 16, color: Colors.inkSecondary, marginTop: 9, maxWidth: 220 },
-  searchBox: { height: 51, backgroundColor: Colors.surfaceCard, borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 17, gap: 9, marginBottom: 12 }, searchGlyph: { fontSize: 21, color: Colors.inkSecondary }, searchInput: { flex: 1, fontFamily: Fonts.sans, fontSize: 12, color: Colors.ink },
-  scanCard: { backgroundColor: Colors.surfaceCard, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.borderHairline, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, marginBottom: 24 }, scanIcon: { width: 43, height: 43, borderRadius: 22, backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center' }, scanTitle: { fontFamily: Fonts.serifMedium, fontSize: 16, color: Colors.ink, marginBottom: 2 }, arrow: { color: Colors.inkSecondary, fontSize: 24 },
-  sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 7 }, link: { fontFamily: Fonts.sansMedium, fontSize: 9.5, color: Colors.accent }, recentRow: { minHeight: 65, flexDirection: 'row', alignItems: 'center', gap: 11, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.borderHairline }, recentName: { fontFamily: Fonts.sansMedium, fontSize: 12, color: Colors.ink }, recentMeta: { fontFamily: Fonts.sans, fontSize: 9.5, color: Colors.inkSecondary, marginTop: 3 }, miniScore: { width: 35, height: 35, borderRadius: 18, borderWidth: 2, borderColor: Colors.sage, alignItems: 'center', justifyContent: 'center' }, miniScoreText: { fontFamily: Fonts.serifMedium, color: Colors.ink, fontSize: 13 },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(252,251,248,0.82)', alignItems: 'center', justifyContent: 'center' },
+  askPill: { marginTop: 18, height: 50, borderRadius: 25, backgroundColor: 'rgba(14,31,30,0.05)', flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16 },
+  step: { flexDirection: 'row', gap: 14, alignItems: 'center', padding: 14 },
+  stepNum: { width: 40, height: 40, borderRadius: 20, backgroundColor: Palette.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  slotIcon: { width: 28, height: 28, borderRadius: 14, backgroundColor: Palette.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  rail: { flex: 1, width: StyleSheet.hairlineWidth * 2, backgroundColor: Palette.hairline, marginTop: 4 },
+  protoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 7 },
+  journal: { height: 280, borderRadius: Radius.xl, borderCurve: 'continuous', overflow: 'hidden', backgroundColor: Palette.sunken },
 });

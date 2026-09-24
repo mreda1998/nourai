@@ -11,16 +11,18 @@ import { View, ActivityIndicator } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFonts } from 'expo-font';
 import {
-  CormorantGaramond_400Regular,
-  CormorantGaramond_500Medium,
-  CormorantGaramond_400Regular_Italic,
-} from '@expo-google-fonts/cormorant-garamond';
+  InstrumentSerif_400Regular,
+  InstrumentSerif_400Regular_Italic,
+} from '@expo-google-fonts/instrument-serif';
 import {
-  DMSans_300Light,
-  DMSans_400Regular,
-  DMSans_500Medium,
-  DMSans_600SemiBold,
-} from '@expo-google-fonts/dm-sans';
+  Inter_300Light,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+import { Palette } from '@/constants/theme';
 import * as SplashScreen from 'expo-splash-screen';
 
 import { AppStateProvider, useAppState } from '@/context/app-state';
@@ -77,8 +79,8 @@ function RootLayoutNav() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 justify-center items-center bg-bone">
-        <ActivityIndicator size="large" color="#1C1C1C" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Palette.canvas }}>
+        <ActivityIndicator size="large" color={Palette.accent} />
       </View>
     );
   }
@@ -87,7 +89,7 @@ function RootLayoutNav() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: '#E9E6DF' },
+        contentStyle: { backgroundColor: Palette.canvas },
         animation: 'slide_from_right',
       }}
     >
@@ -281,13 +283,13 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    CormorantGaramond_400Regular,
-    CormorantGaramond_500Medium,
-    CormorantGaramond_400Regular_Italic,
-    DMSans_300Light,
-    DMSans_400Regular,
-    DMSans_500Medium,
-    DMSans_600SemiBold,
+    InstrumentSerif_400Regular,
+    InstrumentSerif_400Regular_Italic,
+    Inter_300Light,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
   });
 
   const onLayoutRootView = useCallback(async () => {
@@ -309,8 +311,10 @@ export default function RootLayout() {
       <AuthProvider>
         <PurchasesProvider>
           <AppStateProvider>
-            <StatusBar style="dark" />
-            <RootLayoutNav />
+            <BottomSheetModalProvider>
+              <StatusBar style="dark" />
+              <RootLayoutNav />
+            </BottomSheetModalProvider>
           </AppStateProvider>
         </PurchasesProvider>
       </AuthProvider>
