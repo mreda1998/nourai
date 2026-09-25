@@ -62,3 +62,10 @@ def test_grid_reviewed_compound_without_route_in_a_column_is_not_reviewed_there(
     assert g.columns == ["body_composition", "sleep_recovery"]
     creatine = next(r for r in g.rows if r.compound == "Creatine")
     assert creatine.cells["sleep_recovery"]["state"] == "not_reviewed"
+
+
+def test_dose_bar_reads_a_unit_written_into_the_amount():
+    b = dose_bar(studied_low=3, studied_high=5, studied_unit="g", upper_limit=None, amount="5g", amount_unit=None)
+    assert b.amount_value == 5 and b.amount_note is None
+    b = dose_bar(studied_low=100, studied_high=400, studied_unit="mg", upper_limit=None, amount="0.2 g", amount_unit=None)
+    assert b.amount_value == 200

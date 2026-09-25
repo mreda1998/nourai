@@ -81,7 +81,7 @@ async def product_evidence(repo: PathwayRepository, product_id: uuid.UUID) -> Pr
                 upper_limit=compound.upper_limit, amount=pi.amount, amount_unit=pi.unit,
             )
             dose_bars.append(DoseBarOut(compound=compound.canonical_name, route_slug=r.slug,
-                                        outcome=claim.outcome_measure, **bar.__dict__))
+                                        outcome=claim.outcome_measure or r.title, **bar.__dict__))
 
     grid = evidence_grid(grid_input)
     return ProductEvidenceOut(

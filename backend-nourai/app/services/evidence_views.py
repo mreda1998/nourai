@@ -74,11 +74,15 @@ def dose_bar(
     if amount is None:
         bar.amount_note = "Amount on this product unknown"
         return bar
-    try:
-        value = float(str(amount).strip().split()[0].replace(",", "."))
-    except (ValueError, IndexError):
-        bar.amount_note = "Amount on this product unknown"
-        return bar
+    embedded = _first_amount(str(amount)) if not amount_unit else None
+    if embedded:  # "5g", "0.2 g" — the label put the unit inside the amount
+        value, amount_unit = embedded
+    else:
+        try:
+            value = float(str(amount).strip().split()[0].replace(",", "."))
+        except (ValueError, IndexError):
+            bar.amount_note = "Amount on this product unknown"
+            return bar
     converted = _to_unit(value, amount_unit, studied_unit)
     if converted is None:
         bar.amount_note = "Units not comparable"
