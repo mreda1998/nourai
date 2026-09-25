@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Where it acts</title>
+<style>
+  html, body { margin: 0; background: #F3F0E9; font-family: -apple-system, system-ui, sans-serif; color: #16211F; }
+  #wrap { padding: 4px 6px 26px; }
+  .attr { position: fixed; left: 0; right: 0; bottom: 0; height: 22px; line-height: 22px; font-size: 10px; color: #6f7a76; text-align: center; background: #F3F0E9; }
+</style>
+</head>
+<body>
+<!-- Sidebar hidden: the app lists the locations itself. -->
+<template id="sibSwissBioPicsStyle">
+  <style>
+    #swissbiopic { display: block !important; }
+    .terms { display: none !important; }
+    svg { width: 100% !important; height: auto !important; }
+    .subcell_present path, .subcell_present circle, .subcell_present ellipse, .subcell_present polygon,
+    .subcell_present rect, .subcell_present polyline, .subcell_present line {
+      fill: #12524F !important; fill-opacity: .45 !important; stroke: #12524F !important; }
+  </style>
+</template>
+<template id="sibSwissBioPicsSlLiItem"><li><a class="subcell_name"></a><span class="subcell_description"></span></li></template>
+<div id="wrap"><sib-swissbiopics-sl taxid="9606" sls="{{SLS}}"></sib-swissbiopics-sl></div>
+<div class="attr">{{ATTRIBUTION}}</div>
+<script type="module" src="https://www.swissbiopics.org/static/swissbiopics.js"></script>
+<script>
+  const post = (m) => window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(m));
+  const el = document.querySelector('sib-swissbiopics-sl');
+  const started = Date.now();
+  const poll = setInterval(() => {
+    const svg = el.shadowRoot && el.shadowRoot.querySelector('svg');
+    if (svg) { clearInterval(poll); post({ type: 'ready', height: document.body.scrollHeight }); }
+    else if (Date.now() - started > 15000) { clearInterval(poll); post({ type: 'error' }); }
+  }, 250);
+</script>
+</body>
+</html>

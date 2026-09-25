@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
+from app.viewers import router as viewers_router
 from app.core.config import settings
 
 
@@ -39,6 +40,7 @@ app.add_middleware(
 
 # Include API router
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(viewers_router, prefix="/viewers", include_in_schema=False)
 
 
 @app.get("/health")

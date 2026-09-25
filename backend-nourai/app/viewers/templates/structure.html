@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Structure</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdbe-molstar@3.12.0/build/pdbe-molstar-light.css">
+<style>
+  html, body { margin: 0; height: 100%; background: #F3F0E9; font-family: -apple-system, system-ui, sans-serif; }
+  #viewer { position: absolute; inset: 0 0 22px 0; }
+  .attr { position: absolute; left: 0; right: 0; bottom: 0; height: 22px; line-height: 22px; font-size: 10px; color: #6f7a76; text-align: center; }
+  .msp-plugin .msp-layout-standard { border: 0 !important; }
+</style>
+</head>
+<body>
+<div id="viewer"></div>
+<div class="attr">{{ATTRIBUTION}}</div>
+<script src="https://cdn.jsdelivr.net/npm/pdbe-molstar@3.12.0/build/pdbe-molstar-plugin.js"></script>
+<script>
+  const post = (m) => window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(m));
+  const PDB = {{PDB}}, LIGAND = {{LIGAND}};
+  try {
+    const plugin = new PDBeMolstarPlugin();
+    const options = {
+      moleculeId: PDB,
+      hideControls: true,
+      hideCanvasControls: ['expand', 'selection', 'animation', 'controlToggle', 'controlInfo'],
+      bgColor: { r: 243, g: 240, b: 233 },
+      sequencePanel: false,
+      landscape: true,
+      reactive: true,
+    };
+    if (LIGAND) options.ligandView = { label_comp_id: LIGAND };
+    plugin.render(document.getElementById('viewer'), options);
+    plugin.events.loadComplete.subscribe((ok) => post({ type: ok ? 'ready' : 'error' }));
+  } catch (e) {
+    post({ type: 'error', message: String(e) });
+  }
+  setTimeout(() => post({ type: 'timeout' }), 15000);
+</script>
+</body>
+</html>

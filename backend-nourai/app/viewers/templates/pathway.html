@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=3">
+<title>The bigger picture</title>
+<style>
+  html, body { margin: 0; background: #F3F0E9; font-family: -apple-system, system-ui, sans-serif; }
+  #art svg { width: 100%; height: auto; display: block; }
+  #art [id^="REGION-"] { transition: opacity .4s; }
+  #art.focused [id^="REGION-"]:not(.here) { opacity: .22; }
+  #art .here { filter: drop-shadow(0 0 6px rgba(18, 82, 79, .55)); }
+  .bar { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; font-size: 11px; color: #6f7a76; }
+  button { border: 0; background: #E3EEEA; color: #12524F; border-radius: 12px; padding: 4px 10px; font-size: 11px; font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="art"></div>
+<div class="bar"><span>{{ATTRIBUTION}}</span><button id="toggle" hidden>Show whole map</button></div>
+<script>
+  const post = (m) => window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(m));
+  const EHLD = {{EHLD}}, HIGHLIGHT = {{HIGHLIGHT}};
+  const svgUrl = '/viewers/image?url=' + encodeURIComponent('https://reactome.org/download/current/ehld/' + EHLD + '.svg');
+  fetch(svgUrl).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); }).then(text => {
+    const art = document.getElementById('art');
+    art.innerHTML = text;
+    const svg = art.querySelector('svg');
+    svg.removeAttribute('width'); svg.removeAttribute('height');
+    const full = svg.getAttribute('viewBox');
+    const region = HIGHLIGHT && svg.querySelector('#REGION-' + CSS.escape(HIGHLIGHT));
+    if (region) {
+      region.classList.add('here');
+      art.classList.add('focused');
+      const b = region.getBBox(), pad = Math.max(b.width, b.height) * 0.35;
+      const zoomed = [b.x - pad, b.y - pad, b.width + 2 * pad, b.height + 2 * pad].join(' ');
+      svg.setAttribute('viewBox', zoomed);
+      const toggle = document.getElementById('toggle');
+      toggle.hidden = false;
+      toggle.onclick = () => {
+        const whole = svg.getAttribute('viewBox') === zoomed;
+        svg.setAttribute('viewBox', whole ? full : zoomed);
+        toggle.textContent = whole ? 'Zoom to this pathway' : 'Show whole map';
+      };
+    }
+    post({ type: 'ready', height: document.body.scrollHeight });
+  }).catch(e => post({ type: 'error', message: String(e) }));
+</script>
+</body>
+</html>

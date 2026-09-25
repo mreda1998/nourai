@@ -31,3 +31,6 @@ build/
 # Misc
 .DS_Store
 *.log
+
+# Viewer image cache
+.cache/
