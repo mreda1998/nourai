@@ -81,12 +81,13 @@ async def run(names: list[str], top: int | None, dry_run: bool, record: Path | N
             result = build_mechanism(ingredient.canonical_name, clients, extra_pathways=extra)
             summary = (f"ChEBI {result.chebi_id or '—'} · {len(result.pathways)} pathways · "
                        f"{len(result.sl_ids)} cell locations · structure {result.structure['pdb_id'] if result.structure else '—'}")
+            if not dry_run:
+                # Persist even when nothing was found, so stale automatic assets are removed.
+                await persist_mechanism(session, ingredient, result)
             if not result.found_anything:
                 print(f"· {ingredient.canonical_name}: nothing found ({summary})")
-                continue
-            if not dry_run:
-                await persist_mechanism(session, ingredient, result)
-            print(f"{'·' if dry_run else '✓'} {ingredient.canonical_name}: {summary}")
+            else:
+                print(f"{'·' if dry_run else '✓'} {ingredient.canonical_name}: {summary}")
         if dry_run:
             await session.rollback()
             print("\n[DRY RUN — nothing written]")

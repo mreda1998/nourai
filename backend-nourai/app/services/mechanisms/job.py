@@ -22,6 +22,15 @@ from app.services.mechanisms.clients import MechanismClients
 MAX_PROTEINS = 12
 MAX_LOCATIONS = 6
 
+# Ligand codes that appear in crystal structures as crystallisation or
+# cryoprotection additives, buffers or ions — their presence says nothing
+# about biology, so they never become a "see it bind" structure.
+CRYSTALLISATION_ADDITIVES = frozenset({
+    "GOL", "EDO", "PEG", "PGE", "PG4", "1PE", "P6G", "MPD", "DMS", "ACT", "ACY", "FMT",
+    "CIT", "FLC", "TRS", "EPE", "MES", "BME", "IPA", "EOH", "MOH", "SO4", "PO4", "CL",
+    "NA", "MG", "ZN", "CA", "K", "IOD", "NO3", "IMD", "TLA", "MLI", "SIN", "BU3",
+})
+
 
 @dataclass
 class MechanismResult:
@@ -108,6 +117,8 @@ def build_mechanism(
     for chebi in result.chebi_forms:
         try:
             comp = clients.rcsb_ligand(chebi)
+            if comp in CRYSTALLISATION_ADDITIVES:
+                break
             entry = clients.rcsb_best_human_entry(comp) if comp else None
         except Exception:
             entry = None
@@ -159,6 +170,19 @@ async def persist_mechanism(session: AsyncSession, ingredient: Ingredient, resul
             asset = IngredientMechanismAsset(ingredient_id=ingredient.id, kind=kind)
             session.add(asset)
         asset.payload, asset.cached_uri, asset.attribution = payload, cached_uri, attribution
+
+    # Automatic assets the sources no longer support are removed; reviewed ones stay.
+    found = {
+        "cell_locations": bool(result.sl_ids), "pathway_illustration": bool(result.ehld),
+        "pathway_diagram": bool(result.pathways), "structure": bool(result.structure),
+    }
+    stale = (await session.execute(select(IngredientMechanismAsset).where(
+        IngredientMechanismAsset.ingredient_id == ingredient.id,
+        IngredientMechanismAsset.kind.in_([k for k, ok in found.items() if not ok]),
+        IngredientMechanismAsset.reviewed.is_(False),
+    ))).scalars().all()
+    for asset in stale:
+        await session.delete(asset)
 
     if result.sl_ids:
         await upsert("cell_locations",

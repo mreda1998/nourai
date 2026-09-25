@@ -53,3 +53,11 @@ def test_a_failing_source_is_isolated():
 def test_route_pathways_seed_compounds_without_a_molecule():
     r = build_mechanism("Psyllium Husk", recorded("magnesium"), extra_pathways=[("R-HSA-194068", "Bile acid excretion")])
     assert r.pathways == [("R-HSA-194068", "Bile acid excretion")]
+
+
+def test_crystallisation_additives_are_not_shown_as_binding():
+    c = recorded("creatine")
+    c.rcsb_ligand = lambda _chebi: "GOL"
+    c.rcsb_best_human_entry = lambda comp: ("9HDW", "Some protein with glycerol")
+    r = build_mechanism("Creatine", c)
+    assert r.structure is None
