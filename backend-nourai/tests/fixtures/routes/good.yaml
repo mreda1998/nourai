@@ -1,0 +1,41 @@
+slug: creatine-strength-training
+ingredient: Creatine
+forms: [Creatine Monohydrate]
+domain: body_composition
+title: From scoop to strength
+takeaway: >
+  With resistance training, creatine adds a small, well-measured gain in lean
+  mass and strength. Without training, the effect is unclear.
+nodes:
+  - {id: dose, role: input, label: Creatine monohydrate}
+  - {id: pcr, role: mechanism, label: Muscle phosphocreatine, chebi: "CHEBI:58092"}
+  - {id: atp, role: mechanism, label: Faster ATP regeneration, reactome: R-HSA-71288}
+  - {id: lean, role: outcome, label: Lean mass with resistance training}
+  - {id: life, role: boundary, label: Lifespan}
+links:
+  - from: dose
+    to: pcr
+    evidence_type: established_biochemistry
+    strength: strong
+  - from: pcr
+    to: atp
+    evidence_type: established_biochemistry
+    strength: strong
+  - from: atp
+    to: lean
+    evidence_type: meta_analysis
+    strength: moderate
+    claims:
+      - claim_text: Lean tissue mass rose more with creatine than placebo during resistance training.
+        population: Older adults, mean age 57–70 (22 RCTs, n=721)
+        comparator: Placebo + resistance training
+        duration: 7–52 weeks
+        dose: {low: 3, high: 5, unit: g, basis: per_day}
+        outcome_measure: Lean tissue mass
+        effect: {estimate: 1.37, ci: [0.97, 1.76], unit: kg}
+        certainty: moderate
+        citations: [{pmid: "29138605"}]
+  - from: lean
+    to: life
+    evidence_stops_here: true
+    stop_reason: No human study has measured lifespan with creatine.
