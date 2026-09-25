@@ -672,12 +672,14 @@ class APIService {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        throw new Error(error.detail || `HTTP ${response.status}`);
+        throw Object.assign(new Error(error.detail || `HTTP ${response.status}`), { status: response.status });
       }
 
       return response.json();
     } catch (error) {
-      console.error(`[API] Error fetching ${endpoint}:`, error);
+      // 401s are expected for guests hitting account endpoints — don't raise a dev error toast.
+      const log = (error as { status?: number }).status === 401 ? console.log : console.error;
+      log(`[API] Error fetching ${endpoint}:`, error);
       throw error;
     }
   }

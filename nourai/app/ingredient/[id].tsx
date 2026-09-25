@@ -41,6 +41,8 @@ export default function IngredientScreen() {
   }
 
   const strength = evidenceStrength(data.evidence_level);
+  // The API can list a product twice when the ingredient appears twice on its label.
+  const foundIn = data.found_in.filter((p, i, all) => all.findIndex((q) => q.id === p.id) === i);
   const high = data.evidence.filter((e) => e.confidence === 'high').length;
   const moderate = data.evidence.filter((e) => e.confidence === 'moderate').length;
   const low = data.evidence.filter((e) => e.confidence === 'low').length;
@@ -136,10 +138,10 @@ export default function IngredientScreen() {
       {tab === 'safety' ? <Safety data={data} /> : null}
 
       {/* Found in */}
-      {data.found_in.length ? (
-        <Section title="Found in" caption={`${data.found_in.length} product${data.found_in.length === 1 ? '' : 's'} in our library`}>
+      {foundIn.length ? (
+        <Section title="Found in" caption={`${foundIn.length} product${foundIn.length === 1 ? '' : 's'} in our library`}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
-            {data.found_in.slice(0, 12).map((p) => (
+            {foundIn.slice(0, 12).map((p) => (
               <Card key={p.id} padding={14} style={{ width: 148 }} onPress={() => router.push(`/product/${p.id}` as never)} accessibilityLabel={p.name}>
                 <ProductImage uri={p.image_url} category={p.category} size={52} />
                 <Txt variant="caption" tone="secondary" numberOfLines={1} style={{ marginTop: 12 }}>{p.brand || p.category}</Txt>
