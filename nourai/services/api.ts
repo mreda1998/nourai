@@ -6,6 +6,110 @@ const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   (__DEV__ ? 'http://localhost:8000/api/v1' : 'https://api.elory.app/api/v1');
 
+/** Backend origin without /api/v1 — hosted viewers live at /viewers/*. */
+export const API_ORIGIN = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
+
+// ─── Pathway maps ─────────────────────────────────────────────────────────────
+
+/** How far our knowledge of an ingredient goes. */
+export type LadderLevel = 'reviewed' | 'mechanism' | 'function' | 'unidentified';
+
+export interface RouteClaim {
+  claim_text: string;
+  population?: string | null;
+  comparator?: string | null;
+  duration?: string | null;
+  form?: string | null;
+  dose_low?: number | null;
+  dose_high?: number | null;
+  dose_unit?: string | null;
+  dose_basis?: string | null;
+  outcome_measure?: string | null;
+  effect_estimate?: number | null;
+  ci_low?: number | null;
+  ci_high?: number | null;
+  effect_unit?: string | null;
+  certainty?: 'high' | 'moderate' | 'low' | 'very_low' | null;
+  limitations?: string | null;
+  citations: { pmid?: string; doi?: string; url?: string }[];
+  drafted_by: 'ai' | 'human';
+}
+
+export interface RouteNode {
+  id: string;
+  label: string;
+  plain_label?: string | null;
+  role: 'input' | 'mechanism' | 'outcome' | 'boundary';
+}
+
+export interface RouteLink {
+  from: string;
+  to: string;
+  relation_text?: string | null;
+  evidence_type?: 'meta_analysis' | 'human_rct' | 'human_observational' | 'preclinical' | 'established_biochemistry' | 'proposed' | null;
+  strength?: 'strong' | 'moderate' | 'limited' | 'insufficient' | null;
+  human_evidence: boolean;
+  evidence_stops_here: boolean;
+  stop_reason?: string | null;
+  claims: RouteClaim[];
+}
+
+export interface EvidenceRoute {
+  slug: string;
+  version: number;
+  title: string;
+  takeaway: string;
+  domain?: string | null;
+  direction: 'supports' | 'mixed' | 'risk';
+  reviewed_by?: string | null;
+  published_at?: string | null;
+  nodes: RouteNode[];
+  links: RouteLink[];
+}
+
+export interface MechanismAsset {
+  kind: 'cell_locations' | 'structure' | 'pathway_illustration' | 'pathway_diagram';
+  payload: Record<string, any>;
+  viewer_path?: string | null;
+  fallback_url?: string | null;
+  attribution?: string | null;
+  reviewed: boolean;
+}
+
+export interface IngredientMechanism {
+  ingredient_id: string;
+  name: string;
+  level: LadderLevel;
+  via_moiety?: string | null;
+  form_note?: string | null;
+  function_summary?: string | null;
+  route?: EvidenceRoute | null;
+  assets: MechanismAsset[];
+  facts_count: number;
+}
+
+export type GridCellState = 'supports' | 'mixed' | 'risk' | 'mechanism' | 'not_reviewed';
+
+export interface ProductEvidence {
+  grid: {
+    columns: string[];
+    rows: { compound: string; ingredient_id: string; level: LadderLevel; cells: Record<string, { state: GridCellState; strength: string | null }> }[];
+  };
+  dose_bars: DoseBarData[];
+}
+
+export interface DoseBarData {
+  compound: string;
+  route_slug: string;
+  outcome?: string | null;
+  studied_low: number;
+  studied_high: number;
+  unit_label: string;
+  upper_limit_value?: number | null;
+  amount_value?: number | null;
+  amount_note?: string | null;
+}
+
 export interface Ingredient {
   name: string;
   concentration?: string;
@@ -1019,6 +1123,18 @@ class APIService {
    * Fetch an ingredient by ID, returning null on error.
    * Used by screens that want graceful error handling.
    */
+  async getIngredientMechanism(ingredientId: string): Promise<IngredientMechanism> {
+    return this.fetch<IngredientMechanism>(`/ingredients/${ingredientId}/mechanism`);
+  }
+
+  async getRoute(slug: string): Promise<EvidenceRoute> {
+    return this.fetch<EvidenceRoute>(`/routes/${slug}`);
+  }
+
+  async getProductEvidence(productId: string): Promise<ProductEvidence> {
+    return this.fetch<ProductEvidence>(`/products/${productId}/evidence`);
+  }
+
   async getIngredientWithFallback(ingredientId: string): Promise<IngredientDetail | null> {
     try {
       return await this.getIngredient(ingredientId);
