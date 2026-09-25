@@ -1,7 +1,7 @@
 """SQLAlchemy 2.0 models."""
 
 from app.models.product import Product, ProductIngredient, ProductCategory, IngredientStatus
-from app.models.ingredient import Ingredient, IngredientCategory, ResearchStatus
+from app.models.ingredient import Ingredient, IngredientCategory, IngredientRole, ResearchStatus
 from app.models.ingredient_evidence import IngredientEvidence, StudyType, EvidenceDirection
 from app.models.ingredient_biodomain_score import IngredientBioDomainScore
 from app.models.claim import Claim, ClaimSource, EvidenceStrength
@@ -22,6 +22,15 @@ from app.models.ingestion import (  # noqa: F401
     IngredientExternalIdentifier,
     QualityIssue,
     ReviewTask,
+)
+from app.models.pathway import (  # noqa: F401
+    BioEntity,
+    MechanismFact,
+    IngredientMechanismAsset,
+    PathwayRoute,
+    RouteNode,
+    RouteLink,
+    RouteClaim,
 )
 from app.models.laboratory import (  # noqa: F401
     LabDataset,

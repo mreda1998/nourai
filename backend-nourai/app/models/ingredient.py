@@ -1,9 +1,10 @@
 """Ingredient models using SQLAlchemy 2.0."""
+import uuid
 from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -32,6 +33,16 @@ class IngredientCategory(str, Enum):
     ADDITIVE = "additive"
     PEPTIDE = "peptide"
     OTHER = "other"
+
+
+class IngredientRole(str, Enum):
+    """What an ingredient does in a product — decides whether it gets a pathway."""
+
+    ACTIVE = "active"            # dose-meaningful compound (creatine, caffeine)
+    NUTRIENT = "nutrient"        # handled by nutrition rules (sugar, salt)
+    FUNCTIONAL = "functional"    # emulsifier, thickener, solvent …
+    FRAGRANCE = "fragrance"
+    UNKNOWN = "unknown"
 
 
 class ResearchStatus(str, Enum):
@@ -112,6 +123,17 @@ class Ingredient(Base, UUIDMixin, TimestampMixin):
     cycle_length_weeks: Mapped[int | None] = mapped_column(Integer, nullable=True)
     washout_weeks: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cycling_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Pathway maps: routes are written once per active compound; forms
+    # (Magnesium Glycinate) point at it (Magnesium) and inherit its routes.
+    active_moiety_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("ingredients.id", ondelete="SET NULL"), nullable=True
+    )
+    form_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    role: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=IngredientRole.UNKNOWN, server_default="unknown"
+    )
+    function_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Research pipeline tracking
     research_status: Mapped[str] = mapped_column(
