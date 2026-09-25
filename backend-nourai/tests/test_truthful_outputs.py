@@ -168,3 +168,17 @@ def test_canonical_name_beats_another_entrys_synonym():
     ascorbic = SimpleNamespace(canonical_name="Ascorbic Acid", synonyms=["Vitamin C"])
     assert build_lookup([vit_c, ascorbic])["vitamin c"] is vit_c
     assert build_lookup([ascorbic, vit_c])["vitamin c"] is vit_c
+
+
+# ── Ask Elory context ───────────────────────────────────────────────────────
+
+def test_chat_prompt_has_no_heuristic_scores_and_says_unscored():
+    from app.api.v1.chat import _build_system_prompt
+    from app.schemas.chat import StackContext
+    ctx = StackContext(
+        products=[{"name": "SPF", "category": "cosmetic", "grade": None}],
+        domain_scores={"Skin": 50},  # sent by older app versions
+    )
+    prompt = _build_system_prompt(ctx)
+    assert "not yet scored" in prompt
+    assert "Bio-domain" not in prompt and "50/100" not in prompt

@@ -14,12 +14,14 @@ class StackProduct(BaseModel):
     name: str
     brand: str | None = None
     category: str
-    grade: str
+    grade: str | None = None
     ingredients: list[str] = []
 
 
 class StackContext(BaseModel):
     products: list[StackProduct] = []
+    # Deprecated: older clients sent heuristic grade × category numbers here.
+    # They are not evidence and are no longer shown to the model.
     domain_scores: dict[str, float] = {}
     goals: list[str] = []
 

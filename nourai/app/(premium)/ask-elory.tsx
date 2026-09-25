@@ -13,7 +13,6 @@ import { accessToken } from '@/lib/stack-sync';
 import { Fonts, Palette, Radius } from '@/constants/theme';
 import { useAppState } from '@/context/app-state';
 import { useAuth } from '@/context/auth-context';
-import { DOMAINS, computeRadarScores } from '@/constants/domains';
 import { IconButton, PressableScale, Txt } from '@/components/ui';
 
 interface Message { id: string; role: 'user' | 'assistant'; content: string }
@@ -38,10 +37,8 @@ export default function AskEloryScreen() {
 
   const context = useMemo(() => {
     const all = [...stack, ...meals];
-    const scores = computeRadarScores(all);
     return {
       products: all.map((p) => ({ name: p.name, brand: p.brand, category: p.category, grade: p.grade, ingredients: p.ingredients })),
-      domain_scores: Object.fromEntries(DOMAINS.map((d, i) => [d, scores[i] ?? 50])),
       goals: onboardingProfile?.goals ?? [],
     };
   }, [stack, meals, onboardingProfile?.goals]);

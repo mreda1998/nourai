@@ -51,22 +51,13 @@ def _build_system_prompt(ctx: "ChatRequest.stack_context") -> str:  # type: igno
         for p in ctx_.products:
             ings = ", ".join(p.ingredients[:8]) if p.ingredients else "unknown ingredients"
             brand = f" by {p.brand}" if p.brand else ""
+            grade = f"grade {p.grade}" if p.grade else "not yet scored"
             product_lines.append(
-                f"  • {p.name}{brand} [{p.category}, grade {p.grade}] — key ingredients: {ings}"
+                f"  • {p.name}{brand} [{p.category}, {grade}] — key ingredients: {ings}"
             )
         products_block = "Current stack:\n" + "\n".join(product_lines)
     else:
         products_block = "Current stack: empty"
-
-    # Domain scores block
-    if ctx_.domain_scores:
-        score_lines = [
-            f"  • {domain}: {int(score)}/100"
-            for domain, score in ctx_.domain_scores.items()
-        ]
-        scores_block = "Bio-domain evidence scores (0 = no supporting evidence, 100 = strong):\n" + "\n".join(score_lines)
-    else:
-        scores_block = "Bio-domain scores: not available"
 
     # Goals block
     goal_labels = [_GOAL_LABELS.get(g, g) for g in ctx_.goals]
@@ -79,8 +70,6 @@ def _build_system_prompt(ctx: "ChatRequest.stack_context") -> str:  # type: igno
 
 {products_block}
 
-{scores_block}
-
 {goals_block}
 
 Your role:
@@ -90,6 +79,7 @@ Your role:
 - Flag ingredient overlaps, dosage considerations, or potential interactions
 - Be direct and concise: 2–4 sentences per point, no fluff
 - If something is outside your certainty, say "evidence is limited" — never overstate
+- A product that is "not yet scored" has unknown quality, not poor or good quality
 - Do NOT recommend buying new products; focus on optimising what the user already has
 - Never provide medical diagnoses or replace professional medical advice"""
 
