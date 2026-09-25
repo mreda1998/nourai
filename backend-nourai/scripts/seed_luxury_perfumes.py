@@ -57,6 +57,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.config import settings
 from app.models.ingredient import Ingredient
+from app.services.ingredient_matching import build_lookup
 from app.models.product import Product, ProductCategory, ProductIngredient, IngredientStatus
 
 
@@ -1494,11 +1495,7 @@ LUXURY_PERFUMES: list[dict] = [
 async def build_ingredient_lookup(session: AsyncSession) -> dict[str, Ingredient]:
     result = await session.execute(select(Ingredient))
     ingredients = result.scalars().all()
-    lookup: dict[str, Ingredient] = {}
-    for ing in ingredients:
-        lookup[ing.canonical_name.lower().strip()] = ing
-        for syn in (ing.synonyms or []):
-            lookup[syn.lower().strip()] = ing
+    lookup = build_lookup(ingredients)
     return lookup
 
 

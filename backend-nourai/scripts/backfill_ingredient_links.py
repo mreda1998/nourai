@@ -2,11 +2,11 @@
 Backfill ingredient_id FK on product_ingredients rows that were inserted
 before the canonical ingredients table was fully populated.
 
-Applies the same matching logic as fetch_popular_products.py:
+Uses the shared matcher in app.services.ingredient_matching:
   1. Exact match on canonical_name or synonym
-  2. Substring containment (key length >= 5)
+  2. A library name appearing as whole words in the label name
 
-Also updates the `status` column (CLEAN vs WATCH) while we're here.
+Also updates the `status` column while we're here.
 
 Usage
 -----
@@ -18,6 +18,10 @@ python -m scripts.backfill_ingredient_links
 
 # Show a summary of unmatched names after running
 python -m scripts.backfill_ingredient_links --show-unmatched --limit 50
+
+# Re-check rows that are already linked (older, looser matching linked e.g.
+# "Oil" to a fish-oil entry). Relinks or unlinks rows the matcher now rejects.
+python -m scripts.backfill_ingredient_links --recheck-linked --dry-run
 """
 from __future__ import annotations
 
@@ -33,10 +37,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.config import settings
 from app.models.ingredient import Ingredient
-from app.models.product import ProductIngredient, IngredientStatus
+from app.models.product import ProductIngredient
+from app.services.ingredient_matching import build_lookup, infer_status, match_ingredient
 
 
-# ─── Matching (mirrors fetch_popular_products.py) ─────────────────────────────
+# ─── Lookup (matching lives in app.services.ingredient_matching) ─────────────────────────────
 
 IngredientLookup = dict[str, Ingredient]
 
@@ -45,43 +50,11 @@ async def build_ingredient_lookup(session: AsyncSession) -> IngredientLookup:
     result = await session.execute(select(Ingredient))
     all_ingredients = result.scalars().all()
 
-    lookup: IngredientLookup = {}
-    for ing in all_ingredients:
-        lookup[ing.canonical_name.lower().strip()] = ing
-        for syn in (ing.synonyms or []):
-            lookup[syn.lower().strip()] = ing
+    lookup = build_lookup(all_ingredients)
 
     print(f"Loaded {len(all_ingredients)} canonical ingredients "
           f"({len(lookup)} lookup keys including synonyms)")
     return lookup
-
-
-def match_ingredient(raw_name: str, lookup: IngredientLookup) -> Ingredient | None:
-    norm = raw_name.lower().strip()
-    if not norm:
-        return None
-
-    if norm in lookup:
-        return lookup[norm]
-
-    best: Ingredient | None = None
-    best_key_len = 0
-    for key, ing in lookup.items():
-        if len(key) >= 5 and (key in norm or norm in key):
-            if len(key) > best_key_len:
-                best = ing
-                best_key_len = len(key)
-    return best
-
-
-def infer_status(canonical: Ingredient | None) -> IngredientStatus | None:
-    if canonical is None:
-        return None  # Not in our library: unknown, not a concern
-    if canonical.category in ("additive", "preservative", "sweetener"):
-        return IngredientStatus.WATCH
-    if canonical.contraindications:
-        return IngredientStatus.WATCH
-    return IngredientStatus.CLEAN
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -89,12 +62,46 @@ def infer_status(canonical: Ingredient | None) -> IngredientStatus | None:
 BATCH_SIZE = 500
 
 
-async def run(dry_run: bool, show_unmatched: bool, unmatched_limit: int) -> None:
+async def recheck_linked(session: AsyncSession, lookup: IngredientLookup, dry_run: bool) -> None:
+    """Re-run already-linked rows through the matcher; fix links it now rejects."""
+    result = await session.execute(
+        select(ProductIngredient, Ingredient)
+        .join(Ingredient, ProductIngredient.ingredient_id == Ingredient.id)
+    )
+    rows = result.all()
+    print(f"Re-checking {len(rows):,} linked product_ingredient rows")
+
+    changes: dict[tuple[str, str, str], int] = {}  # (label, old, new) → count
+    for pi, current in rows:
+        canonical = match_ingredient(pi.name, lookup)
+        if canonical is not None and canonical.id == current.id:
+            continue
+        key = (pi.name.strip().lower(), current.canonical_name, canonical.canonical_name if canonical else "—")
+        changes[key] = changes.get(key, 0) + 1
+        if not dry_run:
+            pi.ingredient_id = canonical.id if canonical else None
+            pi.status = infer_status(canonical)
+
+    print(f"  {sum(changes.values()):,} rows would change ({len(changes)} distinct label → link pairs)")
+    for (label, old, new), count in sorted(changes.items(), key=lambda x: -x[1])[:60]:
+        print(f"  {count:>5}×  {label!r}: {old} → {new}")
+    if not dry_run:
+        await session.commit()
+        print("  Committed.")
+
+
+async def run(dry_run: bool, show_unmatched: bool, unmatched_limit: int, recheck: bool = False) -> None:
     engine = create_async_engine(settings.database_url, echo=False)
     factory = async_sessionmaker(engine, expire_on_commit=False)
 
     async with factory() as session:
         lookup = await build_ingredient_lookup(session)
+
+        if recheck:
+            await recheck_linked(session, lookup, dry_run)
+            if dry_run:
+                print("\n[DRY RUN — no changes written]")
+            return
 
         # Fetch all unlinked rows
         result = await session.execute(
@@ -151,12 +158,15 @@ def main() -> None:
                         help="Print top unmatched ingredient names after run")
     parser.add_argument("--limit", type=int, default=50, dest="unmatched_limit",
                         help="How many unmatched names to show (default: 50)")
+    parser.add_argument("--recheck-linked", action="store_true", dest="recheck",
+                        help="Re-check existing links against the current matcher")
     args = parser.parse_args()
 
     asyncio.run(run(
         dry_run=args.dry_run,
         show_unmatched=args.show_unmatched,
         unmatched_limit=args.unmatched_limit,
+        recheck=args.recheck,
     ))
 
 

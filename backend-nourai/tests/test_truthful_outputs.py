@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from app.models.product import IngredientStatus
 from app.services.biodomain_scorer import compute_dose_ratio, score_product_biodomains
 from app.services.personalization import CONCERN_FLAGS, concern_applies
-from app.services.product import _infer_status
+from app.services.ingredient_matching import infer_status as _infer_status
 
 
 # ── Dose applicability ──────────────────────────────────────────────────────
@@ -125,3 +125,46 @@ def test_no_score_means_no_grade():
 def test_nothing_scored_gives_no_health_score():
     _, health = score_product_biodomains([_pi(None, None, _bs())])
     assert health is None
+
+
+# ── Ingredient matching ─────────────────────────────────────────────────────
+
+def _lookup(**names):
+    return {k.replace("_", " "): SimpleNamespace(canonical_name=v) for k, v in names.items()}
+
+
+def test_short_label_name_never_matches_longer_library_name():
+    from app.services.ingredient_matching import match_ingredient
+    lookup = _lookup(fish_oil="Omega-3 Fatty Acids", glycerin="Glycerin")
+    assert match_ingredient("Oil", lookup) is None
+    assert match_ingredient("Extract", lookup) is None
+
+
+def test_library_name_as_whole_words_in_label_matches():
+    from app.services.ingredient_matching import match_ingredient
+    lookup = _lookup(sodium_hyaluronate="Hyaluronic Acid", glycerin="Glycerin")
+    assert match_ingredient("Sodium Hyaluronate Crosspolymer", lookup).canonical_name == "Hyaluronic Acid"
+    assert match_ingredient("  GLYCERIN ", lookup).canonical_name == "Glycerin"
+    assert match_ingredient("Polyglyceryl-3 Glycerinate", lookup) is None
+
+
+def test_category_alone_is_not_a_concern():
+    from app.services.ingredient_matching import infer_status
+    additive = SimpleNamespace(category="additive", contraindications=[])
+    assert infer_status(additive) == IngredientStatus.CLEAN
+
+
+def test_excipient_salts_are_not_the_nutrient():
+    from app.services.ingredient_matching import match_ingredient
+    lookup = _lookup(magnesium="Magnesium")
+    assert match_ingredient("Vegetable Magnesium Stearate", lookup) is None
+    assert match_ingredient("Magnesium Aluminum Silicate", lookup) is None
+    assert match_ingredient("Magnesium Citrate", lookup).canonical_name == "Magnesium"
+
+
+def test_canonical_name_beats_another_entrys_synonym():
+    from app.services.ingredient_matching import build_lookup
+    vit_c = SimpleNamespace(canonical_name="Vitamin C", synonyms=[])
+    ascorbic = SimpleNamespace(canonical_name="Ascorbic Acid", synonyms=["Vitamin C"])
+    assert build_lookup([vit_c, ascorbic])["vitamin c"] is vit_c
+    assert build_lookup([ascorbic, vit_c])["vitamin c"] is vit_c

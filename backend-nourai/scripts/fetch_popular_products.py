@@ -63,8 +63,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.config import settings
-from app.models.ingredient import Ingredient, IngredientCategory
-from app.models.product import Product, ProductCategory, ProductIngredient, IngredientStatus
+from app.models.ingredient import Ingredient
+from app.models.product import Product, ProductCategory, ProductIngredient
+from app.services.ingredient_matching import build_lookup, infer_status, match_ingredient
 from app.services.usda import USDAService, _is_nutriments_sparse
 
 # ─── API endpoints ────────────────────────────────────────────────────────────
@@ -221,70 +222,11 @@ async def build_ingredient_lookup(session: AsyncSession) -> IngredientLookup:
     result = await session.execute(select(Ingredient))
     all_ingredients = result.scalars().all()
 
-    lookup: IngredientLookup = {}
-    for ing in all_ingredients:
-        lookup[ing.canonical_name.lower().strip()] = ing
-        for syn in ing.synonyms or []:
-            lookup[syn.lower().strip()] = ing
+    lookup = build_lookup(all_ingredients)
 
     print(f"  Loaded {len(all_ingredients)} canonical ingredients "
           f"({len(lookup)} lookup keys including synonyms)")
     return lookup
-
-
-def match_ingredient(raw_name: str, lookup: IngredientLookup) -> Ingredient | None:
-    """
-    Attempt to match a raw ingredient name to a canonical Ingredient.
-
-    Matching strategy (ordered by reliability):
-    1. Exact dict hit — covers canonical names and all listed synonyms.
-    2. Substring containment — e.g. "sodium hyaluronate" contains the
-       synonym "hyaluronate", which maps to Hyaluronic Acid.
-       We guard with len(key) >= 5 to avoid spurious short matches
-       (e.g. "iron" matching inside "environment").
-
-    Returns None if no confident match found. We never guess.
-    """
-    norm = raw_name.lower().strip()
-    if not norm:
-        return None
-
-    # 1. Exact match (canonical name or synonym)
-    if norm in lookup:
-        return lookup[norm]
-
-    # 2. Substring containment — longer keys take precedence (more specific)
-    best: Ingredient | None = None
-    best_key_len = 0
-    for key, ing in lookup.items():
-        if len(key) >= 5 and (key in norm or norm in key):
-            if len(key) > best_key_len:
-                best = ing
-                best_key_len = len(key)
-    return best
-
-
-def infer_status(canonical: Ingredient | None) -> IngredientStatus | None:
-    """
-    Assign a safety status badge for the ingredient list row.
-
-    Rules (conservative by design — AVOID is never auto-assigned):
-    • No canonical match → None   (unknown is not a concern)
-    • Additive / preservative / sweetener category → WATCH
-    • Has a non-empty contraindications list → WATCH
-    • Everything else → CLEAN
-    """
-    if canonical is None:
-        return None
-    if canonical.category in (
-        IngredientCategory.ADDITIVE,
-        IngredientCategory.PRESERVATIVE,
-        IngredientCategory.SWEETENER,
-    ):
-        return IngredientStatus.WATCH
-    if canonical.contraindications:
-        return IngredientStatus.WATCH
-    return IngredientStatus.CLEAN
 
 
 # ─── HTTP helpers ─────────────────────────────────────────────────────────────

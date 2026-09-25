@@ -64,6 +64,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.config import settings
 from app.models.ingredient import Ingredient
+from app.services.ingredient_matching import build_lookup as index_ingredients, match_ingredient
 
 # ─── CosIng download URL ──────────────────────────────────────────────────────
 # The European Commission hosts the CosIng database as a downloadable CSV.
@@ -155,23 +156,13 @@ def extract_functions(record: dict) -> list[str]:
 # ─── Ingredient matching ──────────────────────────────────────────────────────
 
 def build_lookup(ingredients: list[Ingredient]) -> dict[str, Ingredient]:
-    lookup: dict[str, Ingredient] = {}
-    for ing in ingredients:
-        lookup[ing.canonical_name.lower().strip()] = ing
-        for syn in (ing.synonyms or []):
-            lookup[syn.lower().strip()] = ing
+    lookup = index_ingredients(ingredients)
     return lookup
 
 
 def find_match(inci_name: str, lookup: dict[str, Ingredient]) -> Ingredient | None:
-    norm = inci_name.lower().strip()
-    if norm in lookup:
-        return lookup[norm]
-    # Partial match for cases like "Linalool hydroperoxides" → "Linalool"
-    for key, ing in lookup.items():
-        if len(key) >= 6 and (key in norm or norm in key):
-            return ing
-    return None
+    # e.g. "Linalool hydroperoxides" → "Linalool" (whole-word containment)
+    return match_ingredient(inci_name, lookup)
 
 
 # ─── DB update ────────────────────────────────────────────────────────────────
@@ -304,7 +295,7 @@ async def run(dry_run: bool, report_banned: bool) -> None:
         result = await session.execute(select(Ingredient))
         all_ingredients = list(result.scalars().all())
 
-    lookup = build_lookup(all_ingredients)
+    lookup = index_ingredients(all_ingredients)
     print(f"  DB has {len(all_ingredients)} canonical ingredients "
           f"({len(lookup)} lookup keys)")
 

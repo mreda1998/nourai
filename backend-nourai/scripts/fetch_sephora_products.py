@@ -63,8 +63,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.config import settings
-from app.models.ingredient import Ingredient, IngredientCategory
+from app.models.ingredient import Ingredient
 from app.models.product import Product, ProductCategory, ProductIngredient, IngredientStatus
+from app.services.ingredient_matching import build_lookup as index_ingredients, infer_status as _infer_status, match_ingredient
 
 # ─── Sephora RapidAPI config ──────────────────────────────────────────────────
 
@@ -155,46 +156,17 @@ def parse_inci_string(inci: str) -> list[str]:
 async def build_lookup(session: AsyncSession) -> dict[str, Ingredient]:
     result = await session.execute(select(Ingredient))
     ingredients = result.scalars().all()
-    lookup: dict[str, Ingredient] = {}
-    for ing in ingredients:
-        lookup[ing.canonical_name.lower().strip()] = ing
-        for syn in (ing.synonyms or []):
-            lookup[syn.lower().strip()] = ing
+    lookup = index_ingredients(ingredients)
     print(f"  Loaded {len(ingredients)} canonical ingredients "
           f"({len(lookup)} lookup keys including synonyms)")
     return lookup
 
 
-def match_ingredient(raw_name: str, lookup: dict[str, Ingredient]) -> Ingredient | None:
-    norm = raw_name.lower().strip()
-    if norm in lookup:
-        return lookup[norm]
-    best: Ingredient | None = None
-    best_len = 0
-    for key, ing in lookup.items():
-        if len(key) >= 5 and (key in norm or norm in key):
-            if len(key) > best_len:
-                best = ing
-                best_len = len(key)
-    return best
-
-
 def infer_status(canonical: Ingredient | None, name: str) -> IngredientStatus | None:
-    name_lower = name.lower()
-    # Flag EU-banned materials as AVOID
-    if any(banned in name_lower for banned in ["lilial", "lyral", "hicc", "oakmoss"]):
+    # EU-banned fragrance materials are AVOID by regulation, whatever we know
+    if any(banned in name.lower() for banned in ["lilial", "lyral", "hicc", "oakmoss"]):
         return IngredientStatus.AVOID
-    if canonical is None:
-        return None  # Not in our library: unknown, not a concern
-    if canonical.category in (
-        IngredientCategory.ADDITIVE,
-        IngredientCategory.PRESERVATIVE,
-        IngredientCategory.SWEETENER,
-    ):
-        return IngredientStatus.WATCH
-    if canonical.contraindications:
-        return IngredientStatus.WATCH
-    return IngredientStatus.CLEAN
+    return _infer_status(canonical)
 
 
 # ─── Sephora API client ───────────────────────────────────────────────────────

@@ -6,10 +6,11 @@ import httpx
 from sqlalchemy import select, text
 
 from app.core.config import settings
-from app.models.ingredient import Ingredient, IngredientCategory
-from app.models.product import Product, ProductCategory, ProductIngredient, IngredientStatus
+from app.models.ingredient import Ingredient
+from app.models.product import Product, ProductCategory, ProductIngredient
 from app.repositories.product import ProductRepository
 from app.schemas.product import ProductWithDetails
+from app.services.ingredient_matching import build_lookup, infer_status, match_ingredient
 from app.services.usda import USDAService, _is_nutriments_sparse
 
 # Tier-2 nutrient display names — these are expected "misses" at the ingredient
@@ -75,9 +76,9 @@ class ProductService:
             unmatched_to_log: list[str] = []
             async with self._repo.db.begin():
                 for position, ing_name in enumerate(ing_names[:60], start=1):
-                    canonical = _match_ingredient(ing_name, ingredient_lookup)
+                    canonical = match_ingredient(ing_name, ingredient_lookup)
                     display_name = ing_name.title()[:500]
-                    status = _infer_status(canonical)
+                    status = infer_status(canonical)
                     self._repo.db.add(ProductIngredient(
                         product_id=product.id,
                         name=display_name,
@@ -100,11 +101,7 @@ class ProductService:
         """Load canonical ingredients + synonyms into a flat O(1) lookup dict."""
         result = await self._repo.db.execute(select(Ingredient))
         all_ingredients = list(result.scalars().all())
-        lookup: dict[str, Ingredient] = {}
-        for ing in all_ingredients:
-            lookup[ing.canonical_name.lower().strip()] = ing
-            for syn in (ing.synonyms or []):
-                lookup[syn.lower().strip()] = ing
+        lookup = build_lookup(all_ingredients)
         return lookup
 
     async def _log_unmatched_ingredient(self, raw_name: str) -> None:
@@ -264,30 +261,3 @@ def _parse_off_ingredient_names(product: dict) -> list[str]:
             names.append(token)
             seen.add(token)
     return names
-
-
-def _match_ingredient(raw_name: str, lookup: dict[str, Ingredient]) -> Ingredient | None:
-    norm = raw_name.lower().strip()
-    if norm in lookup:
-        return lookup[norm]
-    best: Ingredient | None = None
-    best_len = 0
-    for key, ing in lookup.items():
-        if len(key) >= 5 and (key in norm or norm in key) and len(key) > best_len:
-            best = ing
-            best_len = len(key)
-    return best
-
-
-def _infer_status(canonical: Ingredient | None) -> IngredientStatus | None:
-    if canonical is None:
-        return None  # Not in our library: unknown, not a concern
-    if canonical.category in (
-        IngredientCategory.ADDITIVE,
-        IngredientCategory.PRESERVATIVE,
-        IngredientCategory.SWEETENER,
-    ):
-        return IngredientStatus.WATCH
-    if canonical.contraindications:
-        return IngredientStatus.WATCH
-    return IngredientStatus.CLEAN
