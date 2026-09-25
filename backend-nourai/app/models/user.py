@@ -190,3 +190,36 @@ class ScanHistoryEntry(Base, UUIDMixin):
 
     def __repr__(self) -> str:
         return f"<ScanHistoryEntry {self.id} for user {self.user_id}>"
+
+
+class SearchHistoryEntry(Base, UUIDMixin):
+    """A product/ingredient search logged for a user."""
+
+    __tablename__ = "search_history"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    query: Mapped[str] = mapped_column(String(255), nullable=False)
+    result_type: Mapped[str] = mapped_column(String(20), nullable=False, default="product")  # product | ingredient
+    searched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index("ix_search_history_user_id", "user_id"),
+        Index("ix_search_history_searched_at", "searched_at"),
+        Index("ix_search_history_user_searched", "user_id", "searched_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<SearchHistoryEntry {self.id} for user {self.user_id}>"

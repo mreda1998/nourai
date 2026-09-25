@@ -3,6 +3,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,25 +16,42 @@ from app.api.deps import (
     get_personalization_service,
     get_product_service,
 )
-from app.models.ingredient import Ingredient
+from app.models.ingestion import IngredientAlias, IngestionJob
 from app.models.product import ProductCategory
+from app.core.config import settings
+from app.db.session import async_session_factory
+from app.schemas.ingestion import BarcodeIngestionResponse, IngestionJobResponse
 from app.schemas.personalization import PersonalAnalysisResponse
-from app.schemas.product import ProductResponse, ProductSearchResponse, ProductWithDetails
+from app.schemas.product import (
+    NUTRIENT_DISPLAY_NAMES,
+    ProductResponse,
+    ProductSearchResponse,
+    ProductWithDetails,
+)
 from app.services.personalization import PersonalizationService
 from app.services.product import ProductService
+from app.services.ingestion.normalization import normalize_gtin
+from app.services.ingestion.queue import IngestionQueue
 
 router = APIRouter()
 
 
 async def _build_ingredient_lookup(db: AsyncSession) -> dict[str, str]:
-    """Return {lowercased name/synonym: str(uuid)} for all canonical ingredients."""
-    result = await db.execute(select(Ingredient))
-    lookup: dict[str, str] = {}
-    for ing in result.scalars().all():
-        lookup[ing.canonical_name.lower().strip()] = str(ing.id)
-        for syn in (ing.synonyms or []):
-            lookup[syn.lower().strip()] = str(ing.id)
-    return lookup
+    """Resolve only the fixed nutrient panel names, not the full ontology."""
+    rows = await db.execute(
+        select(IngredientAlias.normalized_alias, IngredientAlias.ingredient_id).where(
+            IngredientAlias.approved.is_(True),
+            IngredientAlias.normalized_alias.in_(NUTRIENT_DISPLAY_NAMES),
+        )
+    )
+    candidates: dict[str, set[str]] = {}
+    for alias, ingredient_id in rows:
+        candidates.setdefault(alias, set()).add(str(ingredient_id))
+    return {
+        alias: next(iter(ingredient_ids))
+        for alias, ingredient_ids in candidates.items()
+        if len(ingredient_ids) == 1
+    }
 
 
 @router.get("", response_model=ProductSearchResponse)
@@ -155,21 +173,96 @@ async def personalize_product(
     )
 
 
-@router.get("/barcode/{barcode}", response_model=ProductWithDetails)
+@router.get("/ingestion/{job_id}", response_model=IngestionJobResponse)
+async def get_ingestion_status(job_id: UUID, db: DBSession):
+    """Return a stable, mobile-safe view of a background ingestion job."""
+    job = await db.get(IngestionJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Ingestion job not found")
+    messages = {
+        "queued": "Product is waiting to be verified",
+        "running": "Product details are being verified",
+        "retry": "The product source is temporarily unavailable; retrying",
+        "complete": "Product is ready",
+        "needs_review": "We could not verify this product automatically",
+        "dead": "Product verification could not be completed",
+    }
+    result_message = (
+        job.result.get("message")
+        if isinstance(job.result, dict) and isinstance(job.result.get("message"), str)
+        else None
+    )
+    response = IngestionJobResponse(
+        job_id=job.id,
+        status=job.status,
+        product_id=job.product_id,
+        poll_after_ms=1200 if job.status in {"queued", "running"} else 2500,
+        message=result_message or messages.get(
+            job.status, "Product verification is in progress"
+        ),
+    )
+    return response
+
+
+@router.get(
+    "/barcode/{barcode}",
+    response_model=ProductWithDetails | BarcodeIngestionResponse,
+)
 async def get_product_by_barcode(
     barcode: str,
     db: DBSession,
     service: Annotated[ProductService, Depends(get_product_service)] = None,
     current_user: OptionalUser = None,
 ):
-    """
-    Look up a product by barcode.
-    Fetches from external API if not in database.
-    """
-    product = await service.get_product_by_barcode(barcode)
+    """Return a cached product or queue idempotent background verification."""
+    try:
+        normalized = normalize_gtin(barcode)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+    product = await service.get_local_product_by_barcode(
+        normalized.digits, normalized.gtin14
+    )
+    if product:
+        lookup = await _build_ingredient_lookup(db)
+        return ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)
 
-    lookup = await _build_ingredient_lookup(db)
-    return ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)
+    queue = IngestionQueue(
+        async_session_factory,
+        lease_seconds=settings.ingestion_job_lease_seconds,
+        default_max_attempts=settings.ingestion_job_max_attempts,
+    )
+    job = await queue.enqueue(
+        db,
+        job_type="product_barcode",
+        idempotency_key=f"barcode:off-v3.6:{normalized.gtin14}",
+        payload={"barcode": normalized.digits, "gtin14": normalized.gtin14},
+        priority=50,
+    )
+    await db.commit()
+
+    # A prior idempotent job may have completed between the initial read and
+    # enqueue. Return its product immediately when possible.
+    if job.status == "complete" and job.product_id:
+        product = await service.get_product(job.product_id)
+        if product:
+            lookup = await _build_ingredient_lookup(db)
+            return ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)
+
+    existing_message = (
+        job.result.get("message")
+        if isinstance(job.result, dict) and isinstance(job.result.get("message"), str)
+        else None
+    )
+    response = BarcodeIngestionResponse(
+        job_id=job.id,
+        status=job.status,
+        gtin14=normalized.gtin14,
+        product_id=job.product_id,
+        message=existing_message or (
+            "Product verification could not be completed"
+            if job.status == "dead"
+            else "We are verifying this product from trusted source data"
+        ),
+    )
+    return JSONResponse(status_code=202, content=response.model_dump(mode="json"))

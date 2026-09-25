@@ -96,6 +96,19 @@ class ProductService:
 
         return await self._repo.get_with_details(product.id)
 
+    async def get_local_product_by_barcode(
+        self, barcode: str, gtin14: str
+    ) -> Product | None:
+        """Read-only scan lookup; upstream work belongs to the durable worker."""
+        product = await self._repo.get_by_gtin_with_details(gtin14)
+        if product is not None:
+            return product
+        for candidate in {barcode, gtin14, gtin14.lstrip("0")}:
+            product = await self._repo.get_by_barcode_with_details(candidate)
+            if product is not None:
+                return product
+        return None
+
     async def _build_ingredient_lookup(self) -> dict[str, Ingredient]:
         """Load canonical ingredients + synonyms into a flat O(1) lookup dict."""
         result = await self._repo.db.execute(select(Ingredient))

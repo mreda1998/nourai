@@ -29,14 +29,25 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = ""
     supabase_service_role_key: str = ""  # Project Settings → API → service_role key
     supabase_storage_bucket: str = "product-images"
+    supabase_structure_bucket: str = "ingredient-structures"
 
     # RevenueCat
     revenuecat_webhook_secret: str = ""
 
     # External APIs
-    openfoodfacts_user_agent: str = "Elory/1.0"
+    openfoodfacts_api_base: str = "https://world.openfoodfacts.org/api/v3.6"
+    openfoodfacts_contact_email: str = "hello@elory.app"
+    openfoodfacts_user_agent: str = "Elory/1.0 (hello@elory.app)"
     usda_api_key: str = ""  # https://fdc.nal.usda.gov/api-guide.html (free)
     rapidapi_key: str = ""  # https://rapidapi.com — used for Sephora product API
+
+    # Durable ingestion worker
+    ingestion_worker_id: str = "elory-ingestion-worker"
+    ingestion_poll_seconds: float = 1.0
+    ingestion_job_lease_seconds: int = 300
+    ingestion_job_max_attempts: int = 5
+    image_max_download_bytes: int = 15_000_000
+    image_processing_enabled: bool = True
 
     # Research agent
     anthropic_api_key: str = ""
@@ -58,6 +69,14 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
+
+    @property
+    def openfoodfacts_request_user_agent(self) -> str:
+        """Always include a contact even when an older environment overrides UA."""
+        user_agent = self.openfoodfacts_user_agent.strip() or "Elory/1.0"
+        if self.openfoodfacts_contact_email and self.openfoodfacts_contact_email not in user_agent:
+            return f"{user_agent} ({self.openfoodfacts_contact_email})"
+        return user_agent
 
 
 @lru_cache

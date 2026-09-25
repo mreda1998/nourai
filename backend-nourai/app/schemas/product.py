@@ -87,6 +87,10 @@ _NUTRIENT_ORDER = [
     "zinc", "selenium", "omega-3-fat",
 ]
 
+NUTRIENT_DISPLAY_NAMES: frozenset[str] = frozenset(
+    config[0].casefold() for config in _NUTRIENT_CONFIG.values()
+)
+
 
 def _parse_nutriments(
     extra_data: dict,
@@ -180,6 +184,16 @@ class Citation(BaseModel):
     journal: str | None = None
 
 
+class ProductAttribution(BaseModel):
+    source_name: str
+    source_url: str
+    attribution_text: str
+    data_license_name: str | None = None
+    data_license_url: str | None = None
+    image_license_name: str | None = None
+    image_license_url: str | None = None
+
+
 # ─── List-level response (search / browse) ───────────────────────────────────
 
 class ProductResponse(BaseModel):
@@ -236,6 +250,7 @@ class ProductWithDetails(BaseModel):
     bio_domains: list[BioDomain] = []
     recommendations: list[Recommendation] = []
     citations: list[Citation] = []
+    attribution: ProductAttribution | None = None
 
     @classmethod
     def _grade_from_score(cls, score: int | None) -> str:
@@ -327,6 +342,20 @@ class ProductWithDetails(BaseModel):
 
         # Prefer computed score; fall back to manually seeded score if no domains found
         effective_score = computed_health_score if domain_scores else product.health_score
+        source = (product.extra_data or {}).get("source")
+        attribution = None
+        if source in {"openfoodfacts", "open-food-facts"}:
+            barcode = product.barcode or ""
+            attribution = ProductAttribution(
+                source_name="Open Food Facts",
+                source_url=f"https://world.openfoodfacts.org/product/{barcode}",
+                attribution_text="Data and images from Open Food Facts contributors",
+                data_license_name="Open Database License",
+                data_license_url="https://opendatacommons.org/licenses/odbl/1-0/",
+                image_license_name="CC BY-SA 3.0",
+                image_license_url="https://creativecommons.org/licenses/by-sa/3.0/",
+            )
+
         return cls(
             id=product.id,
             barcode=product.barcode,
@@ -342,6 +371,7 @@ class ProductWithDetails(BaseModel):
             bio_domains=bio_domains,
             recommendations=[],
             citations=citations,
+            attribution=attribution,
         )
 
 
