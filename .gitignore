@@ -81,3 +81,6 @@ htmlcov/
 midjourney/
 moodboard/
 .worktrees/
+
+# Brainstorming companion mockups
+.superpowers/
