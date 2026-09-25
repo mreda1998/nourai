@@ -1,13 +1,27 @@
 """Personalization repository — evidence queries against GIN-indexed JSONB tags."""
 import uuid
 
-from sqlalchemy import String, cast, or_, select
+from sqlalchemy import String, case, cast, or_, select
 from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.ingredient_evidence import IngredientEvidence
 from app.models.ingredient import Ingredient
+
+
+# Explicit strength ranks — the columns are strings, and sorting them
+# alphabetically would put "moderate" above "high".
+_CONFIDENCE_RANK = case(
+    {"high": 0, "moderate": 1, "low": 2},
+    value=IngredientEvidence.confidence,
+    else_=3,
+)
+_EFFECT_RANK = case(
+    {"strong": 0, "moderate": 1, "weak": 2},
+    value=IngredientEvidence.effect_size,
+    else_=3,
+)
 
 
 class PersonalizationRepository:
@@ -77,10 +91,7 @@ class PersonalizationRepository:
             # map ingredient.canonical_name → product ingredient display name.
             .options(selectinload(IngredientEvidence.ingredient))
             # Higher-confidence, stronger-effect studies first.
-            .order_by(
-                IngredientEvidence.confidence.desc(),
-                IngredientEvidence.effect_size.desc(),
-            )
+            .order_by(_CONFIDENCE_RANK, _EFFECT_RANK)
         )
 
         result = await self._db.execute(stmt)

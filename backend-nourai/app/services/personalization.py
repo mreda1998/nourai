@@ -29,6 +29,11 @@ from app.schemas.personalization import (
     PersonalGoal,
 )
 
+def concern_applies(direction: str | None) -> bool:
+    """Only risk or mixed evidence can raise a personal concern."""
+    return direction in ("risk", "mixed")
+
+
 # ── Keyword pattern tables ────────────────────────────────────────────────────
 # Direct port of CONCERN_FLAGS / GOAL_SUPPORT from elory/utils/personalization.ts.
 # Kept in sync manually — if the TS side changes, update here too.
@@ -36,16 +41,9 @@ from app.schemas.personalization import (
 _FlagEntry = tuple[str, str]  # (pattern, label)
 
 CONCERN_FLAGS: dict[str, list[_FlagEntry]] = {
-    "fertility": [
-        ("paraben", "Endocrine disruptor — fertility risk"),
-        ("phthalate", "Endocrine disruptor — fertility risk"),
-        ("fragrance", "May contain hidden phthalates"),
-        ("bpa", "Endocrine disruptor — fertility risk"),
-        ("triclosan", "Hormonal disruption risk"),
-        ("oxybenzone", "Systemic absorption — fertility concern"),
-        ("benzophenone", "Possible endocrine disruptor"),
-        ("phenoxyethanol", "Reproductive toxicant at high doses"),
-    ],
+    # Fertility, hormonal-condition and infant-proximity concerns are served
+    # only by reviewed evidence (Tier 1). A substring match is not enough to
+    # tell someone an ingredient threatens their fertility or their child.
     "thyroid": [
         ("soy", "May interfere with thyroid hormone absorption"),
         ("isoflavone", "Phytoestrogen — thyroid caution"),
@@ -53,16 +51,6 @@ CONCERN_FLAGS: dict[str, list[_FlagEntry]] = {
         ("kelp", "High iodine — thyroid caution"),
         ("selenium", "Excess selenium affects thyroid"),
         ("bromide", "Displaces iodine — thyroid concern"),
-    ],
-    "hormonal_condition": [
-        ("paraben", "Estrogenic activity"),
-        ("phthalate", "Endocrine disruption risk"),
-        ("fragrance", "May contain estrogenic compounds"),
-        ("lavender", "Weak phytoestrogenic activity reported"),
-        ("tea tree", "Weak hormonal activity in vitro"),
-        ("progesterone", "Exogenous hormone — review with doctor"),
-        ("estrogen", "Exogenous hormone — review with doctor"),
-        ("bpa", "Strong estrogenic activity"),
     ],
     "medications": [
         ("st. john's wort", "Strong CYP3A4 inducer — drug interaction"),
@@ -72,17 +60,6 @@ CONCERN_FLAGS: dict[str, list[_FlagEntry]] = {
         ("valerian", "CNS depressant — sedative interaction"),
         ("garlic extract", "Antiplatelet — blood thinner interaction"),
         ("vitamin k", "Interferes with warfarin"),
-    ],
-    "infant_proximity": [
-        ("salicylic", "Avoid skin contact with infants"),
-        ("retinol", "Toxic to infants via skin contact"),
-        ("retinoic", "Retinoic acid — infant skin risk"),
-        ("fragrance", "Sensitizing — keep away from infants"),
-        ("glycolic", "Strong acid — infant skin risk"),
-        ("lactic acid", "AHA — infant skin caution"),
-        ("benzoyl peroxide", "Not for infant proximity"),
-        ("essential oil", "Many are sensitizing for infants"),
-        ("menthol", "Can cause apnea in infants"),
     ],
     # ── Fragrance-specific concerns ───────────────────────────────────────────
     # Based on EU Cosmetics Regulation 1223/2009 Annex III — 26 mandatory
@@ -344,8 +321,12 @@ class PersonalizationService:
                     accum[display_name] = _IngredientAccum()
                 a = accum[display_name]
 
-                # Concern: risk or mixed evidence matching a user concern
-                relevant_concerns = [t for t in (ev.concern_tags or []) if t in concern_tags]
+                # Concern: only evidence pointing toward risk. A study tagged
+                # with the user's concern may be reassuring about it.
+                relevant_concerns = (
+                    [t for t in (ev.concern_tags or []) if t in concern_tags]
+                    if concern_applies(ev.direction) else []
+                )
                 for concern_id in relevant_concerns:
                     if concern_id not in a.concern_flags:
                         # Build label from the finding summary (truncated)

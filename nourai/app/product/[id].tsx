@@ -111,7 +111,7 @@ export default function ProductDetailScreen() {
 
   const onAdd = (entry: StackEntry) => {
     if (!product) return;
-    const grade = (['A', 'B', 'C', 'D'] as const).find((g) => g === product.grade) ?? 'C';
+    const grade = (['A', 'B', 'C', 'D'] as const).find((g) => g === product.grade) ?? null;
     addToStack({
       id: product.id, name: product.name, brand: product.brand || '', category: product.category, grade,
       ingredients: product.ingredients.map((i) => i.name), imageUri: product.image_url,
@@ -188,8 +188,10 @@ export default function ProductDetailScreen() {
             <ScoreBadge score={score} size={72} />
             <View style={{ flex: 1 }}>
               <Txt variant="overline" tone="secondary">Elory score</Txt>
-              <Txt variant="title2" color={toneColor(scoreTone(score))} style={{ marginTop: 2 }}>{scoreQualifier(score)}</Txt>
-              <Txt variant="footnote" tone="secondary" style={{ marginTop: 2 }}>Based on ingredient evidence and safety</Txt>
+              <Txt variant="title2" color={toneColor(scoreTone(score))} style={{ marginTop: 2 }}>{score == null ? 'Not yet scored' : scoreQualifier(score)}</Txt>
+              <Txt variant="footnote" tone="secondary" style={{ marginTop: 2 }}>
+                {score == null ? 'Not enough reviewed evidence on its ingredients yet' : 'Based on reviewed ingredient evidence'}
+              </Txt>
             </View>
           </View>
           <Txt variant="callout" style={{ marginTop: 16 }}>
@@ -255,7 +257,7 @@ export default function ProductDetailScreen() {
                     key={ing.name}
                     leading={<View style={[styles.dot, { backgroundColor: dot }]} />}
                     title={ing.name}
-                    subtitle={[ing.concentration, isFlagged ? (p?.concernFlags[0]?.label ?? ing.tag) : helps ? `Supports ${p!.goalSupports[0].label.toLowerCase()}` : ing.tag].filter(Boolean).join(' · ') || undefined}
+                    subtitle={[ing.concentration, isFlagged ? (p?.concernFlags[0]?.label ?? ing.tag) : helps ? `Supports ${p!.goalSupports[0].label.toLowerCase()}` : ing.ingredient_id ? ing.tag : 'Not yet reviewed'].filter(Boolean).join(' · ') || undefined}
                     trailing={resolving === ing.name ? <ActivityIndicator size="small" color={Palette.accent} /> : null}
                     onPress={() => openIngredient(ing)}
                   />
@@ -267,6 +269,7 @@ export default function ProductDetailScreen() {
             <Legend color={Palette.strong} label="Helps your goals" />
             <Legend color={Palette.weak} label="Flagged" />
             <Legend color={Palette.accent} label="Researched" />
+            <Legend color={Palette.ink4} label="Not yet reviewed" />
           </View>
         </View>
       ) : null}
@@ -360,5 +363,5 @@ const styles = StyleSheet.create({
   alert: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', backgroundColor: Palette.weakSoft, borderColor: 'transparent', borderRadius: Radius.lg },
   dot: { width: 10, height: 10, borderRadius: 5, marginHorizontal: 10 },
   dotSm: { width: 8, height: 8, borderRadius: 4 },
-  legend: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 14 },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 16, rowGap: 6, marginTop: 14 },
 });

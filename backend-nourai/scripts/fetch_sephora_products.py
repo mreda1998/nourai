@@ -179,13 +179,13 @@ def match_ingredient(raw_name: str, lookup: dict[str, Ingredient]) -> Ingredient
     return best
 
 
-def infer_status(canonical: Ingredient | None, name: str) -> IngredientStatus:
+def infer_status(canonical: Ingredient | None, name: str) -> IngredientStatus | None:
     name_lower = name.lower()
     # Flag EU-banned materials as AVOID
     if any(banned in name_lower for banned in ["lilial", "lyral", "hicc", "oakmoss"]):
         return IngredientStatus.AVOID
     if canonical is None:
-        return IngredientStatus.WATCH
+        return None  # Not in our library: unknown, not a concern
     if canonical.category in (
         IngredientCategory.ADDITIVE,
         IngredientCategory.PRESERVATIVE,

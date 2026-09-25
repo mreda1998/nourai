@@ -63,7 +63,8 @@ function scoreColor(score: number) {
   return Colors.accentAlert;
 }
 
-function gradeColor(grade: string) {
+function gradeColor(grade: string | null) {
+  if (!grade) return Colors.inkTertiary;
   if (grade === 'A') return Colors.accentHill;
   if (grade === 'B') return '#5C7A4E';
   if (grade === 'C') return Colors.accentClay;
@@ -219,8 +220,8 @@ export default function DomainDetailScreen() {
       .filter((p) => (DOMAIN_RELEVANCE[domain]?.[p.category] ?? 0) > 0)
       .sort(
         (a, b) =>
-          DOMAIN_RELEVANCE[domain][b.category] * (GRADE_QUALITY[b.grade] ?? 1) -
-          DOMAIN_RELEVANCE[domain][a.category] * (GRADE_QUALITY[a.grade] ?? 1)
+          DOMAIN_RELEVANCE[domain][b.category] * ((b.grade && GRADE_QUALITY[b.grade]) || 1) -
+          DOMAIN_RELEVANCE[domain][a.category] * ((a.grade && GRADE_QUALITY[a.grade]) || 1)
       );
   }, [stack, domain]);
 

@@ -13,8 +13,11 @@ We capture this by computing a dose_ratio:
 
     dose_ratio = clamp(product_amount / effective_dose_low, 0, 1)
 
-If the ingredient has no dose information, dose_ratio = 1.0 (assume full effect).
-If the product does not list an amount, dose_ratio = 0.5 (conservative default).
+If the research dose, the product amount, or comparable units are missing,
+dose_ratio is None ("unknown"). Unknown never becomes an invented effect:
+a benefit with unknown dose contributes nothing, while a harm with unknown
+dose is kept at full weight so missing data can never make a product look
+safer than the evidence allows.
 
 Confidence multipliers (from biodomains.py) downweight low-quality evidence.
 
@@ -51,7 +54,7 @@ class DomainContribution:
     """One ingredient's weighted, dose-adjusted contribution to a domain."""
     ingredient_name: str
     raw_magnitude: float      # as reported by the LLM
-    dose_ratio: float         # 0–1; how much of the effective dose is present
+    dose_ratio: float | None  # 0–1; None when applicability is unknown
     confidence_weight: float  # from CONFIDENCE_WEIGHTS
     direction_sign: int       # +1 / -1 / 0
     weighted_score: float     # final contribution = magnitude × dose_ratio × confidence × sign
@@ -99,14 +102,15 @@ def compute_dose_ratio(
     effective_dose_low: float | None,
     dose_unit: str | None,
     dose_dependent: bool,
-) -> float:
+) -> float | None:
     """
     Return a scalar [0, 1] representing how much of the effective dose the
-    product delivers.
+    product delivers, or None when that cannot be established.
 
     • Not dose-dependent            → 1.0 (full effect regardless of amount)
-    • No dose info from research    → 1.0 (can't penalize what we don't know)
-    • Amount present but no units   → 0.5 (conservative default)
+    • No dose info from research    → None
+    • Amount missing / unparseable  → None
+    • Units not comparable          → None
     • Parseable amount ≥ effective  → 1.0
     • Parseable amount < effective  → amount / effective_dose_low
     """
@@ -114,16 +118,16 @@ def compute_dose_ratio(
         return 1.0
 
     if effective_dose_low is None or effective_dose_low <= 0:
-        return 1.0  # No dose threshold known — assume full effect
+        return None  # No dose threshold known
 
     if product_amount is None:
-        return 0.5  # Amount unlisted — conservative halfway assumption
+        return None  # Amount unlisted
 
     # Try to parse the product amount as a float
     try:
         parsed_amount = float(str(product_amount).strip().split()[0])
     except (ValueError, IndexError):
-        return 0.5
+        return None
 
     # Try to normalize both to mg for comparison
     prod_mg = _normalize_to_mg(parsed_amount, product_unit)
@@ -137,15 +141,15 @@ def compute_dose_ratio(
     if product_unit and dose_unit and product_unit.lower() == dose_unit.lower():
         return min(parsed_amount / effective_dose_low, 1.0)
 
-    # Can't compare — assume full effect
-    return 1.0
+    # Can't compare
+    return None
 
 
 # ─── Main scoring function ────────────────────────────────────────────────────
 
 def score_product_biodomains(
     product_ingredients: list["ProductIngredient"],
-) -> tuple[list[ProductDomainScore], int]:
+) -> tuple[list[ProductDomainScore], int | None]:
     """
     Compute per-biodomain scores for a product and derive a health_score.
 
@@ -155,7 +159,8 @@ def score_product_biodomains(
     Returns:
         (domain_scores, health_score)
         domain_scores: one entry per domain that has at least one scored ingredient
-        health_score:  0–100 integer for the product overall
+        health_score:  0–100 integer for the product overall, or None when
+                       no ingredient could be scored
     """
     # Accumulate contributions per domain
     domain_buckets: dict[str, list[DomainContribution]] = {k: [] for k in BIODOMAIN_KEYS}
@@ -189,8 +194,12 @@ def score_product_biodomains(
                 dose_dependent=bs.dose_dependent,
             )
 
+            if dose_ratio is None and direction_sign > 0:
+                continue  # Benefit not established at this product's dose
+
             confidence_weight = CONFIDENCE_WEIGHTS.get(bs.confidence, 0.2)
-            weighted = bs.magnitude * dose_ratio * confidence_weight * direction_sign
+            effective_ratio = 1.0 if dose_ratio is None else dose_ratio
+            weighted = bs.magnitude * effective_ratio * confidence_weight * direction_sign
 
             domain_buckets[bs.biodomain].append(
                 DomainContribution(
@@ -238,10 +247,13 @@ def score_product_biodomains(
     positive_scores = [d.display_value for d in domain_scores if not d.is_negative]
     negative_scores = [abs(d.raw_score) * 80 for d in domain_scores if d.is_negative]
 
+    if not domain_scores:
+        return domain_scores, None  # Nothing scored — no health score
+
     if positive_scores:
         base = sum(positive_scores) / len(positive_scores)
     else:
-        base = 50.0  # No data — neutral default
+        base = 50.0  # Only harms scored — start neutral and apply penalties
 
     penalty = min(sum(negative_scores), base)  # Can't go below 0
     health_score = max(0, min(100, round(base - penalty)))

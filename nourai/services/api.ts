@@ -41,7 +41,8 @@ export interface Product {
   subcategory?: string;
   description?: string;
   image_url?: string;
-  grade: string;
+  /** Null when the product can't be scored yet — never a default letter. */
+  grade: string | null;
   tags?: string[];
   has_allergen_warning: boolean;
   allergen_warning?: string;
@@ -66,7 +67,8 @@ export interface ProductListItem {
   name: string;
   brand?: string;
   category: string;
-  grade: string;
+  /** Null when the product can't be scored yet — never a default letter. */
+  grade: string | null;
   is_ai_generated: boolean;
   image_url?: string;
 }
@@ -371,7 +373,8 @@ export interface StackProduct {
   name: string;
   brand?: string;
   category: string;
-  grade: string;
+  /** Null when the product can't be scored yet — never a default letter. */
+  grade: string | null;
   ingredients: string[];
 }
 
@@ -566,7 +569,7 @@ export interface StackEntry {
   product_name: string;
   product_brand?: string | null;
   product_image_url?: string | null;
-  product_grade: string;
+  product_grade: string | null;
   product_category: string;
   logged_at: string;
   time_of_day?: 'morning' | 'afternoon' | 'evening' | 'night' | null;
@@ -582,7 +585,7 @@ export interface ScanHistoryItem {
   product_id: string;
   product_name: string;
   product_brand?: string;
-  product_grade: string;
+  product_grade: string | null;
   product_category: string;
   product_image_url?: string | null;
   scanned_at: string;

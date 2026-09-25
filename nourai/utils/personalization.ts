@@ -13,16 +13,9 @@ import type { Ingredient, OnboardingProfile } from '@/services/api';
 type FlagEntry = { pattern: string; label: string };
 
 const CONCERN_FLAGS: Record<string, FlagEntry[]> = {
-  fertility: [
-    { pattern: 'paraben', label: 'Endocrine disruptor — fertility risk' },
-    { pattern: 'phthalate', label: 'Endocrine disruptor — fertility risk' },
-    { pattern: 'fragrance', label: 'May contain hidden phthalates' },
-    { pattern: 'bpa', label: 'Endocrine disruptor — fertility risk' },
-    { pattern: 'triclosan', label: 'Hormonal disruption risk' },
-    { pattern: 'oxybenzone', label: 'Systemic absorption — fertility concern' },
-    { pattern: 'benzophenone', label: 'Possible endocrine disruptor' },
-    { pattern: 'phenoxyethanol', label: 'Reproductive toxicant at high doses' },
-  ],
+  // Fertility, hormonal-condition and infant-proximity concerns come only from
+  // reviewed evidence on the server. A substring match is not enough to tell
+  // someone an ingredient threatens their fertility or their child.
   thyroid: [
     { pattern: 'soy', label: 'May interfere with thyroid hormone absorption' },
     { pattern: 'isoflavone', label: 'Phytoestrogen — thyroid caution' },
@@ -30,16 +23,6 @@ const CONCERN_FLAGS: Record<string, FlagEntry[]> = {
     { pattern: 'kelp', label: 'High iodine — thyroid caution' },
     { pattern: 'selenium', label: 'Excess selenium affects thyroid' },
     { pattern: 'bromide', label: 'Displaces iodine — thyroid concern' },
-  ],
-  hormonal_condition: [
-    { pattern: 'paraben', label: 'Estrogenic activity' },
-    { pattern: 'phthalate', label: 'Endocrine disruption risk' },
-    { pattern: 'fragrance', label: 'May contain estrogenic compounds' },
-    { pattern: 'lavender', label: 'Weak phytoestrogenic activity reported' },
-    { pattern: 'tea tree', label: 'Weak hormonal activity in vitro' },
-    { pattern: 'progesterone', label: 'Exogenous hormone — review with doctor' },
-    { pattern: 'estrogen', label: 'Exogenous hormone — review with doctor' },
-    { pattern: 'bpa', label: 'Strong estrogenic activity' },
   ],
   medications: [
     { pattern: "st. john's wort", label: 'Strong CYP3A4 inducer — drug interaction' },
@@ -49,17 +32,6 @@ const CONCERN_FLAGS: Record<string, FlagEntry[]> = {
     { pattern: 'valerian', label: 'CNS depressant — sedative interaction' },
     { pattern: 'garlic extract', label: 'Antiplatelet — blood thinner interaction' },
     { pattern: 'vitamin k', label: 'Interferes with warfarin' },
-  ],
-  infant_proximity: [
-    { pattern: 'salicylic', label: 'Avoid skin contact with infants' },
-    { pattern: 'retinol', label: 'Toxic to infants via skin contact' },
-    { pattern: 'retinoic', label: 'Retinoic acid — infant skin risk' },
-    { pattern: 'fragrance', label: 'Sensitizing — keep away from infants' },
-    { pattern: 'glycolic', label: 'Strong acid — infant skin risk' },
-    { pattern: 'lactic acid', label: 'AHA — infant skin caution' },
-    { pattern: 'benzoyl peroxide', label: 'Not for infant proximity' },
-    { pattern: 'essential oil', label: 'Many are sensitizing for infants' },
-    { pattern: 'menthol', label: 'Can cause apnea in infants' },
   ],
 };
 

@@ -442,9 +442,10 @@ def _classify_exposures(product: Product, pi: ProductIngredient, ingredient: Ing
 
 
 def _severity(pi: ProductIngredient) -> float:
-    if pi.status == "avoid":
+    status = pi.effective_status
+    if status == "avoid":
         return 1.0
-    if pi.status == "watch":
+    if status == "watch":
         return 0.7
     return 0.45
 

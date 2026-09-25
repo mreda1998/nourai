@@ -119,5 +119,19 @@ class ProductIngredient(Base, UUIDMixin):
         Index("ix_product_ingredients_ingredient_id", "ingredient_id"),
     )
 
+    @property
+    def effective_status(self) -> str | None:
+        """
+        Status safe to show users. Older ingestion runs marked every ingredient
+        missing from our library as "watch"; an unrecognised ingredient is
+        unknown, not a concern, so an unlinked "watch" reads as None.
+        """
+        if self.status is None:
+            return None
+        value = self.status if isinstance(self.status, str) else self.status.value
+        if value == IngredientStatus.WATCH.value and self.ingredient_id is None:
+            return None
+        return value
+
     def __repr__(self) -> str:
         return f"<ProductIngredient {self.name} in {self.product_id}>"

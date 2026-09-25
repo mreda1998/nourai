@@ -6,6 +6,19 @@ from pydantic import BaseModel, ConfigDict, computed_field
 from app.models.product import IngredientStatus, ProductCategory
 from app.schemas.claim import ClaimResponse  # kept for __init__ re-export
 
+
+def grade_from_score(score: int | None) -> str | None:
+    """Letter grade for a health score. No score means no grade — never "C"."""
+    if score is None:
+        return None
+    if score >= 80:
+        return "A"
+    if score >= 60:
+        return "B"
+    if score >= 40:
+        return "C"
+    return "D"
+
 # ─── Bio-domain scoring ───────────────────────────────────────────────────────
 # Delegated to app/services/biodomain_scorer.py.
 # That module implements dose-aware, LLM-scored per-ingredient per-domain
@@ -196,16 +209,8 @@ class ProductResponse(BaseModel):
 
     @computed_field
     @property
-    def grade(self) -> str:
-        if self.health_score is None:
-            return "C"
-        if self.health_score >= 80:
-            return "A"
-        if self.health_score >= 60:
-            return "B"
-        if self.health_score >= 40:
-            return "C"
-        return "D"
+    def grade(self) -> str | None:
+        return grade_from_score(self.health_score)
 
     @computed_field
     @property
@@ -227,7 +232,7 @@ class ProductWithDetails(BaseModel):
     category: ProductCategory
     description: str | None = None
     image_url: str | None = None
-    grade: str = "C"
+    grade: str | None = None
     tags: list[str] = []
     has_allergen_warning: bool = False
     allergen_warning: str | None = None
@@ -236,18 +241,6 @@ class ProductWithDetails(BaseModel):
     bio_domains: list[BioDomain] = []
     recommendations: list[Recommendation] = []
     citations: list[Citation] = []
-
-    @classmethod
-    def _grade_from_score(cls, score: int | None) -> str:
-        if score is None:
-            return "C"
-        if score >= 80:
-            return "A"
-        if score >= 60:
-            return "B"
-        if score >= 40:
-            return "C"
-        return "D"
 
     @classmethod
     def from_orm_with_details(
@@ -264,12 +257,8 @@ class ProductWithDetails(BaseModel):
             if pi.amount:
                 concentration = f"{pi.amount} {pi.unit}".strip() if pi.unit else pi.amount
 
-            tag: str | None = None
-            tag_type: str | None = None
-            if pi.status:
-                tag = pi.status if isinstance(pi.status, str) else pi.status.value
-                if tag in ("watch", "avoid"):
-                    tag_type = "warning"
+            tag = pi.effective_status
+            tag_type = "warning" if tag in ("watch", "avoid") else None
 
             ingredients.append(MobileIngredient(
                 name=pi.name,
@@ -325,8 +314,9 @@ class ProductWithDetails(BaseModel):
             for ds in sorted(domain_scores, key=lambda d: d.display_value, reverse=True)
         ]
 
-        # Prefer computed score; fall back to manually seeded score if no domains found
-        effective_score = computed_health_score if domain_scores else product.health_score
+        # Prefer the ingredient-evidence score; fall back to a manually seeded
+        # score. Nutrition-only domains don't produce a health score.
+        effective_score = computed_health_score if computed_health_score is not None else product.health_score
         return cls(
             id=product.id,
             barcode=product.barcode,
@@ -335,7 +325,7 @@ class ProductWithDetails(BaseModel):
             category=product.category,
             description=product.summary,
             image_url=product.image_url,
-            grade=cls._grade_from_score(effective_score),
+            grade=grade_from_score(effective_score),
             is_ai_generated=False,
             has_allergen_warning=False,
             ingredients=ingredients,

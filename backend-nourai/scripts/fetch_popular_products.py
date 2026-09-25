@@ -264,18 +264,18 @@ def match_ingredient(raw_name: str, lookup: IngredientLookup) -> Ingredient | No
     return best
 
 
-def infer_status(canonical: Ingredient | None) -> IngredientStatus:
+def infer_status(canonical: Ingredient | None) -> IngredientStatus | None:
     """
     Assign a safety status badge for the ingredient list row.
 
     Rules (conservative by design — AVOID is never auto-assigned):
-    • No canonical match → WATCH  (we simply don't know enough)
+    • No canonical match → None   (unknown is not a concern)
     • Additive / preservative / sweetener category → WATCH
     • Has a non-empty contraindications list → WATCH
     • Everything else → CLEAN
     """
     if canonical is None:
-        return IngredientStatus.WATCH
+        return None
     if canonical.category in (
         IngredientCategory.ADDITIVE,
         IngredientCategory.PRESERVATIVE,

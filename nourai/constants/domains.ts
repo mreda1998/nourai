@@ -292,7 +292,7 @@ function onsetWeight(category: string, scannedAt?: Date): number {
 }
 
 export function computeRadarScores(
-  stack: { category: string; grade: string; scannedAt?: Date }[]
+  stack: { category: string; grade: string | null; scannedAt?: Date }[]
 ): number[] {
   return DOMAINS.map((domain) => {
     const isExposure = domain === 'Inflammation & Immune';

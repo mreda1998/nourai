@@ -249,7 +249,7 @@ async def get_ingredient(
             subcategory=product.subcategory,
             image_url=product.image_url,
             amount=pi.amount,
-            status=pi.status,
+            status=pi.effective_status,
         )
         for pi, product in found_rows
     ]

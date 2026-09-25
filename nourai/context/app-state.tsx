@@ -7,7 +7,7 @@ export interface Product {
   name: string;
   brand: string;
   category: string;
-  grade: 'A' | 'B' | 'C' | 'D';
+  grade: 'A' | 'B' | 'C' | 'D' | null;
   ingredients: string[];
   scannedAt: Date;
   imageUri?: string | null;
@@ -77,7 +77,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         name: e.product_name,
         brand: e.product_brand ?? '',
         category: e.product_category,
-        grade: (e.product_grade as Product['grade']) ?? 'C',
+        grade: (e.product_grade as Product['grade']) ?? null,
         ingredients: [],
         imageUri: e.product_image_url ?? null,
         scannedAt: new Date(e.logged_at ?? e.created_at),

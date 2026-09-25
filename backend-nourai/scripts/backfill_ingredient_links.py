@@ -74,9 +74,9 @@ def match_ingredient(raw_name: str, lookup: IngredientLookup) -> Ingredient | No
     return best
 
 
-def infer_status(canonical: Ingredient | None) -> IngredientStatus:
+def infer_status(canonical: Ingredient | None) -> IngredientStatus | None:
     if canonical is None:
-        return IngredientStatus.WATCH
+        return None  # Not in our library: unknown, not a concern
     if canonical.category in ("additive", "preservative", "sweetener"):
         return IngredientStatus.WATCH
     if canonical.contraindications:

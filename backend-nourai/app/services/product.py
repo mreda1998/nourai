@@ -279,9 +279,9 @@ def _match_ingredient(raw_name: str, lookup: dict[str, Ingredient]) -> Ingredien
     return best
 
 
-def _infer_status(canonical: Ingredient | None) -> IngredientStatus:
+def _infer_status(canonical: Ingredient | None) -> IngredientStatus | None:
     if canonical is None:
-        return IngredientStatus.WATCH
+        return None  # Not in our library: unknown, not a concern
     if canonical.category in (
         IngredientCategory.ADDITIVE,
         IngredientCategory.PRESERVATIVE,

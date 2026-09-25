@@ -346,7 +346,7 @@ class USDAService:
                 "name": name.title(),
                 "brand": None,
                 "category": "food",
-                "grade": "A",   # whole/raw foods default to A
+                "grade": None,  # Generic nutrient record — not graded
                 "is_ai_generated": False,
                 "image_url": None,
             })
@@ -458,7 +458,7 @@ class USDAService:
                 "Values shown are per 100g unless a serving size is specified."
             ),
             "image_url": None,
-            "grade": "A",
+            "grade": None,
             "tags": tags,
             "has_allergen_warning": False,
             "allergen_warning": None,

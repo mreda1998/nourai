@@ -6,22 +6,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.deps import CurrentUser, get_stack_service
+from app.schemas.product import grade_from_score
 from app.schemas.user import StackEntryCreate, StackEntryWithProduct
 from app.services.stack import StackService
 
 router = APIRouter()
-
-
-def _grade(health_score: int | None) -> str:
-    if health_score is None:
-        return "C"
-    if health_score >= 80:
-        return "A"
-    if health_score >= 60:
-        return "B"
-    if health_score >= 40:
-        return "C"
-    return "D"
 
 
 def _entry_with_product(entry) -> StackEntryWithProduct:
@@ -38,7 +27,7 @@ def _entry_with_product(entry) -> StackEntryWithProduct:
         product_name=product.name,
         product_brand=product.brand,
         product_image_url=product.image_url,
-        product_grade=_grade(product.health_score),
+        product_grade=grade_from_score(product.health_score),
         product_category=product.category.value if product.category else "supplement",
     )
 
