@@ -23,7 +23,7 @@ export default function DomainsScreen() {
   useEffect(() => {
     DOMAINS.forEach((d) => {
       api.getHealthDomain(d.key)
-        .then((r) => setScores((s) => ({ ...s, [d.key]: r.score })))
+        .then((r) => setScores((s) => ({ ...s, [d.key]: r?.score ?? null })))
         .catch(() => setScores((s) => ({ ...s, [d.key]: null })));
     });
   }, []);

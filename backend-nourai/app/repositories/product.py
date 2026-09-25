@@ -1,13 +1,13 @@
 """Product repository using SQLAlchemy 2.0."""
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
-from app.models.ingredient import Ingredient
 from app.models.product import Product, ProductCategory, ProductIngredient
+from app.models.ingestion import ProductIdentifier
 from app.models.ingredient import Ingredient
-from app.models.claim import Claim, ClaimSource
+from app.models.claim import Claim
 from app.repositories.base import BaseRepository
 
 
@@ -19,7 +19,10 @@ class ProductRepository(BaseRepository[Product]):
     async def get_by_barcode(self, barcode: str) -> Product | None:
         """Find product by barcode."""
         result = await self.db.execute(
-            select(Product).where(Product.barcode == barcode)
+            select(Product).where(
+                Product.barcode == barcode,
+                Product.publication_status == "published",
+            )
         )
         return result.scalar_one_or_none()
 
@@ -27,7 +30,7 @@ class ProductRepository(BaseRepository[Product]):
         """Get product with ingredients (including biodomain scores) and claims."""
         result = await self.db.execute(
             select(Product)
-            .where(Product.id == id)
+            .where(Product.id == id, Product.publication_status == "published")
             .options(
                 selectinload(Product.product_ingredients)
                     .selectinload(ProductIngredient.ingredient)
@@ -41,7 +44,30 @@ class ProductRepository(BaseRepository[Product]):
         """Get product by barcode with ingredients (including biodomain scores) and claims."""
         result = await self.db.execute(
             select(Product)
-            .where(Product.barcode == barcode)
+            .where(
+                Product.barcode == barcode,
+                Product.publication_status == "published",
+            )
+            .options(
+                selectinload(Product.product_ingredients)
+                    .selectinload(ProductIngredient.ingredient)
+                    .selectinload(Ingredient.biodomain_scores),
+                selectinload(Product.claims).selectinload(Claim.sources),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_gtin_with_details(self, gtin14: str) -> Product | None:
+        """Get a product through its normalized GTIN-14 identifier."""
+        result = await self.db.execute(
+            select(Product)
+            .join(ProductIdentifier, ProductIdentifier.product_id == Product.id)
+            .where(
+                ProductIdentifier.scheme == "gtin",
+                ProductIdentifier.value == gtin14,
+                ProductIdentifier.market_country == "",
+                Product.publication_status == "published",
+            )
             .options(
                 selectinload(Product.product_ingredients)
                     .selectinload(ProductIngredient.ingredient)
@@ -63,28 +89,27 @@ class ProductRepository(BaseRepository[Product]):
         Returns (products, total_count).
         """
         search_pattern = f"%{query}%"
+        search_filter = or_(
+            Product.name.ilike(search_pattern),
+            Product.brand.ilike(search_pattern),
+        )
         base_query = select(Product).where(
-            or_(
-                Product.name.ilike(search_pattern),
-                Product.brand.ilike(search_pattern),
-            )
+            Product.publication_status == "published",
+            search_filter,
         )
 
         if category:
             base_query = base_query.where(Product.category == category)
 
         # Count query mirrors base_query filters exactly
-        count_query = select(Product.id).where(
-            or_(
-                Product.name.ilike(search_pattern),
-                Product.brand.ilike(search_pattern),
-            )
+        count_query = select(func.count()).select_from(Product).where(
+            Product.publication_status == "published",
+            search_filter,
         )
         if category:
             count_query = count_query.where(Product.category == category)
 
-        count_result = await self.db.execute(count_query)
-        total = len(count_result.all())
+        total = (await self.db.execute(count_query)).scalar_one()
 
         # Get paginated results
         result = await self.db.execute(
@@ -105,7 +130,10 @@ class ProductRepository(BaseRepository[Product]):
         """Get products by category."""
         result = await self.db.execute(
             select(Product)
-            .where(Product.category == category)
+            .where(
+                Product.category == category,
+                Product.publication_status == "published",
+            )
             .order_by(Product.health_score.desc().nullslast())
             .limit(limit)
             .offset(offset)
@@ -122,15 +150,16 @@ class ProductRepository(BaseRepository[Product]):
         List all products with optional category filter.
         Returns (products, total_count).
         """
-        base_query = select(Product)
-        count_query = select(Product.id)
+        base_query = select(Product).where(Product.publication_status == "published")
+        count_query = select(func.count()).select_from(Product).where(
+            Product.publication_status == "published"
+        )
 
         if category:
             base_query = base_query.where(Product.category == category)
             count_query = count_query.where(Product.category == category)
 
-        count_result = await self.db.execute(count_query)
-        total = len(count_result.all())
+        total = (await self.db.execute(count_query)).scalar_one()
 
         result = await self.db.execute(
             base_query.order_by(Product.health_score.desc().nullslast())
@@ -147,7 +176,10 @@ class ProductRepository(BaseRepository[Product]):
         limit: int = 10,
     ) -> list[Product]:
         """Get top-rated products by health score."""
-        query = select(Product).where(Product.health_score.isnot(None))
+        query = select(Product).where(
+            Product.health_score.isnot(None),
+            Product.publication_status == "published",
+        )
 
         if category:
             query = query.where(Product.category == category)

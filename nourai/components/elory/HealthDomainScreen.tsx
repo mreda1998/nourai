@@ -39,11 +39,11 @@ export function HealthDomainScreen({ config }: { config: HealthDomainConfig }) {
   return (
     <Screen back title={config.title} right={<IconButton icon={SlidersHorizontal} label="Edit health profile" onPress={() => router.push('/health/edit-profile' as never)} />}>
       <Card padding={20} style={{ alignItems: 'center' }}>
-        {loading ? <View style={{ height: 180, justifyContent: 'center' }}><ActivityIndicator color={Palette.accent} /></View> : remote ? (
+        {loading ? <View style={{ height: 180, justifyContent: 'center' }}><ActivityIndicator color={Palette.accent} /></View> : remote?.score != null ? (
           <>
             <ScoreGauge score={remote.score} size={220} label={`${config.title} score`} qualifier={remote.qualifier || scoreQualifier(remote.score)} />
             <Txt variant="subhead" tone="secondary" align="center" style={{ marginTop: -6 }}>
-              Based on your profile, your stack and the evidence behind each ingredient.
+              Based on what you logged today and the evidence behind each ingredient.
             </Txt>
           </>
         ) : (

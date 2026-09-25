@@ -612,11 +612,13 @@ export interface SearchHistoryResponse {
 export interface DailyScoreCategory {
   key: string;
   label: string;
-  value: number;
+  /** Null when nothing logged today informs this category. */
+  value: number | null;
 }
 
 export interface DailyScoreResponse {
-  overall: number;
+  /** Null when nothing logged today could be scored. */
+  overall: number | null;
   qualifier: string;
   categories: DailyScoreCategory[];
 }
@@ -630,9 +632,27 @@ export interface HealthDomainFactor {
 export interface HealthDomainResponse {
   biodomain: string;
   label: string;
-  score: number;
+  score: number | null;
   qualifier: string;
   factors: HealthDomainFactor[];
+}
+
+// App health areas → backend biodomain keys (app/core/biodomains.py).
+const AREA_BIODOMAIN: Record<string, string | undefined> = {
+  skin: 'skin_appearance',
+  sleep: 'sleep_recovery',
+  gut: 'gut_digestive',
+  hormonal: 'hormonal_endocrine',
+  fitness: 'body_composition',
+};
+
+/** The day boundary for daily scores is the user's local midnight. */
+function deviceTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
 }
 
 // ─── Auth token provider ────────────────────────────────────────────────────
@@ -874,15 +894,18 @@ class APIService {
    * Get the Daily Longevity Score for the user's current-day stack.
    */
   async getDailyScore(): Promise<DailyScoreResponse> {
-    return this.fetch<DailyScoreResponse>('/users/me/daily-score');
+    return this.fetch<DailyScoreResponse>(`/users/me/daily-score?tz=${encodeURIComponent(deviceTimeZone())}`);
   }
 
   /**
    * Get a single biodomain's score + top contributing ingredients from today's stack.
    * `biodomain` is one of the canonical keys in app/core/biodomains.py (backend).
    */
-  async getHealthDomain(biodomain: string): Promise<HealthDomainResponse> {
-    return this.fetch<HealthDomainResponse>(`/users/me/health-domain/${biodomain}`);
+  /** Null for app areas the backend has no biodomain for (e.g. hair). */
+  async getHealthDomain(area: string): Promise<HealthDomainResponse | null> {
+    const biodomain = AREA_BIODOMAIN[area];
+    if (!biodomain) return null;
+    return this.fetch<HealthDomainResponse>(`/users/me/health-domain/${biodomain}?tz=${encodeURIComponent(deviceTimeZone())}`);
   }
 
   // ============================================

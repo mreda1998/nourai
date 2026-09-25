@@ -4,7 +4,7 @@
 VENV = . venv/bin/activate &&
 PYTHON = $(VENV) python3
 
-.PHONY: help up down logs migrate seed seed-peptides images research dev reset test backfill-links backfill-usda seed-whole-foods seed-fragrance seed-luxury-perfumes fetch-sephora enrich-pubchem fetch-cosing start seed-golden-set seed-golden-set-dry suggest-new-ingredients suggest-new-ingredients-more research-atelier
+.PHONY: help up down logs migrate seed seed-peptides images research dev worker worker-once import-lab reset test backfill-links backfill-usda seed-whole-foods seed-fragrance seed-luxury-perfumes fetch-sephora enrich-pubchem fetch-cosing start seed-golden-set seed-golden-set-dry suggest-new-ingredients suggest-new-ingredients-more research-atelier
 
 help:
 	@echo ""
@@ -16,7 +16,8 @@ help:
 	@echo "  make migrate           Run all pending migrations"
 	@echo "  make seed              Seed the golden set (products + ingredients)"
 	@echo "  make seed-peptides     Seed 20 curated peptides (run after migrate)"
-	@echo "  make fetch-products    Expand product catalogue from Open Food Facts + Beauty Facts"
+	@echo "  make enqueue-barcodes FILE=… Queue a prioritized GTIN manifest in batches"
+	@echo "  make fetch-products    Legacy search-API importer (do not use for scale)"
 	@echo "  make seed-fragrance    Seed EU fragrance allergen ingredients (run before fetch-products)"
 	@echo "  make seed-luxury-perfumes  Seed ~70 curated luxury perfumes (Chanel, Dior, LV, Creed...)"
 	@echo "  make fetch-sephora         Fetch thousands of luxury fragrances from Sephora (RAPIDAPI_KEY)"
@@ -29,6 +30,9 @@ help:
 	@echo "  make research-all      Run research agent on ALL pending ingredients"
 	@echo "  make research-atelier  Enrich complete ingredients with timing + interactions"
 	@echo "  make dev               Start the API server (hot reload)"
+	@echo "  make worker            Start the durable ingestion worker"
+	@echo "  make worker-once       Process at most one queued ingestion job"
+	@echo "  make import-lab FILE=… Import a versioned public lab-results manifest"
 	@echo "  make reset             Full reset: wipe DB, re-migrate, re-seed"
 	@echo "  make logs              Tail PostgreSQL logs"
 	@echo ""
@@ -125,6 +129,20 @@ migrate-down:
 migration-status:
 	$(VENV) alembic current
 
+# ─── Durable ingestion ───────────────────────────────────────────────────────
+
+worker:
+	$(PYTHON) -m app.workers.ingestion
+
+worker-once:
+	$(PYTHON) -m app.workers.ingestion --once
+
+enqueue-barcodes:
+	$(PYTHON) -m scripts.enqueue_barcodes $(FILE)
+
+import-lab:
+	$(PYTHON) -m scripts.import_lab_results $(FILE)
+
 # ─── Seeding ──────────────────────────────────────────────────────────────────
 
 seed:
@@ -157,6 +175,14 @@ images:
 
 images-dry:
 	$(PYTHON) scripts/upload_product_images.py --dry-run
+
+structures:
+	$(PYTHON) scripts/generate_ingredient_structures.py
+	@echo ""
+	@echo "Ingredient structure images generated with RDKit."
+
+structures-dry:
+	$(PYTHON) scripts/generate_ingredient_structures.py --dry-run
 
 # ─── Research agent ───────────────────────────────────────────────────────────
 

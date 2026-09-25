@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { api } from '@/services/api';
 import type { TimeOfDay } from '@/components/AddToStackSheet';
+import { parseServings } from '@/utils/servings';
 
 /**
  * Best-effort server sync for the local stack. The local AppState stack is
@@ -16,7 +17,7 @@ export async function accessToken(): Promise<string | null> {
 export async function syncAddToStack(productId: string, timeOfDay: TimeOfDay, loggedAt: Date, quantity?: string) {
   try {
     const token = await accessToken();
-    if (token) await api.addToStack(token, productId, timeOfDay, { loggedAt, notes: quantity });
+    if (token) await api.addToStack(token, productId, timeOfDay, { loggedAt, notes: quantity, quantity: parseServings(quantity) });
   } catch { /* the stack tab re-syncs on focus */ }
 }
 

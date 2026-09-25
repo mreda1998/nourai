@@ -1,0 +1,11 @@
+[build]
+dockerfile = "Dockerfile"
+
+[deploy]
+startCommand = "python -m app.workers.ingestion"
+restartPolicyType = "on-failure"
+restartPolicyMaxRetries = 10
+
+[[services]]
+name = "elory-ingestion-worker"
+

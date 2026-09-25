@@ -2,6 +2,10 @@
 
 FastAPI backend for the Elory health product scanner. Manages products, ingredients, evidence from PubMed research, and user health profiles.
 
+The product catalogue now uses a durable provenance-first ingestion pipeline.
+See [docs/INGESTION_ARCHITECTURE.md](docs/INGESTION_ARCHITECTURE.md) for the
+product-count strategy, image policy, lab-result model, and deployment design.
+
 ---
 
 ## Tech stack
@@ -52,9 +56,11 @@ make up               # start PostgreSQL on port 5432 (Docker)
 make migrate          # apply all Alembic migrations
 make seed             # load the golden set: 23 ingredients + 15 real products
 make seed-peptides    # load 20 curated peptides
-make fetch-products   # expand to ~4 500 products from Open Food Facts + Open Beauty Facts
+make enqueue-barcodes FILE=barcodes.csv  # queue a prioritized GTIN manifest
+make worker           # ingest, normalize, revise, and verify images
 make research         # enrich first 5 ingredients with PubMed evidence (test run)
 make dev              # start API with hot reload → http://localhost:8001
+make worker           # start the independently scalable ingestion worker
 ```
 
 ### 2 — Populate the full database
@@ -62,8 +68,9 @@ make dev              # start API with hot reload → http://localhost:8001
 Run these after `make seed` to build a production-quality dataset.
 
 ```bash
-# Step 1 — expand products (takes ~10 min, no API cost)
-make fetch-products
+# Step 1 — queue the prioritized catalogue, then run workers
+make enqueue-barcodes FILE=barcodes.csv
+make worker
 
 # Step 2 — dry-run the research agent to see what will be processed
 make research-dry
@@ -86,7 +93,7 @@ make dev              # start API (hot reload)
 make research         # enrich next 5 pending ingredients
 make research-retry   # retry any that previously failed
 make research-atelier # enrich complete ingredients with timing + interactions
-make fetch-products   # pull new products from OpenFoodFacts (idempotent)
+make enqueue-barcodes FILE=barcodes.csv  # queue a versioned/daily refresh
 make migrate          # apply any new migrations after a git pull
 make reset            # full wipe → re-migrate → re-seed (destructive)
 make logs             # tail PostgreSQL logs
@@ -133,7 +140,9 @@ Copy `.env.example` to `.env` and fill in the values below.
 |----------|---------|-------------|
 | `ENVIRONMENT` | `development` | `development` or `production` |
 | `DEBUG` | `true` | Enables SQL query logging |
-| `OPENFOODFACTS_USER_AGENT` | `Elory/1.0` | Identifies your app to OpenFoodFacts |
+| `OPENFOODFACTS_USER_AGENT` | `Elory/1.0 (hello@elory.app)` | Identifies your app to Open Food Facts; use your real contact email |
+| `INGESTION_WORKER_ID` | `elory-ingestion-worker` | Stable worker identity used for job leases |
+| `IMAGE_PROCESSING_ENABLED` | `true` | Enables deterministic authentic-image verification |
 
 ---
 
@@ -220,9 +229,13 @@ After seeding, populate PubMed evidence with:
 make research-all     # PubMed + belief/reality for all PENDING ingredients
 ```
 
-### `scripts/fetch_popular_products.py`
+### `scripts/fetch_popular_products.py` (legacy)
 
-Expands the golden set with real, popular products pulled from [Open Food Facts](https://world.openfoodfacts.org/) and [Open Beauty Facts](https://world.openbeautyfacts.org/). Products are sorted by `unique_scans_n` (real scan count) so the most widely used items are imported first.
+This older search-API importer is retained for compatibility, but should not be
+used to scale the catalogue. It bypasses immutable source snapshots, revisions,
+quality gates, and worker retry controls. Use a prioritized GTIN manifest with
+`make enqueue-barcodes FILE=…`; use licensed bulk exports/deltas beyond the
+initial 25,000-product milestone.
 
 - Covers 15 categories: dietary supplements, proteins, vitamins, energy drinks, dairy, plant-based, snacks, beverages, baby food, condiments, cereals, moisturisers, sunscreen, serums, shampoos
 - Target: ~4 500 products

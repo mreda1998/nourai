@@ -111,7 +111,8 @@ function headline(score: number | null) {
 
 function ScoreCard({ score, loading }: { score: DailyScoreResponse | null; loading: boolean }) {
   const value = score?.overall ?? null;
-  const weakest = score?.categories?.length ? [...score.categories].sort((a, b) => a.value - b.value)[0] : null;
+  const scored = (score?.categories ?? []).filter((c): c is typeof c & { value: number } => c.value != null);
+  const weakest = scored.length ? [...scored].sort((a, b) => a.value - b.value)[0] : null;
   return (
     <Animated.View entering={FadeInDown.duration(700).delay(150)}>
       <Card padding={22} style={{ alignItems: 'stretch' }}>
@@ -124,16 +125,18 @@ function ScoreCard({ score, loading }: { score: DailyScoreResponse | null; loadi
         </View>
         <Txt variant="title1" align="center" style={{ marginTop: -8 }}>{headline(value)}</Txt>
         <Txt variant="subhead" tone="secondary" align="center" style={{ marginTop: 8, paddingHorizontal: 8 }}>
-          {value == null
+          {score == null
             ? 'We couldn’t calculate today’s score. Pull down to try again.'
-            : weakest && weakest.value < 70
-              ? `${weakest.label} is holding your score back. Tap it below to see why.`
-              : 'Built from product quality, evidence strength and your health profile.'}
+            : value == null
+              ? 'Nothing logged today has enough dose and evidence data to score yet.'
+              : weakest && weakest.value < 70
+                ? `${weakest.label} is holding your score back. Tap it below to see why.`
+                : 'Built from what you logged today, at the amounts on the label, and the evidence behind each ingredient.'}
         </Txt>
 
-        {score?.categories?.length ? (
+        {scored.length ? (
           <View style={{ marginTop: 18, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Palette.hairline, paddingTop: 6 }}>
-            {score.categories.slice(0, 4).map((c, i) => (
+            {scored.slice(0, 4).map((c, i) => (
               <ContributorBar key={c.key} label={c.label} value={c.value} valueLabel={`${Math.round(c.value)}`} delay={250 + i * 90} onPress={() => router.push('/domains' as never)} />
             ))}
           </View>

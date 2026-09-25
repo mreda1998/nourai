@@ -10,6 +10,26 @@ from app.models.subscription import Subscription, SubscriptionTier, Subscription
 from app.models.unmatched_ingredient_log import UnmatchedIngredientLog  # noqa: F401
 from app.models.chat_message import ChatMessage  # noqa: F401
 from app.models.ingredient_interaction import IngredientInteraction  # noqa: F401
+from app.models.ingestion import (  # noqa: F401
+    DataSource,
+    SourceRecord,
+    IngestionJob,
+    ProductIdentifier,
+    ProductRevision,
+    ProductIngredientOccurrence,
+    ProductAsset,
+    IngredientAlias,
+    IngredientExternalIdentifier,
+    QualityIssue,
+    ReviewTask,
+)
+from app.models.laboratory import (  # noqa: F401
+    LabDataset,
+    LabSample,
+    LabAnalysis,
+    LabObservation,
+    LabInterpretation,
+)
 
 __all__ = [
     # Product
@@ -46,4 +66,22 @@ __all__ = [
     "ChatMessage",
     # Ingredient interactions
     "IngredientInteraction",
+    # Ingestion and provenance
+    "DataSource",
+    "SourceRecord",
+    "IngestionJob",
+    "ProductIdentifier",
+    "ProductRevision",
+    "ProductIngredientOccurrence",
+    "ProductAsset",
+    "IngredientAlias",
+    "IngredientExternalIdentifier",
+    "QualityIssue",
+    "ReviewTask",
+    # Laboratory evidence
+    "LabDataset",
+    "LabSample",
+    "LabAnalysis",
+    "LabObservation",
+    "LabInterpretation",
 ]

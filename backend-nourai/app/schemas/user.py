@@ -76,6 +76,7 @@ class ScanHistoryItemResponse(BaseModel):
     product_brand: str | None = None
     product_grade: str | None = None
     product_category: str = "supplement"
+    product_image_url: str | None = None
     scanned_at: datetime
 
 
@@ -84,6 +85,65 @@ class ScanHistoryResponse(BaseModel):
 
     items: list[ScanHistoryItemResponse]
     total: int
+
+
+class SearchHistoryItemResponse(BaseModel):
+    """A single search history entry."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    query: str
+    result_type: str
+    searched_at: datetime
+
+
+class SearchHistoryResponse(BaseModel):
+    """Paginated search history."""
+
+    items: list[SearchHistoryItemResponse]
+    total: int
+
+
+class SearchHistoryCreate(BaseModel):
+    """Log a search request."""
+
+    query: str
+    result_type: str = "product"
+
+
+class DailyScoreCategory(BaseModel):
+    """One of the 5 display categories that make up the daily score."""
+
+    key: str
+    label: str
+    value: int | None  # None when nothing logged today informs this category
+
+
+class DailyScoreResponse(BaseModel):
+    """Daily Longevity Score for the user's current-day stack."""
+
+    overall: int | None  # None when nothing logged today could be scored
+    qualifier: str
+    categories: list[DailyScoreCategory]
+
+
+class HealthDomainFactor(BaseModel):
+    """One ingredient's contribution to a single biodomain score."""
+
+    ingredient_name: str
+    strength: str  # Strong | Moderate | Limited
+    direction: str  # benefit | harm | neutral
+
+
+class HealthDomainResponse(BaseModel):
+    """Single biodomain score + top contributing ingredients from the user's stack."""
+
+    biodomain: str
+    label: str
+    score: int | None
+    qualifier: str
+    factors: list[HealthDomainFactor]
 
 
 class StackEntryCreate(BaseModel):
