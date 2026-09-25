@@ -9,7 +9,7 @@ Show people how a molecule acts in the body and how far the human evidence actua
 
 The user-facing promise for every ingredient is one visible ladder of certainty:
 
-**Reviewed route → Mechanism only → Function only → Not yet identified**
+**Reviewed route → Mechanism only → Function only → Not yet reviewed**
 
 Scale never forces a guess. It only leaves more ingredients lower on the ladder until someone reviews them.
 
@@ -30,7 +30,7 @@ Pathways attach to **active compounds**, never to products. Products (millions) 
 
 | Layer | Question | Produced by | Shown as |
 |---|---|---|---|
-| 1. Substance identity | What is this label name? | Existing matcher + `ingredient_aliases` (out of scope to extend here) | "Not yet identified" when unmatched |
+| 1. Substance identity | What is this label name? | Existing matcher + `ingredient_aliases` (out of scope to extend here) | "Not yet reviewed" when unmatched |
 | 2. Role | Active, nutrient, functional, fragrance? | `ingredients.role` + `function_summary` | Function line only, no pathway |
 | 3. Mechanism facts | Which molecules/proteins/pathways/cell compartments are involved? | Automatic import from open databases only — no generated wording | "How it works (mechanism, not a proven benefit)" panels |
 | 4. Reviewed routes | Does the mechanism lead to a measured human outcome, how much, where does evidence stop? | AI-drafted, machine-checked, human-approved YAML routes | Evidence chain, dose bar, evidence-grid cells |

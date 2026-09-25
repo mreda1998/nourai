@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Ladder levels, exactly: `reviewed | mechanism | function | unidentified`, shown as "Reviewed route · Mechanism only · Function only · Not yet identified".
+- Ladder levels, exactly: `reviewed | mechanism | function | unidentified`, shown as "Reviewed route · Mechanism only · Function only · Not yet reviewed".
 - Layer 3 never produces an outcome claim; only a published route can.
 - Published route versions are immutable; a change creates `version + 1` with `supersedes_id`.
 - No response defined here returns `ingredient_biodomain_scores` values.

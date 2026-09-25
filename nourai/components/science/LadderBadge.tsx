@@ -5,7 +5,7 @@ import type { LadderLevel } from '@/services/api';
 import { Txt } from '@/components/ui';
 
 const STEPS: { level: LadderLevel; label: string }[] = [
-  { level: 'unidentified', label: 'Not yet identified' },
+  { level: 'unidentified', label: 'Not yet reviewed' },
   { level: 'function', label: 'Function only' },
   { level: 'mechanism', label: 'Mechanism only' },
   { level: 'reviewed', label: 'Reviewed route' },
@@ -17,7 +17,7 @@ const EXPLAIN: Record<LadderLevel, string> = {
   reviewed: 'A reviewed route links how it works to outcomes measured in people.',
   mechanism: 'How it works, from scientific databases. Not yet reviewed for effects in people.',
   function: 'What it does in the product. No health effect is claimed.',
-  unidentified: 'We haven’t identified this ingredient yet.',
+  unidentified: 'We haven’t reviewed what this ingredient does or how it works yet.',
 };
 
 /** Four-step ladder showing how far our knowledge of an ingredient goes. */
