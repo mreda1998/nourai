@@ -1,0 +1,254 @@
+{
+ "chebi_ids_for_name|Nicotinamide Mononucleotide": [
+  "50383",
+  "16171"
+ ],
+ "chebi_related_forms|50383": [],
+ "chebi_related_forms|16171": [
+  "14648",
+  "14649"
+ ],
+ "reactome_pathways|50383": [],
+ "reactome_pathways|16171": [],
+ "reactome_pathways|14648": [],
+ "reactome_pathways|14649": [
+  [
+   "R-HSA-196807",
+   "Nicotinate metabolism"
+  ],
+  [
+   "R-HSA-9660826",
+   "Purinergic signaling in leishmaniasis infection"
+  ]
+ ],
+ "reactome_ancestors|R-HSA-196807": [
+  [
+   [
+    "R-HSA-196807",
+    "Nicotinate metabolism",
+    false
+   ],
+   [
+    "R-HSA-196849",
+    "Metabolism of water-soluble vitamins and cofactors",
+    false
+   ],
+   [
+    "R-HSA-196854",
+    "Metabolism of vitamins and cofactors",
+    true
+   ],
+   [
+    "R-HSA-1430728",
+    "Metabolism",
+    true
+   ]
+  ]
+ ],
+ "reactome_proteins|R-HSA-196807": [
+  [
+   "Q9BZQ4",
+   "NMNAT2"
+  ],
+  [
+   "Q9NPI5",
+   "NMRK2"
+  ],
+  [
+   "Q8N695",
+   "SLC5A8"
+  ],
+  [
+   "P21589",
+   "NT5E"
+  ],
+  [
+   "Q9Y226",
+   "SLC22A13"
+  ],
+  [
+   "Q5VYX0",
+   "RNLS"
+  ],
+  [
+   "Q9NWW6",
+   "NMRK1"
+  ],
+  [
+   "Q9BQG2",
+   "NUDT12"
+  ],
+  [
+   "Q4G0N4",
+   "NADK2"
+  ],
+  [
+   "Q96T66",
+   "NMNAT3"
+  ],
+  [
+   "Q15274",
+   "QPRT"
+  ],
+  [
+   "P28907",
+   "CD38"
+  ],
+  [
+   "Q6IA69",
+   "NADSYN1"
+  ],
+  [
+   "Q8NCW5",
+   "NAXE"
+  ],
+  [
+   "Q460N5",
+   "PARP14"
+  ],
+  [
+   "Q2NL67",
+   "PARP6"
+  ],
+  [
+   "Q8N3A8",
+   "PARP8"
+  ],
+  [
+   "Q9UKK3",
+   "PARP4"
+  ],
+  [
+   "Q53GL7",
+   "PARP10"
+  ],
+  [
+   "Q8IXQ6",
+   "PARP9"
+  ],
+  [
+   "Q8N5Y8",
+   "PARP16"
+  ],
+  [
+   "Q8IW45",
+   "NAXD"
+  ],
+  [
+   "Q10588",
+   "BST1"
+  ],
+  [
+   "O95544",
+   "NADK"
+  ],
+  [
+   "P40261",
+   "NNMT"
+  ],
+  [
+   "Q9H1U9",
+   "SLC25A51"
+  ],
+  [
+   "Q9HAN9",
+   "NMNAT1"
+  ],
+  [
+   "P43490",
+   "NAMPT"
+  ],
+  [
+   "Q6XQN6",
+   "NAPRT"
+  ]
+ ],
+ "uniprot_locations|Q9BZQ4": [
+  [
+   "SL-0134",
+   "Golgi apparatus membrane"
+  ],
+  [
+   "SL-0089",
+   "Cytoplasmic vesicle membrane"
+  ],
+  [
+   "SL-0086",
+   "Cytoplasm"
+  ],
+  [
+   "SL-0279",
+   "Cell projection, axon"
+  ]
+ ],
+ "uniprot_locations|Q9NPI5": [],
+ "uniprot_locations|Q8N695": [
+  [
+   "SL-0015",
+   "Apical cell membrane"
+  ]
+ ],
+ "uniprot_locations|P21589": [
+  [
+   "SL-0039",
+   "Cell membrane"
+  ]
+ ],
+ "uniprot_locations|Q9Y226": [
+  [
+   "SL-0015",
+   "Apical cell membrane"
+  ]
+ ],
+ "uniprot_locations|Q5VYX0": [
+  [
+   "SL-0243",
+   "Secreted"
+  ]
+ ],
+ "uniprot_locations|Q9NWW6": [],
+ "uniprot_locations|Q9BQG2": [
+  [
+   "SL-0086",
+   "Cytoplasm"
+  ],
+  [
+   "SL-0204",
+   "Peroxisome"
+  ],
+  [
+   "SL-0281",
+   "Cytoplasmic granule"
+  ]
+ ],
+ "uniprot_locations|Q4G0N4": [
+  [
+   "SL-0173",
+   "Mitochondrion"
+  ]
+ ],
+ "uniprot_locations|Q96T66": [
+  [
+   "SL-0173",
+   "Mitochondrion"
+  ]
+ ],
+ "uniprot_locations|Q15274": [],
+ "uniprot_locations|P28907": [
+  [
+   "SL-0310",
+   "Cell surface"
+  ],
+  [
+   "SL-0039",
+   "Cell membrane"
+  ]
+ ],
+ "rcsb_ligand|50383": null,
+ "rcsb_ligand|16171": null,
+ "rcsb_ligand|14648": "NMN",
+ "rcsb_best_human_entry|NMN": [
+  "2QG6",
+  "Crystal structure of human nicotinamide riboside kinase (NRK1) in complex with nicotinamide mononucleotide (NMN)"
+ ]
+}

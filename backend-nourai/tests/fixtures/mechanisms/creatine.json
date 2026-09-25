@@ -1,0 +1,158 @@
+{
+ "chebi_ids_for_name|Creatine": [
+  "16919"
+ ],
+ "chebi_related_forms|16919": [
+  "66924",
+  "57947"
+ ],
+ "reactome_pathways|16919": [],
+ "reactome_pathways|66924": [],
+ "reactome_pathways|57947": [
+  [
+   "R-HSA-71288",
+   "Creatine metabolism"
+  ]
+ ],
+ "reactome_ancestors|R-HSA-71288": [
+  [
+   [
+    "R-HSA-71288",
+    "Creatine metabolism",
+    false
+   ],
+   [
+    "R-HSA-71291",
+    "Metabolism of amino acids and derivatives",
+    true
+   ],
+   [
+    "R-HSA-1430728",
+    "Metabolism",
+    true
+   ]
+  ]
+ ],
+ "reactome_proteins|R-HSA-71288": [
+  [
+   "P17540",
+   "CKMT2"
+  ],
+  [
+   "P12532",
+   "CKMT1A"
+  ],
+  [
+   "Q14353",
+   "GAMT"
+  ],
+  [
+   "P50440",
+   "GATM"
+  ],
+  [
+   "P06732",
+   "CKM"
+  ],
+  [
+   "P12277",
+   "CKB"
+  ],
+  [
+   "P48065",
+   "SLC6A12"
+  ],
+  [
+   "P48066",
+   "SLC6A11"
+  ],
+  [
+   "Q99884",
+   "SLC6A7"
+  ],
+  [
+   "P48029",
+   "SLC6A8"
+  ]
+ ],
+ "uniprot_locations|P17540": [
+  [
+   "SL-0168",
+   "Mitochondrion inner membrane"
+  ]
+ ],
+ "uniprot_locations|P12532": [
+  [
+   "SL-0168",
+   "Mitochondrion inner membrane"
+  ]
+ ],
+ "uniprot_locations|Q14353": [],
+ "uniprot_locations|P50440": [
+  [
+   "SL-0168",
+   "Mitochondrion inner membrane"
+  ],
+  [
+   "SL-0086",
+   "Cytoplasm"
+  ]
+ ],
+ "uniprot_locations|P06732": [
+  [
+   "SL-0086",
+   "Cytoplasm"
+  ]
+ ],
+ "uniprot_locations|P12277": [
+  [
+   "SL-0091",
+   "Cytoplasm, cytosol"
+  ],
+  [
+   "SL-0173",
+   "Mitochondrion"
+  ],
+  [
+   "SL-0039",
+   "Cell membrane"
+  ]
+ ],
+ "uniprot_locations|P48065": [
+  [
+   "SL-0026",
+   "Basolateral cell membrane"
+  ],
+  [
+   "SL-0039",
+   "Cell membrane"
+  ]
+ ],
+ "uniprot_locations|P48066": [
+  [
+   "SL-0039",
+   "Cell membrane"
+  ]
+ ],
+ "uniprot_locations|Q99884": [
+  [
+   "SL-0531",
+   "Synaptic cell membrane"
+  ]
+ ],
+ "uniprot_locations|P48029": [
+  [
+   "SL-0039",
+   "Cell membrane"
+  ],
+  [
+   "SL-0015",
+   "Apical cell membrane"
+  ]
+ ],
+ "rcsb_ligand|16919": "CRN",
+ "rcsb_best_human_entry|CRN": [
+  "3B6R",
+  "Crystal structure of Human Brain-type Creatine Kinase"
+ ]
+}

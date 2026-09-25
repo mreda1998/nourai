@@ -1,0 +1,82 @@
+{
+ "chebi_ids_for_name|Caffeine": [
+  "27732",
+  "27134"
+ ],
+ "chebi_related_forms|27732": [],
+ "chebi_related_forms|27134": [],
+ "reactome_pathways|27732": [
+  [
+   "R-HSA-211957",
+   "Aromatic amines can be N-hydroxylated or N-dealkylated by CYP1A2"
+  ],
+  [
+   "R-HSA-418594",
+   "G alpha (i) signalling events"
+  ],
+  [
+   "R-HSA-420499",
+   "Class C/3 (Metabotropic glutamate/pheromone receptors)"
+  ],
+  [
+   "R-HSA-9717207",
+   "Sensory perception of sweet, bitter, and umami (glutamate) taste"
+  ]
+ ],
+ "reactome_pathways|27134": [],
+ "reactome_ancestors|R-HSA-211957": [
+  [
+   [
+    "R-HSA-211957",
+    "Aromatic amines can be N-hydroxylated or N-dealkylated by CYP1A2",
+    false
+   ],
+   [
+    "R-HSA-211981",
+    "Xenobiotics",
+    false
+   ],
+   [
+    "R-HSA-211897",
+    "Cytochrome P450 - arranged by substrate type",
+    false
+   ],
+   [
+    "R-HSA-211945",
+    "Phase I - Functionalization of compounds",
+    false
+   ],
+   [
+    "R-HSA-211859",
+    "Biological oxidations",
+    true
+   ],
+   [
+    "R-HSA-1430728",
+    "Metabolism",
+    true
+   ]
+  ]
+ ],
+ "reactome_proteins|R-HSA-211957": [
+  [
+   "P05177",
+   "CYP1A2"
+  ]
+ ],
+ "uniprot_locations|P05177": [
+  [
+   "SL-0097",
+   "Endoplasmic reticulum membrane"
+  ],
+  [
+   "SL-0165",
+   "Microsome membrane"
+  ]
+ ],
+ "rcsb_ligand|27732": "CFF",
+ "rcsb_best_human_entry|CFF": [
+  "7PBB",
+  "Crystal structure of CD73 in complex with caffeine in the open form"
+ ]
+}
