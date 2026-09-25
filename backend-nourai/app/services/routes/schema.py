@@ -103,6 +103,8 @@ class RouteFile(_Model):
     create_if_missing: IngredientSeed | None = None
     forms: list[str] = Field(default_factory=list)
     domain: str | None = None
+    # What the measured outcome means for the person: the evidence grid cell.
+    direction: Literal["supports", "mixed", "risk"] = "supports"
     title: str
     takeaway: str
     structure: StructureSpec | None = None

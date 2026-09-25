@@ -19,6 +19,9 @@ from app.models.ingredient import Ingredient
 from app.models.ingredient_evidence import IngredientEvidence
 from app.models.ingredient_biodomain_score import IngredientBioDomainScore
 from app.models.product import Product, ProductIngredient
+from app.repositories.pathway import PathwayRepository
+from app.schemas.pathway import MechanismOut
+from app.services.pathway_views import ingredient_mechanism
 
 router = APIRouter()
 
@@ -194,6 +197,18 @@ async def search_ingredients(
         ],
         total=total,
     )
+
+
+@router.get("/{ingredient_id}/mechanism", response_model=MechanismOut, response_model_by_alias=True)
+async def get_ingredient_mechanism(
+    ingredient_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """How far our knowledge goes (ladder level), the reviewed route, and viewer panels."""
+    out = await ingredient_mechanism(PathwayRepository(db), ingredient_id)
+    if out is None:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    return out
 
 
 @router.get("/{ingredient_id}", response_model=IngredientDetail)

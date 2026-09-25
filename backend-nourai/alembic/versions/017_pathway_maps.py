@@ -90,6 +90,7 @@ def upgrade() -> None:
         sa.Column("title", sa.String(255), nullable=False),
         sa.Column("takeaway", sa.Text(), nullable=False),
         sa.Column("domain", sa.String(50), nullable=True),
+        sa.Column("direction", sa.String(10), nullable=False, server_default="supports"),
         sa.Column("status", sa.String(20), nullable=False, server_default="draft"),
         sa.Column("reviewed_by", sa.String(255), nullable=True),
         sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),

@@ -21,6 +21,9 @@ from app.models.product import ProductCategory
 from app.core.config import settings
 from app.db.session import async_session_factory
 from app.schemas.ingestion import BarcodeIngestionResponse, IngestionJobResponse
+from app.repositories.pathway import PathwayRepository
+from app.schemas.pathway import ProductEvidenceOut
+from app.services.pathway_views import product_evidence
 from app.schemas.personalization import PersonalAnalysisResponse
 from app.schemas.product import (
     NUTRIENT_DISPLAY_NAMES,
@@ -127,6 +130,12 @@ async def get_product(
 
     lookup = await _build_ingredient_lookup(db)
     return ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)
+
+
+@router.get("/{product_id}/evidence", response_model=ProductEvidenceOut)
+async def get_product_evidence(product_id: UUID, db: DBSession):
+    """Evidence grid (active compounds × domains) and dose bars, assembled automatically."""
+    return await product_evidence(PathwayRepository(db), product_id)
 
 
 @router.get("/{product_id}/personalize", response_model=PersonalAnalysisResponse)

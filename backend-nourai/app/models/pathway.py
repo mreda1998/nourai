@@ -126,6 +126,7 @@ class PathwayRoute(Base, UUIDMixin, TimestampMixin):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     takeaway: Mapped[str] = mapped_column(Text, nullable=False)
     domain: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    direction: Mapped[str] = mapped_column(String(10), nullable=False, default="supports")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default=RouteStatus.DRAFT)
     reviewed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

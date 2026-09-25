@@ -98,7 +98,7 @@ async def apply_route(
     now = datetime.now(timezone.utc)
     row = PathwayRoute(
         slug=route.slug, version=action.version, ingredient_id=ingredient.id,
-        title=route.title, takeaway=route.takeaway.strip(), domain=route.domain,
+        title=route.title, takeaway=route.takeaway.strip(), domain=route.domain, direction=route.direction,
         status=RouteStatus.PUBLISHED.value, reviewed_by=reviewer, reviewed_at=now, published_at=now,
         supersedes_id=latest.id if latest else None, source_path=source_path, source_commit=commit,
         content_hash=content_hash(route),
