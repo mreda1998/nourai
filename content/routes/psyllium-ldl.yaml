@@ -1,0 +1,50 @@
+slug: psyllium-ldl
+ingredient: Psyllium Husk
+domain: cardiovascular
+direction: supports
+title: A gel that lowers LDL
+takeaway: >
+  Psyllium forms a thick gel in the gut that carries bile acids out; the liver
+  then uses cholesterol to make more. Across 28 trials, around 10 g a day
+  lowered LDL cholesterol by a modest, consistent amount.
+nodes:
+  - {id: dose, role: input, label: Psyllium husk, plain_label: Psyllium fibre you take}
+  - {id: gel, role: mechanism, label: Viscous gel in the gut, plain_label: Thickens into a gel as it absorbs water}
+  - {id: bile, role: mechanism, label: More bile acids excreted, plain_label: The liver pulls cholesterol from blood to replace them, reactome: R-HSA-194068}
+  - {id: ldl, role: outcome, label: Lower LDL cholesterol}
+  - {id: events, role: boundary, label: Fewer heart attacks and strokes}
+links:
+  - from: dose
+    to: gel
+    evidence_type: established_biochemistry
+    strength: strong
+  - from: gel
+    to: bile
+    evidence_type: established_biochemistry
+    strength: moderate
+  - from: bile
+    to: ldl
+    evidence_type: meta_analysis
+    strength: moderate
+    claims:
+      - claim_text: Psyllium lowered LDL cholesterol compared with control.
+        population: People with or without high cholesterol (28 RCTs, 1,924 people)
+        comparator: Control
+        duration: 3 weeks or longer
+        dose: {low: 10.2, high: 10.2, unit: g, basis: per_day}
+        outcome_measure: LDL cholesterol
+        effect: {estimate: -0.33, ci: [-0.38, -0.27], unit: mmol/L}
+        certainty: moderate
+        limitations: Rated moderate quality because results varied between trials; 10.2 g is the median dose, not a prescription.
+        citations: [{pmid: "30239559"}]
+      - claim_text: Apolipoprotein B, an alternative marker of atherogenic particles, also fell.
+        population: People with or without high cholesterol (28 RCTs, 1,924 people)
+        comparator: Control
+        outcome_measure: Apolipoprotein B
+        effect: {estimate: -0.05, ci: [-0.08, -0.03], unit: g/L}
+        certainty: high
+        citations: [{pmid: "30239559"}]
+  - from: ldl
+    to: events
+    evidence_stops_here: true
+    stop_reason: These trials measured cholesterol, not heart attacks or strokes.

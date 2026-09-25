@@ -1,0 +1,59 @@
+slug: creatine-strength-training
+ingredient: Creatine
+forms: [Creatine Monohydrate]
+domain: body_composition
+direction: supports
+title: From scoop to strength
+takeaway: >
+  Combined with resistance training, creatine adds a small, well-measured gain
+  in lean mass and strength in older adults. It works by topping up a fast
+  energy reserve in muscle. Without training, the benefit is unclear.
+nodes:
+  - {id: dose, role: input, label: Creatine, plain_label: Creatine you take}
+  - {id: pcr, role: mechanism, label: Muscle phosphocreatine, plain_label: A bigger fast-energy reserve in muscle, chebi: "CHEBI:17287"}
+  - {id: atp, role: mechanism, label: Faster ATP regeneration, plain_label: Energy restored faster during hard efforts, reactome: R-HSA-71288}
+  - {id: lean, role: outcome, label: Lean mass and strength with resistance training}
+  - {id: life, role: boundary, label: Longer life}
+links:
+  - from: dose
+    to: pcr
+    relation_text: Stored in muscle as phosphocreatine
+    evidence_type: established_biochemistry
+    strength: strong
+    claims:
+      - claim_text: Supplementation up to 30 g/day for up to 5 years was well tolerated in healthy people; the authors suggest a low habitual intake such as 3 g/day may bring health benefits.
+        population: Position stand of the International Society of Sports Nutrition
+        dose: {low: 3, high: 5, unit: g, basis: per_day}
+        certainty: moderate
+        limitations: Expert position statement, not a single trial. The commonly used 3–5 g/day maintenance range is stated in the full text, not the abstract.
+        citations: [{pmid: "28615996"}]
+  - from: pcr
+    to: atp
+    relation_text: Creatine kinase turns phosphocreatine + ADP back into ATP
+    evidence_type: established_biochemistry
+    strength: strong
+  - from: atp
+    to: lean
+    evidence_type: meta_analysis
+    strength: moderate
+    claims:
+      - claim_text: Lean tissue mass rose more with creatine than with placebo during resistance training.
+        population: Adults with a mean age of 57–70 (22 RCTs, 721 people)
+        comparator: Placebo + the same resistance training
+        duration: 7–52 weeks, training 2–3 days a week
+        outcome_measure: Lean tissue mass
+        effect: {estimate: 1.37, ci: [0.97, 1.76], unit: kg}
+        certainty: moderate
+        limitations: Group averages; lean tissue includes more than new muscle. Only studied alongside resistance training.
+        citations: [{pmid: "29138605"}]
+      - claim_text: Chest-press strength also improved more with creatine than with placebo.
+        population: Adults with a mean age of 57–70 (22 RCTs, 721 people)
+        comparator: Placebo + the same resistance training
+        outcome_measure: Chest-press strength (standardised mean difference)
+        effect: {estimate: 0.35, ci: [0.16, 0.53], unit: SMD}
+        certainty: moderate
+        citations: [{pmid: "29138605"}]
+  - from: lean
+    to: life
+    evidence_stops_here: true
+    stop_reason: No human study has measured whether creatine makes people live longer.

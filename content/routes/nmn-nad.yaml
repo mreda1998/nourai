@@ -1,0 +1,41 @@
+slug: nmn-nad
+ingredient: Nicotinamide Mononucleotide
+create_if_missing:
+  canonical_name: Nicotinamide Mononucleotide
+  category: other
+  synonyms: [NMN, beta-NMN, β-nicotinamide mononucleotide]
+domain: energy_metabolism
+direction: mixed
+title: More NAD, unproven benefit
+takeaway: >
+  NMN is a building block of NAD⁺, a molecule cells use to handle energy. In
+  trials it reliably raises NAD in the blood — but across 12 trials most
+  measures of glucose and cholesterol did not change, and every study had
+  quality concerns.
+nodes:
+  - {id: dose, role: input, label: NMN, plain_label: NMN you take, chebi: "CHEBI:16171"}
+  - {id: nad, role: mechanism, label: Converted to NAD⁺, plain_label: Used to build NAD⁺, chebi: "CHEBI:15846", reactome: R-HSA-196807}
+  - {id: blood, role: outcome, label: Higher NAD in the blood}
+  - {id: metabolic, role: boundary, label: Better metabolic health}
+links:
+  - from: dose
+    to: nad
+    relation_text: NMN adenylyltransferases (NMNAT1–3) turn NMN into NAD⁺
+    evidence_type: established_biochemistry
+    strength: strong
+  - from: nad
+    to: blood
+    evidence_type: meta_analysis
+    strength: limited
+    claims:
+      - claim_text: NMN raised blood NAD levels compared with control.
+        population: Adults (12 RCTs, 513 people)
+        comparator: Control
+        outcome_measure: Blood NAD levels
+        certainty: low
+        limitations: Seven studies had some concerns and five a high risk of bias. Blood NAD may not reflect other tissues.
+        citations: [{pmid: "39116016"}]
+  - from: blood
+    to: metabolic
+    evidence_stops_here: true
+    stop_reason: Across 12 trials, most glucose and cholesterol measures did not differ from control; the authors warn benefits may be exaggerated.

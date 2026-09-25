@@ -1,0 +1,53 @@
+slug: caffeine-sleep
+ingredient: Caffeine
+domain: sleep_recovery
+direction: risk
+title: Alert now, awake later
+takeaway: >
+  Caffeine blocks the adenosine signal that builds sleep pressure. In a
+  controlled trial, 100 mg had no measurable effect on sleep, while 400 mg
+  disrupted sleep when taken within 12 hours of bedtime — more so the later it
+  was taken.
+structure: {pdb: 5MZP, ligand: CFF, target: Adenosine A2A receptor}
+nodes:
+  - {id: dose, role: input, label: Caffeine, plain_label: Caffeine from any source}
+  - {id: a2a, role: mechanism, label: Adenosine A2A receptor blocked, plain_label: Caffeine sits in the receptor where adenosine would, uniprot: P29274}
+  - {id: signal, role: mechanism, label: Less adenosine signalling, plain_label: The "sleep pressure" signal is muffled, reactome: R-HSA-417973}
+  - {id: sleep, role: outcome, label: Sleep disrupted at 400 mg within 12 h of bedtime}
+  - {id: cutoff, role: boundary, label: A safe cutoff for you}
+links:
+  - from: dose
+    to: a2a
+    relation_text: Binds the receptor in place of adenosine (crystal structure 5MZP)
+    evidence_type: established_biochemistry
+    strength: strong
+  - from: a2a
+    to: signal
+    evidence_type: established_biochemistry
+    strength: strong
+  - from: signal
+    to: sleep
+    evidence_type: human_rct
+    strength: limited
+    claims:
+      - claim_text: 400 mg delayed sleep onset and changed sleep structure when taken within 12 hours of bedtime; taken 4 hours before bed, perceived sleep quality fell.
+        population: 23 healthy young men with moderate habitual intake
+        comparator: Placebo (randomised, double-blind crossover)
+        dose: {low: 400, high: 400, unit: mg, basis: single_dose}
+        outcome_measure: Home polysomnography and sleep diary
+        effect: {estimate: -34.02, unit: "% perceived sleep quality at 4 h"}
+        certainty: low
+        limitations: Small study in young men only; one dose at a time.
+        citations: [{pmid: "39377163"}]
+      - claim_text: 100 mg had no significant effect on measured or perceived sleep, even 4 hours before bed.
+        population: 23 healthy young men with moderate habitual intake
+        comparator: Placebo (randomised, double-blind crossover)
+        dose: {low: 100, high: 100, unit: mg, basis: single_dose}
+        outcome_measure: Home polysomnography and sleep diary
+        certainty: low
+        limitations: Absence of a measured effect in 23 people is not proof of no effect for everyone.
+        citations: [{pmid: "39377163"}]
+  - from: sleep
+    to: cutoff
+    evidence_stops_here: true
+    stop_reason: Tested in 23 young men only; sensitivity to caffeine varies widely, so no universal safe dose or cutoff time was established.
