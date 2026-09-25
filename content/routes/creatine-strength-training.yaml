@@ -27,6 +27,7 @@ links:
         certainty: moderate
         limitations: Expert position statement, not a single trial. The commonly used 3–5 g/day maintenance range is stated in the full text, not the abstract.
         citations: [{pmid: "28615996"}]
+        drafted_by: ai
   - from: pcr
     to: atp
     relation_text: Creatine kinase turns phosphocreatine + ADP back into ATP
@@ -46,6 +47,7 @@ links:
         certainty: moderate
         limitations: Group averages; lean tissue includes more than new muscle. Only studied alongside resistance training.
         citations: [{pmid: "29138605"}]
+        drafted_by: ai
       - claim_text: Chest-press strength also improved more with creatine than with placebo.
         population: Adults with a mean age of 57–70 (22 RCTs, 721 people)
         comparator: Placebo + the same resistance training
@@ -53,6 +55,7 @@ links:
         effect: {estimate: 0.35, ci: [0.16, 0.53], unit: SMD}
         certainty: moderate
         citations: [{pmid: "29138605"}]
+        drafted_by: ai
   - from: lean
     to: life
     evidence_stops_here: true

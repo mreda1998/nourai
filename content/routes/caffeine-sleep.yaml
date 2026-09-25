@@ -39,6 +39,7 @@ links:
         certainty: low
         limitations: Small study in young men only; one dose at a time.
         citations: [{pmid: "39377163"}]
+        drafted_by: ai
       - claim_text: 100 mg had no significant effect on measured or perceived sleep, even 4 hours before bed.
         population: 23 healthy young men with moderate habitual intake
         comparator: Placebo (randomised, double-blind crossover)
@@ -47,6 +48,7 @@ links:
         certainty: low
         limitations: Absence of a measured effect in 23 people is not proof of no effect for everyone.
         citations: [{pmid: "39377163"}]
+        drafted_by: ai
   - from: sleep
     to: cutoff
     evidence_stops_here: true

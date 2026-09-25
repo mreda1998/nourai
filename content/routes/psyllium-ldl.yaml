@@ -37,6 +37,7 @@ links:
         certainty: moderate
         limitations: Rated moderate quality because results varied between trials; 10.2 g is the median dose, not a prescription.
         citations: [{pmid: "30239559"}]
+        drafted_by: ai
       - claim_text: Apolipoprotein B, an alternative marker of atherogenic particles, also fell.
         population: People with or without high cholesterol (28 RCTs, 1,924 people)
         comparator: Control
@@ -44,6 +45,7 @@ links:
         effect: {estimate: -0.05, ci: [-0.08, -0.03], unit: g/L}
         certainty: high
         citations: [{pmid: "30239559"}]
+        drafted_by: ai
   - from: ldl
     to: events
     evidence_stops_here: true

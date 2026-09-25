@@ -78,3 +78,8 @@ export function citationLabel(c: { pmid?: string; doi?: string; url?: string }):
   if (c.doi) return `DOI ${c.doi}`;
   return 'Source';
 }
+
+/** Routes imported before anyone has reviewed them carry reviewer "pending". */
+export function isPendingReview(route: { reviewed_by?: string | null }): boolean {
+  return !route.reviewed_by || route.reviewed_by.toLowerCase() === 'pending';
+}

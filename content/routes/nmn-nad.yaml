@@ -35,6 +35,7 @@ links:
         certainty: low
         limitations: Seven studies had some concerns and five a high risk of bias. Blood NAD may not reflect other tissues.
         citations: [{pmid: "39116016"}]
+        drafted_by: ai
   - from: blood
     to: metabolic
     evidence_stops_here: true

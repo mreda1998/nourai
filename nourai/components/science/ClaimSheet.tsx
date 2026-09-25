@@ -5,7 +5,7 @@ import { ExternalLink } from 'lucide-react-native';
 import { Palette } from '@/constants/theme';
 import type { EvidenceRoute, RouteLink } from '@/services/api';
 import { PressableScale, Sheet, Txt } from '@/components/ui';
-import { CERTAINTY_LABEL, EVIDENCE_LABEL, citationLabel, citationUrl, doseText } from './labels';
+import { CERTAINTY_LABEL, EVIDENCE_LABEL, citationLabel, citationUrl, doseText, isPendingReview } from './labels';
 import { EffectFigure } from './EffectFigure';
 
 function Row({ label, value }: { label: string; value?: string | null }) {
@@ -56,7 +56,9 @@ export const ClaimSheet = forwardRef<BottomSheetModal, { route: EvidenceRoute; l
                 </View>
                 {c.drafted_by === 'ai' ? (
                   <Txt variant="caption" tone="tertiary" style={{ marginTop: 8 }}>
-                    Drafted with AI from the cited abstract; checked by {route.reviewed_by ?? 'a reviewer'}.
+                    {isPendingReview(route)
+                      ? 'Drafted with AI from the cited abstract. Numbers were checked against it automatically; not yet reviewed by an expert.'
+                      : `Drafted with AI from the cited abstract; reviewed by ${route.reviewed_by}.`}
                   </Txt>
                 ) : null}
               </View>

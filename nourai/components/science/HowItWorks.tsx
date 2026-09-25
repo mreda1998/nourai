@@ -7,6 +7,7 @@ import { LadderBadge } from './LadderBadge';
 import { EvidenceChain } from './EvidenceChain';
 import { DoseBar } from './DoseBar';
 import { ViewerPanel } from './ViewerPanel';
+import { isPendingReview } from './labels';
 
 function asset(m: IngredientMechanism, kind: MechanismAsset['kind']) {
   return m.assets.find((a) => a.kind === kind);
@@ -56,7 +57,10 @@ export function HowItWorks({ ingredientId, unreviewedSummary }: { ingredientId: 
       </Card>
 
       {route ? (
-        <Section title={route.title} caption={`Reviewed${route.reviewed_by ? ` by ${route.reviewed_by}` : ''} · version ${route.version}`}>
+        <Section
+          title={route.title}
+          caption={isPendingReview(route) ? `Draft — awaiting expert review · version ${route.version}` : `Reviewed by ${route.reviewed_by} · version ${route.version}`}
+        >
           <Txt variant="callout" tone="secondary" style={{ marginBottom: 18 }}>{route.takeaway}</Txt>
           <EvidenceChain route={route} />
         </Section>
