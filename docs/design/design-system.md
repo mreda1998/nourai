@@ -12,6 +12,10 @@ and the primitives live in `nourai/components/ui/`.
 | **Alma** | Warm cream palette and serif titles, product on a tinted plate, bottom-sheet flows, playful single-question onboarding |
 | **MacroFactor** | Full-screen scanner, dense but legible data rows, time-of-day timeline |
 
+## Visual world
+
+Imagery is set in **Dakhla**, where Saharan dunes meet a turquoise Atlantic lagoon. It's shot like large-format cinema, with epic empty horizons, natural light, and no people, buildings or culture props. The palette comes from that place: the canvas is sand and bone, the accent is lagoon teal, and gold is the low sun. Prompts are in `image-prompts.md`.
+
 ## Principles
 
 1. **Evidence has a color.** Strong is green `#2E8567`, moderate is amber `#C38A26`, and weak is clay `#BE5B3B`. Every score, meter and pill uses this one scale, through `utils/grade.ts`.
