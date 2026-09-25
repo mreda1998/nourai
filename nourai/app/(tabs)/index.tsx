@@ -75,7 +75,7 @@ function Hero({ name }: { name?: string }) {
     <View style={{ height: HERO_H + insets.top }}>
       {/* Extends above the fold so pull-to-refresh never reveals a seam. */}
       <View style={{ position: 'absolute', top: -600, left: 0, right: 0, height: 600, backgroundColor: '#EDE6DA' }} />
-      <Image source={todayHero()} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="left center" transition={300} />
+      <Image source={todayHero()} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="center" transition={300} />
       <LinearGradient
         colors={['rgba(243,240,233,0.35)', 'rgba(243,240,233,0)', 'rgba(243,240,233,0.2)', Palette.canvas]}
         locations={[0, 0.3, 0.7, 1]}

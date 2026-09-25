@@ -1,25 +1,22 @@
 /**
- * Every editorial image slot in the app, in one place.
- *
- * Slots currently point at the existing brand hero. To swap in generated
- * artwork, drop the file into assets/images/ and change the require() here —
- * no screen code changes needed. See docs/design/image-prompts.md.
+ * Every editorial image slot in the app, in one place. The visual world is
+ * Dakhla — Saharan dunes meeting a turquoise lagoon (see
+ * docs/design/image-prompts.md). To replace an image, drop the file into
+ * assets/images/ and change its require() here.
  */
-const brandHero = require('@/assets/images/elory-architecture-hero.png');
-
 export const Imagery = {
   /** Today hero — morning (5am–12pm). */
-  todayMorning: brandHero,
+  todayMorning: require('@/assets/images/today-morning.jpg'),
   /** Today hero — afternoon (12pm–6pm). */
-  todayAfternoon: brandHero,
+  todayAfternoon: require('@/assets/images/today-afternoon.jpg'),
   /** Today hero — evening (6pm–5am). */
-  todayEvening: brandHero,
-  /** First-run hero on Today when the stack is empty. */
-  welcome: brandHero,
+  todayEvening: require('@/assets/images/today-evening.jpg'),
+  /** Onboarding welcome. */
+  welcome: require('@/assets/images/welcome.jpg'),
   /** Journal cover story. */
-  journalCover: brandHero,
-  /** Premium / Atelier night hero. */
-  atelier: brandHero,
+  journalCover: require('@/assets/images/journal-cover.jpg'),
+  /** Premium / Atelier / paywall night hero. */
+  atelier: require('@/assets/images/atelier-night.jpg'),
   /** Ingredient mechanism fallback. */
   mechanism: require('@/assets/images/creatine-mechanism.png'),
 };
