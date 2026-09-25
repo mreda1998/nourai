@@ -129,7 +129,8 @@ async def apply_route(
         link_row = RouteLink(
             position=position, from_key=link.from_, to_key=link.to, relation_text=link.relation_text,
             evidence_type=link.evidence_type, strength=link.strength,
-            evidence_stops_here=link.evidence_stops_here, stop_reason=link.stop_reason,
+            evidence_stops_here=link.evidence_stops_here,
+            stop_reason=link.stop_reason.strip() if link.stop_reason else None,
         )
         for claim_position, c in enumerate(link.claims):
             link_row.claims.append(RouteClaim(

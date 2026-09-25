@@ -63,16 +63,19 @@ def _normalise(text: str) -> str:
     )
 
 
+def _number_pattern(number: str) -> str:
+    """"0.5" also matches "0.50"; "2" also matches "2.0"; never a longer number."""
+    body = re.escape(number) + (r"0*" if "." in number else r"(?:\.0+)?")
+    return rf"(?<![\d.]){body}(?![\d]|\.\d)"
+
+
 def _has_number(text: str, number: str) -> bool:
-    return re.search(rf"(?<![\d.]){re.escape(number)}(?![\d]|\.\d)", text) is not None
+    return re.search(_number_pattern(number), text) is not None
 
 
 def _has_dose(text: str, number: str, unit: str) -> bool:
     """The number followed by its unit, allowing a range: "3 g", "3-5 g", "3 to 5 g"."""
-    pattern = (
-        rf"(?<![\d.]){re.escape(number)}(?![\d]|\.\d)"
-        rf"(?:\s*(?:-|to)\s*\d+(?:\.\d+)?)?\s*{re.escape(unit)}\b"
-    )
+    pattern = _number_pattern(number) + rf"(?:\s*(?:-|to)\s*\d+(?:\.\d+)?)?\s*{re.escape(unit)}\b"
     return re.search(pattern, text, re.IGNORECASE) is not None
 
 

@@ -69,7 +69,8 @@ export function EvidenceChain({ route }: { route: EvidenceRoute }) {
   const [open, setOpen] = useState<RouteLink | null>(null);
   const colour = route.direction === 'risk' ? Palette.weak : route.direction === 'mixed' ? Palette.moderate : Palette.strong;
 
-  const outgoing = useMemo(() => new Map(route.links.map((l) => [l.from, l])), [route.links]);
+  // Each node is reached by exactly one link; drawing the link *into* the next
+  // node keeps branching routes (one outcome, two boundaries) intact.
   const incoming = useMemo(() => new Map(route.links.map((l) => [l.to, l])), [route.links]);
 
   const show = (link: RouteLink) => { setOpen(link); sheet.current?.present(); };
@@ -77,8 +78,9 @@ export function EvidenceChain({ route }: { route: EvidenceRoute }) {
   return (
     <View>
       {route.nodes.map((node, i) => {
-        const next = outgoing.get(node.id);
         const into = incoming.get(node.id);
+        const nextNode = route.nodes[i + 1];
+        const next = nextNode ? incoming.get(nextNode.id) : undefined;
         const headline = into?.claims.find((c) => c.effect_estimate != null);
         const overline = node.role === 'boundary' ? ROLE_OVERLINE.boundary : ROLE_OVERLINE[node.role];
         return (

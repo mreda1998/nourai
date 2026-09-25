@@ -91,3 +91,13 @@ def test_dose_numbers_must_come_with_their_unit():
     assert missing_numbers(claim, "doses of 3-5 g/day") == []
     assert missing_numbers(claim, "3 to 5 g per day") == []
     assert missing_numbers(claim, "3 g loading, then 5 g") == []
+
+
+def test_trailing_zeros_in_the_abstract_still_match():
+    from app.services.routes.checks import missing_numbers
+    claim = load_route(F / "good.yaml").links[2].claims[0]
+    claim.dose = None
+    claim.effect.estimate, claim.effect.ci = -0.39, [-0.5, -0.27]
+    assert missing_numbers(claim, "MD = -0.39 mmol/L; 95% CI: -0.50, -0.27 mmol/L") == []
+    claim.effect.estimate, claim.effect.ci = 2, None
+    assert missing_numbers(claim, "a difference of 2.0 points") == []
