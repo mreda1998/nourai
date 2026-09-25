@@ -8,10 +8,11 @@ import {
   AlertTriangle, ArrowDown, Ban, CircleSlash, Pill as PillIcon, Quote, ShieldCheck, Sparkles,
 } from 'lucide-react-native';
 import { api, IngredientDetail, IngredientEvidenceRecord } from '@/services/api';
+import { HowItWorks } from '@/components/science/HowItWorks';
 import { Palette, Radius } from '@/constants/theme';
 import { evidenceStrength, strengthLabel, strengthTone, toneColor, Tone } from '@/utils/grade';
 import {
-  Button, Card, ContributorBar, EmptyState, EvidenceMeter, IconButton, ListGroup, ListRow, Pill,
+  Button, Card, EmptyState, EvidenceMeter, IconButton, ListGroup, ListRow, Pill,
   ProductImage, Screen, Section, SegmentedControl, SkeletonCard, Txt,
 } from '@/components/ui';
 
@@ -106,34 +107,7 @@ export default function IngredientScreen() {
         </View>
       ) : null}
 
-      {tab === 'mechanism' ? (
-        <View style={{ marginTop: 16 }}>
-          {data.mechanism_image_url ? (
-            <View style={styles.mechImage}><Image source={{ uri: data.mechanism_image_url }} style={StyleSheet.absoluteFill} contentFit="cover" transition={300} /></View>
-          ) : null}
-          <Card padding={20}>
-            <Txt variant="overline" tone="secondary">Mechanism</Txt>
-            <Txt variant="callout" style={{ marginTop: 8 }}>
-              {data.mechanism_summary || 'The precise mechanism is still being characterised in human studies.'}
-            </Txt>
-          </Card>
-          {data.biodomain_scores.length ? (
-            <Section title="Where it acts" caption="Strength of effect by body system">
-              <Card padding={18} style={{ paddingVertical: 6 }}>
-                {data.biodomain_scores.slice(0, 6).map((d, i) => (
-                  <ContributorBar
-                    key={d.biodomain}
-                    label={d.biodomain}
-                    value={d.direction === 'harm' ? 30 : Math.round(d.magnitude * 100)}
-                    valueLabel={d.direction === 'benefit' ? 'Benefit' : d.direction === 'harm' ? 'Risk' : d.direction === 'mixed' ? 'Mixed' : 'Neutral'}
-                    delay={i * 70}
-                  />
-                ))}
-              </Card>
-            </Section>
-          ) : null}
-        </View>
-      ) : null}
+      {tab === 'mechanism' ? <HowItWorks ingredientId={data.id} unreviewedSummary={data.mechanism_summary} /> : null}
 
       {tab === 'safety' ? <Safety data={data} /> : null}
 
@@ -305,5 +279,4 @@ const styles = StyleSheet.create({
   structure: { width: 76, height: 76, borderRadius: 38, backgroundColor: Palette.surface, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: Palette.hairline },
   connector: { alignItems: 'center', height: 20, justifyContent: 'center', zIndex: 2 },
   connectorDot: { width: 30, height: 30, borderRadius: 15, backgroundColor: Palette.accent, alignItems: 'center', justifyContent: 'center', marginVertical: -8, borderWidth: 3, borderColor: Palette.canvas },
-  mechImage: { height: 220, borderRadius: Radius.xl, borderCurve: 'continuous', overflow: 'hidden', backgroundColor: Palette.sunken, marginBottom: 12 },
 });

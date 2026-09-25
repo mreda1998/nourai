@@ -9,7 +9,8 @@ import {
 } from 'lucide-react-native';
 import { Palette, Radius } from '@/constants/theme';
 import { api, getProductWithFallback } from '@/services/api';
-import type { Ingredient, LabObservation, Product, ServerPersonalAnalysis } from '@/services/api';
+import type { Ingredient, LabObservation, Product, ProductEvidence, ServerPersonalAnalysis } from '@/services/api';
+import { DoseBar, EvidenceGrid } from '@/components/science';
 import { useAppState } from '@/context/app-state';
 import { useAuth } from '@/context/auth-context';
 import { analyzeIngredients, buildPersonalAnalysis } from '@/utils/personalization';
@@ -17,7 +18,7 @@ import { categoryLabel, gradeToScore, scoreQualifier, scoreTone, toneColor } fro
 import { AddToStackSheet, type StackEntry } from '@/components/AddToStackSheet';
 import { syncAddToStack, syncRemoveFromStack } from '@/lib/stack-sync';
 import {
-  Button, Card, ContributorBar, EmptyState, IconButton, ListGroup, ListRow, Pill, ProductImage,
+  Button, Card, EmptyState, IconButton, ListGroup, ListRow, Pill, ProductImage,
   ScoreBadge, Screen, Section, SegmentedControl, SkeletonCard, Txt,
 } from '@/components/ui';
 
@@ -34,6 +35,7 @@ export default function ProductDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [serverAnalysis, setServerAnalysis] = useState<ServerPersonalAnalysis | null>(null);
   const [lab, setLab] = useState<LabObservation[]>([]);
+  const [evidence, setEvidence] = useState<ProductEvidence | null>(null);
   const [tab, setTab] = useState<Tab>('ingredients');
   const [resolving, setResolving] = useState<string | null>(null);
 
@@ -68,6 +70,7 @@ export default function ProductDetailScreen() {
     if (!product || product.id.startsWith('usda-')) return;
     let alive = true;
     api.getProductLabResults(product.id).then((r) => alive && setLab(r.observations)).catch(() => {});
+    api.getProductEvidence(product.id).then((r) => alive && setEvidence(r)).catch(() => {});
     return () => { alive = false; };
   }, [product?.id]);
 
@@ -146,7 +149,6 @@ export default function ProductDetailScreen() {
   const score = gradeToScore(product.grade);
   const linked = ingredients.filter((i) => i.ingredient_id).length;
   const flagged = ingredients.filter((i) => perIngredient?.get(i.name)?.concernFlags.length || i.tag_type === 'warning').length;
-  const supports = product.bio_domains.filter((d) => d.value > 0 && !d.is_negative).sort((a, b) => b.value - a.value);
   const tabs: { key: Tab; label: string }[] = [
     { key: 'ingredients', label: `Ingredients ${ingredients.length}` },
     ...(nutrients.length ? [{ key: 'nutrition' as Tab, label: 'Nutrition' }] : []),
@@ -286,10 +288,24 @@ export default function ProductDetailScreen() {
 
       {tab === 'details' ? (
         <View>
-          {supports.length ? (
-            <Section title="What it supports" style={{ marginTop: 24 }}>
-              <Card padding={18} style={{ paddingVertical: 6 }}>
-                {supports.slice(0, 6).map((d, i) => <ContributorBar key={d.name} label={d.name} value={d.value} valueLabel={`${Math.round(d.value)}`} delay={i * 70} />)}
+          {evidence?.grid.rows.length ? (
+            <Section title="What the evidence says" caption="Reviewed routes for the active compounds in this product" style={{ marginTop: 24 }}>
+              <Card padding={16}>
+                <EvidenceGrid grid={evidence.grid} />
+              </Card>
+            </Section>
+          ) : null}
+
+          {evidence?.dose_bars.length ? (
+            <Section title="Doses against the studies">
+              <Card padding={16} style={{ gap: 18 }}>
+                {evidence.dose_bars.map((b) => (
+                  <View key={`${b.compound}-${b.route_slug}`}>
+                    <Txt variant="subheadStrong">{b.compound}</Txt>
+                    {b.outcome ? <Txt variant="caption" tone="secondary" style={{ marginBottom: 4 }}>{b.outcome}</Txt> : null}
+                    <DoseBar bar={b} />
+                  </View>
+                ))}
               </Card>
             </Section>
           ) : null}
@@ -324,7 +340,7 @@ export default function ProductDetailScreen() {
             </Section>
           ) : null}
 
-          {!supports.length && !lab.length && !product.attribution ? (
+          {!evidence?.grid.rows.length && !lab.length && !product.attribution ? (
             <EmptyState title="No additional details" message="Lab results and source information appear here when available." />
           ) : null}
         </View>
