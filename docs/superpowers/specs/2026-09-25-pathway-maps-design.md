@@ -220,7 +220,7 @@ Panels 3–5 display the source attribution beneath them.
 ## Error handling and honesty rules
 
 - Missing data hides a panel or shows its ladder level; it never shows a placeholder claim.
-- A route whose citations stop resolving is flagged by a scheduled CI check and stays published but marked "citation under review" until fixed.
+- A route whose citations stop resolving is caught by a weekly scheduled CI check, which opens a `citation-review` issue for the reviewer; the route stays published until a corrected version is merged.
 - The API never returns AI-derived `ingredient_biodomain_scores` values in any response defined here.
 - Product-page copy may say "present in this product", never "active in your body".
 
