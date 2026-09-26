@@ -57,11 +57,11 @@ export default function StackScreen() {
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         { title: item.name, options: ['View analysis', 'Remove from stack', 'Cancel'], destructiveButtonIndex: 1, cancelButtonIndex: 2 },
-        (i) => { if (i === 0) router.push(`/product/${item.id}` as never); if (i === 1) remove(item); },
+        (i) => { if (i === 0) router.push(`/product/${item.id}?via=stack` as never); if (i === 1) remove(item); },
       );
     } else {
       Alert.alert(item.name, undefined, [
-        { text: 'View analysis', onPress: () => router.push(`/product/${item.id}` as never) },
+        { text: 'View analysis', onPress: () => router.push(`/product/${item.id}?via=stack` as never) },
         { text: 'Remove', style: 'destructive', onPress: () => remove(item) },
         { text: 'Cancel', style: 'cancel' },
       ]);

@@ -88,7 +88,7 @@ export default function HistoryScreen() {
                 subtitle={`${r.item.product_brand || r.item.product_category} · ${time(r.at)}`}
                 trailing={<ScoreBadge score={gradeToScore(r.item.product_grade)} size={34} />}
                 chevron={false}
-                onPress={() => router.push(`/product/${r.item.product_id}` as never)}
+                onPress={() => router.push(`/product/${r.item.product_id}?via=history` as never)}
               />
             ) : (
               <ListRow

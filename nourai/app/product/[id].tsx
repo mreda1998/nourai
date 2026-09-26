@@ -15,6 +15,8 @@ import { useAuth } from '@/context/auth-context';
 import { analyzeIngredients, buildPersonalAnalysis } from '@/utils/personalization';
 import { categoryLabel, gradeToScore, scoreQualifier, scoreTone, toneColor } from '@/utils/grade';
 import { AddToStackSheet, type StackEntry } from '@/components/AddToStackSheet';
+import { FeedbackSheet } from '@/components/FeedbackSheet';
+import { isCatalogueId, track } from '@/lib/insights';
 import { syncAddToStack, syncRemoveFromStack } from '@/lib/stack-sync';
 import {
   Button, Card, ContributorBar, EmptyState, IconButton, ListGroup, ListRow, Pill, ProductImage,
@@ -24,10 +26,11 @@ import {
 type Tab = 'ingredients' | 'nutrition' | 'details';
 
 export default function ProductDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, via } = useLocalSearchParams<{ id: string; via?: string }>();
   const { stack, addToStack, removeFromStack } = useAppState();
   const { onboardingProfile, isSignedIn } = useAuth();
   const sheet = useRef<BottomSheetModal>(null);
+  const feedback = useRef<BottomSheetModal>(null);
 
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,6 +52,9 @@ export default function ProductDetailScreen() {
       if (!data) { setError('We couldn’t find this product.'); return; }
       setProduct(data);
       if (isSignedIn) api.addToScanHistory(data.id).catch(() => {});
+      track('product_view', isCatalogueId(data.id)
+        ? { product_id: data.id, meta: { via: via ?? 'other' } }
+        : { meta: { via: via ?? 'other', ref: data.id } });
     } catch {
       setError('Something went wrong loading this product.');
     } finally {
@@ -327,11 +333,21 @@ export default function ProductDetailScreen() {
         </View>
       ) : null}
 
-      <Txt variant="caption" tone="tertiary" align="center" style={{ marginTop: 28, paddingHorizontal: 24 }}>
+      <Button
+        label="Something look wrong?"
+        variant="tertiary"
+        size="sm"
+        fullWidth={false}
+        style={{ alignSelf: 'center', marginTop: 24 }}
+        onPress={() => feedback.current?.present()}
+      />
+
+      <Txt variant="caption" tone="tertiary" align="center" style={{ marginTop: 12, paddingHorizontal: 24 }}>
         Educational information, not medical advice. Talk to a clinician before changing medications or treatments.
       </Txt>
 
       <AddToStackSheet ref={sheet} productName={product.name} productCategory={product.category} onConfirm={onAdd} />
+      <FeedbackSheet ref={feedback} productId={product.id} productName={product.name} />
     </Screen>
   );
 }

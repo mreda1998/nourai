@@ -142,7 +142,7 @@ export default function IngredientScreen() {
         <Section title="Found in" caption={`${foundIn.length} product${foundIn.length === 1 ? '' : 's'} in our library`}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
             {foundIn.slice(0, 12).map((p) => (
-              <Card key={p.id} padding={14} style={{ width: 148 }} onPress={() => router.push(`/product/${p.id}` as never)} accessibilityLabel={p.name}>
+              <Card key={p.id} padding={14} style={{ width: 148 }} onPress={() => router.push(`/product/${p.id}?via=ingredient` as never)} accessibilityLabel={p.name}>
                 <ProductImage uri={p.image_url} category={p.category} size={52} />
                 <Txt variant="caption" tone="secondary" numberOfLines={1} style={{ marginTop: 12 }}>{p.brand || p.category}</Txt>
                 <Txt variant="subheadStrong" numberOfLines={2} style={{ minHeight: 40 }}>{p.name}</Txt>

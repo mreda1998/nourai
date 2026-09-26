@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
-  Bell, BookOpen, ChevronRight, CircleUserRound, Crown, Grid2x2, History, Info, KeyRound, Settings, ShieldCheck, SlidersHorizontal,
+  Bell, BookOpen, ChevronRight, CircleUserRound, Crown, Grid2x2, History, Info, KeyRound, MessageSquareHeart, Settings, ShieldCheck, SlidersHorizontal,
 } from 'lucide-react-native';
+import type { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { FeedbackSheet } from '@/components/FeedbackSheet';
+import { TESTER_MODE } from '@/lib/tester-mode';
 import { useAuth } from '@/context/auth-context';
 import { usePurchases } from '@/context/purchases-context';
 import { Palette, Radius } from '@/constants/theme';
@@ -21,6 +24,7 @@ export default function YouScreen() {
   const goals = onboardingProfile?.goals ?? [];
   const focus = onboardingProfile?.focusAreas ?? [];
   const concerns = onboardingProfile?.healthConcerns ?? [];
+  const feedback = useRef<BottomSheetModal>(null);
 
   return (
     <Screen tabbed right={<IconButton icon={Settings} label="Account settings" onPress={() => router.push('/settings/account' as never)} />}>
@@ -83,6 +87,14 @@ export default function YouScreen() {
         </ListGroup>
       </Section>
 
+      {TESTER_MODE ? (
+        <Section title="Beta">
+          <ListGroup>
+            <ListRow icon={MessageSquareHeart} title="Send feedback" subtitle="What’s confusing, broken or missing?" onPress={() => feedback.current?.present()} />
+          </ListGroup>
+        </Section>
+      ) : null}
+
       <Section title="Settings">
         <ListGroup>
           <ListRow icon={CircleUserRound} title="Account" onPress={() => router.push('/settings/account' as never)} />
@@ -95,6 +107,7 @@ export default function YouScreen() {
       </Section>
 
       <Txt variant="caption" tone="tertiary" align="center" style={{ marginTop: 28 }}>Elory · Evidence over opinion</Txt>
+      <FeedbackSheet ref={feedback} />
     </Screen>
   );
 }

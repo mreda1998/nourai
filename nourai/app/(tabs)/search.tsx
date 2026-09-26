@@ -5,11 +5,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Apple, Droplet, FlaskConical, History, Pill as PillIcon, SearchX } from 'lucide-react-native';
 import { api, IngredientListItem, ProductListItem, SearchHistoryItem } from '@/services/api';
+import { track } from '@/lib/insights';
 import { Palette, Radius } from '@/constants/theme';
 import { JOURNAL } from '@/constants/journal';
 import { categoryLabel, evidenceStrength, gradeToScore } from '@/utils/grade';
 import {
-  Card, Chip, EmptyState, EvidenceMeter, ListGroup, ListRow, Pill, PressableScale, ProductImage,
+  Button, Card, Chip, EmptyState, EvidenceMeter, ListGroup, ListRow, Pill, PressableScale, ProductImage,
   ScoreBadge, Screen, SearchField, Section, SegmentedControl, Txt,
 } from '@/components/ui';
 
@@ -75,6 +76,13 @@ export default function DiscoverScreen() {
   const results = mode === 'ingredients' ? ingredients.length : products.length;
   const activeCategory = CATEGORIES.find((c) => c.key === category);
 
+  // Record a search once the person stops typing, so "cer" → "cerave" is one event.
+  useEffect(() => {
+    if (q.length < 2 || loading) return;
+    const t = setTimeout(() => track('search', { query: q, meta: { mode, results, category } }), 1200);
+    return () => clearTimeout(t);
+  }, [q, loading, results, mode, category]);
+
   return (
     <Screen tabbed title="Discover">
       <SearchField
@@ -100,7 +108,23 @@ export default function DiscoverScreen() {
       {searching ? (
         <View style={{ marginTop: 20 }}>
           {loading ? <ActivityIndicator color={Palette.accent} style={{ marginTop: 24 }} /> : results === 0 ? (
-            <EmptyState icon={SearchX} title="No matches" message={q ? `Nothing found for “${q}”. Try a brand name, or scan the barcode.` : 'Nothing in this category yet.'} action="Scan instead" onAction={() => router.push('/(tabs)/scan' as never)} />
+            <EmptyState
+              icon={SearchX}
+              title="No matches"
+              message={q ? `Nothing found for “${q}”. Try a brand name, or scan the barcode.` : 'Nothing in this category yet.'}
+              action="Scan instead"
+              onAction={() => router.push('/(tabs)/scan' as never)}
+              secondary={q && mode === 'products' ? (
+                <Button
+                  label="Can’t find it? Help add it"
+                  variant="tertiary"
+                  size="md"
+                  fullWidth={false}
+                  style={{ marginTop: 6 }}
+                  onPress={() => router.push({ pathname: '/submit-product', params: { name: q } } as never)}
+                />
+              ) : undefined}
+            />
           ) : mode === 'products' ? (
             <Animated.View entering={FadeIn}>
               <Txt variant="footnote" tone="secondary" style={{ marginBottom: 10 }}>{products.length} result{products.length === 1 ? '' : 's'}</Txt>
@@ -113,7 +137,7 @@ export default function DiscoverScreen() {
                     subtitle={p.brand || categoryLabel(p.category)}
                     trailing={<ScoreBadge score={gradeToScore(p.grade)} size={36} />}
                     chevron={false}
-                    onPress={() => router.push(`/product/${p.id}` as never)}
+                    onPress={() => router.push(`/product/${p.id}?via=search` as never)}
                   />
                 ))}
               </ListGroup>

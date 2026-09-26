@@ -220,7 +220,7 @@ function Protocol({ stack }: { stack: Product[] }) {
             <View style={{ flex: 1, paddingBottom: gi < groups.length - 1 ? 18 : 0 }}>
               <Txt variant="overline" tone="secondary" style={{ marginTop: 7, marginBottom: 8 }}>{g.label}</Txt>
               {g.items.map((p) => (
-                <PressableScale key={p.id} onPress={() => router.push(`/product/${p.id}` as never)} style={styles.protoRow} accessibilityLabel={p.name}>
+                <PressableScale key={p.id} onPress={() => router.push(`/product/${p.id}?via=stack` as never)} style={styles.protoRow} accessibilityLabel={p.name}>
                   <ProductImage uri={p.imageUri} category={p.category} size={40} />
                   <View style={{ flex: 1 }}>
                     <Txt variant="subheadStrong" numberOfLines={1}>{p.name}</Txt>
@@ -242,7 +242,7 @@ function Protocol({ stack }: { stack: Product[] }) {
 function RecentCard({ item, index }: { item: ScanHistoryItem; index: number }) {
   return (
     <Animated.View entering={FadeInDown.duration(500).delay(80 * index)}>
-      <Card padding={14} style={{ width: 156 }} onPress={() => router.push(`/product/${item.product_id}` as never)} accessibilityLabel={item.product_name}>
+      <Card padding={14} style={{ width: 156 }} onPress={() => router.push(`/product/${item.product_id}?via=history` as never)} accessibilityLabel={item.product_name}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <ProductImage uri={item.product_image_url} category={item.product_category} size={56} />
           <ScoreBadge score={gradeToScore(item.product_grade)} size={32} />
