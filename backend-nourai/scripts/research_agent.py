@@ -1077,6 +1077,10 @@ async def research_one_ingredient(
         # re-run can be a handful and would overwrite a well-supported summary.
         async with session_factory() as session:
             synthesized = await all_study_records(session, iid, synthesized)
+        if valid_articles and not synthesized:
+            # Every summary call failed (API down, out of credit…). That is not
+            # "insufficient evidence" — mark it failed so it's retried later.
+            raise RuntimeError(f"none of {len(valid_articles)} abstracts could be summarised")
 
         # ── 5. Belief vs. reality summary (Sonnet) ────────────────────────────
         print(f"  [4/5] Generating belief vs. reality summary...")
