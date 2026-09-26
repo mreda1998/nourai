@@ -8,8 +8,8 @@ import { Txt, type TxtProps } from './Txt';
  */
 export function ClampedText({ lines = 3, children, ...rest }: TxtProps & { lines?: number; children: string }) {
   const [expanded, setExpanded] = useState(false);
-  // ~55 characters fit a line at these sizes; beyond `lines` of them, offer more.
-  const overflows = children.length > lines * 55;
+  // ~40 characters fit a line of display type at these sizes; beyond `lines` of them, offer more.
+  const overflows = children.length > lines * 40;
   return (
     <>
       <Txt

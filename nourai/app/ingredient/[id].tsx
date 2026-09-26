@@ -161,7 +161,7 @@ function BeliefReality({ data, strength }: { data: IngredientDetail; strength: n
             <Quote size={16} color={Palette.ink3} strokeWidth={2} />
             <Txt variant="overline" tone="secondary">What people believe</Txt>
           </View>
-          <ClampedText variant="title3" italic tone="secondary" style={{ marginTop: 10 }}>{belief}</ClampedText>
+          <ClampedText variant="title2" italic tone="secondary" style={{ marginTop: 10 }}>{belief}</ClampedText>
         </Card>
       ) : null}
       {belief && reality ? (
@@ -177,7 +177,7 @@ function BeliefReality({ data, strength }: { data: IngredientDetail; strength: n
               <Txt variant="overline" color={toneColor(tone)}>What the evidence shows</Txt>
             </View>
           </View>
-          <ClampedText variant="title3" style={{ marginTop: 10 }}>{reality}</ClampedText>
+          <ClampedText variant="title2" style={{ marginTop: 10 }}>{reality}</ClampedText>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
             <Pill label={strengthLabel(strength)} tone={tone} />
             {data.evidence.length ? <Txt variant="footnote" tone="secondary">{data.evidence.length} studies summarised</Txt> : null}

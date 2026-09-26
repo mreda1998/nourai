@@ -13,6 +13,13 @@ export function prettyFormula(formula: string): string {
   return formula.replace(/\d/g, (d) => SUBSCRIPT[Number(d)]);
 }
 
+const ELEMENT_KEY = [
+  { symbol: 'N', label: 'Nitrogen', colour: '#0F5652' },
+  { symbol: 'O', label: 'Oxygen', colour: '#BE5B3B' },
+  { symbol: 'S', label: 'Sulfur', colour: '#C9A465' },
+  { symbol: 'P', label: 'Phosphorus', colour: '#C38A26' },
+];
+
 export type Molecule = { svg_path: string; formula: string; mass: number };
 
 function useMoleculeSvg(path: string | undefined): string | null {
@@ -60,10 +67,11 @@ export function MoleculeCard({ molecule, name, classLabel }: { molecule: Molecul
             <Txt variant="caption" tone="secondary">{molecule.mass} g/mol</Txt>
           </View>
         </View>
+        {/* Key only for the coloured elements this molecule actually contains. */}
         <View style={{ alignSelf: 'stretch', flexDirection: 'row', gap: 14, marginTop: 10 }}>
-          <Legend colour="#0F5652" label="Nitrogen" />
-          <Legend colour="#BE5B3B" label="Oxygen" />
-          <Legend colour="#C9A465" label="Sulfur" />
+          {ELEMENT_KEY.filter((e) => new RegExp(`${e.symbol}(?![a-z])`).test(molecule.formula)).map((e) => (
+            <Legend key={e.symbol} colour={e.colour} label={e.label} />
+          ))}
         </View>
       </Card>
     </Animated.View>
