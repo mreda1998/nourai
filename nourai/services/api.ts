@@ -1,6 +1,8 @@
 /**
  * API Service for Elory Backend
  */
+import Constants from 'expo-constants';
+import { getDeviceId } from '@/lib/device-id';
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ??
@@ -633,6 +635,35 @@ export interface HealthDomainResponse {
   factors: HealthDomainFactor[];
 }
 
+// Tester insights
+export type ClientEventType = 'search' | 'product_view' | 'stack_add' | 'feedback';
+
+export interface ClientEventFields {
+  product_id?: string;
+  barcode?: string;
+  query?: string;
+  meta?: Record<string, unknown>;
+}
+
+export type SubmissionCategory = 'food' | 'supplement' | 'cosmetic' | 'otc' | 'other';
+
+export interface SubmissionPhoto {
+  uri: string;
+  name: string;
+  type: string;
+}
+
+export interface ProductSubmissionInput {
+  barcode?: string;
+  name?: string;
+  brand?: string;
+  category?: SubmissionCategory;
+  note?: string;
+  photos: SubmissionPhoto[];
+}
+
+const APP_VERSION = Constants.expoConfig?.version ?? 'dev';
+
 // ─── Auth token provider ────────────────────────────────────────────────────
 // Set by AuthProvider after Supabase initialises. Avoids a circular import
 // between api.ts ↔ lib/supabase.ts.
@@ -659,12 +690,16 @@ class APIService {
       const token = await _authTokenProvider();
       if (token) sessionHeader = { Authorization: `Bearer ${token}` };
     }
+    // Multipart bodies need fetch to set their own boundary header.
+    const isForm = typeof FormData !== 'undefined' && options?.body instanceof FormData;
 
     try {
       const response = await fetch(url, {
         ...options,
         headers: {
-          'Content-Type': 'application/json',
+          ...(isForm ? {} : { 'Content-Type': 'application/json' }),
+          'X-Device-Id': await getDeviceId(),
+          'X-App-Version': APP_VERSION,
           ...sessionHeader,
           ...options?.headers, // explicit headers win (e.g. caller passes their own token)
         },
@@ -672,9 +707,11 @@ class APIService {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        throw Object.assign(new Error(error.detail || `HTTP ${response.status}`), { status: response.status });
+        const detail = typeof error.detail === 'string' ? error.detail : `HTTP ${response.status}`;
+        throw Object.assign(new Error(detail), { status: response.status });
       }
 
+      if (response.status === 204) return undefined as T;
       return response.json();
     } catch (error) {
       // 401s are expected for guests hitting account endpoints — don't raise a dev error toast.
@@ -881,6 +918,51 @@ class APIService {
    */
   async getHealthDomain(biodomain: string): Promise<HealthDomainResponse> {
     return this.fetch<HealthDomainResponse>(`/users/me/health-domain/${biodomain}`);
+  }
+
+  /**
+   * Score an explicit list of products (the on-device stack). Works for guests.
+   */
+  async getStackScore(productIds: string[]): Promise<DailyScoreResponse> {
+    return this.fetch<DailyScoreResponse>('/scores/daily', {
+      method: 'POST',
+      body: JSON.stringify({ product_ids: productIds.slice(0, 50) }),
+    });
+  }
+
+  /**
+   * One biodomain's score + top contributing ingredients for the given products.
+   */
+  async getStackDomain(biodomain: string, productIds: string[]): Promise<HealthDomainResponse> {
+    return this.fetch<HealthDomainResponse>(`/scores/domain/${biodomain}`, {
+      method: 'POST',
+      body: JSON.stringify({ product_ids: productIds.slice(0, 50) }),
+    });
+  }
+
+  // ============================================
+  // Tester insights
+  // ============================================
+
+  async trackEvent(body: { type: ClientEventType } & ClientEventFields): Promise<void> {
+    await this.fetch<void>('/insights/events', { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  /**
+   * Send a product we don't have yet, with up to three label photos.
+   */
+  async submitProduct(input: ProductSubmissionInput): Promise<{ id: string; photos_stored: number }> {
+    const form = new FormData();
+    for (const key of ['barcode', 'name', 'brand', 'category', 'note'] as const) {
+      const value = input[key]?.trim();
+      if (value) form.append(key, value);
+    }
+    // React Native's FormData accepts { uri, name, type } file descriptors.
+    input.photos.forEach((photo) => form.append('photos', photo as unknown as Blob));
+    return this.fetch<{ id: string; photos_stored: number }>('/insights/submissions', {
+      method: 'POST',
+      body: form,
+    });
   }
 
   // ============================================
