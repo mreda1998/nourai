@@ -19,6 +19,7 @@ class TesterEvent(Base, UUIDMixin):
     """One scan / search / product view / stack add / feedback message."""
 
     __tablename__ = "tester_events"
+    __test__ = False  # name starts with "Test"; keep pytest from collecting it
 
     device_id: Mapped[str] = mapped_column(String(64), nullable=False)
     user_id: Mapped[uuid.UUID | None] = mapped_column(

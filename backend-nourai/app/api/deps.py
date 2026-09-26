@@ -1,7 +1,7 @@
 """Shared API dependencies."""
 from typing import Annotated
 
-from fastapi import Depends, Query
+from fastapi import Depends, Header, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +13,7 @@ from app.repositories.product import ProductRepository
 from app.repositories.subscription import SubscriptionRepository
 from app.repositories.user import UserRepository
 from app.services.personalization import PersonalizationService
+from app.services.insights import clean_device_id
 from app.services.product import ProductService
 from app.services.stack import StackService
 from app.services.subscription import SubscriptionService
@@ -22,6 +23,19 @@ from app.services.subscription import SubscriptionService
 DBSession = Annotated[AsyncSession, Depends(get_db)]
 CurrentUser = Annotated[UserProfile, Depends(get_current_user)]
 OptionalUser = Annotated[UserProfile | None, Depends(get_current_user_optional)]
+
+
+async def get_device_id(x_device_id: Annotated[str | None, Header()] = None) -> str | None:
+    """Anonymous per-install ID the app sends as X-Device-Id (None if absent/malformed)."""
+    return clean_device_id(x_device_id)
+
+
+async def get_app_version(x_app_version: Annotated[str | None, Header()] = None) -> str | None:
+    return (x_app_version or "").strip()[:32] or None
+
+
+DeviceId = Annotated[str | None, Depends(get_device_id)]
+AppVersion = Annotated[str | None, Depends(get_app_version)]
 
 
 class PaginationParams(BaseModel):

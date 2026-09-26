@@ -8,7 +8,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
+    AppVersion,
     CurrentUser,
+    DeviceId,
     DBSession,
     OptionalUser,
     PaginationParams,
@@ -32,6 +34,7 @@ from app.services.personalization import PersonalizationService
 from app.services.product import ProductService
 from app.services.ingestion.normalization import normalize_gtin
 from app.services.ingestion.queue import IngestionQueue
+from app.services.insights import record_event
 
 router = APIRouter()
 
@@ -211,19 +214,34 @@ async def get_ingestion_status(job_id: UUID, db: DBSession):
 async def get_product_by_barcode(
     barcode: str,
     db: DBSession,
+    device_id: DeviceId,
+    app_version: AppVersion,
     service: Annotated[ProductService, Depends(get_product_service)] = None,
     current_user: OptionalUser = None,
 ):
     """Return a cached product or queue idempotent background verification."""
+    async def record_scan(result: str, **fields) -> None:
+        meta = {"result": result, **fields.pop("meta", {})}
+        await record_event(
+            device_id=device_id,
+            event_type="scan",
+            user_id=current_user.id if current_user else None,
+            meta=meta,
+            app_version=app_version,
+            **fields,
+        )
+
     try:
         normalized = normalize_gtin(barcode)
     except ValueError as exc:
+        await record_scan("invalid", meta={"raw": barcode[:32]})
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     product = await service.get_local_product_by_barcode(
         normalized.digits, normalized.gtin14
     )
     if product:
+        await record_scan("cached", barcode=normalized.gtin14, product_id=product.id)
         lookup = await _build_ingredient_lookup(db)
         return ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)
 
@@ -246,8 +264,15 @@ async def get_product_by_barcode(
     if job.status == "complete" and job.product_id:
         product = await service.get_product(job.product_id)
         if product:
+            await record_scan("cached", barcode=normalized.gtin14, product_id=product.id)
             lookup = await _build_ingredient_lookup(db)
             return ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)
+
+    await record_scan(
+        "queued",
+        barcode=normalized.gtin14,
+        meta={"job_id": str(job.id), "status": job.status},
+    )
 
     existing_message = (
         job.result.get("message")
