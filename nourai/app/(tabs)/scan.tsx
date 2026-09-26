@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing, FadeIn, FadeInDown, FadeOutDown, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
-import { Camera, Search, X, Zap, ZapOff } from 'lucide-react-native';
+import { Camera, PackagePlus, Search, X, Zap, ZapOff } from 'lucide-react-native';
 import { api, isBarcodeIngestionResponse, Product } from '@/services/api';
 import { Palette, Radius } from '@/constants/theme';
 import { categoryLabel, gradeToScore, scoreQualifier } from '@/utils/grade';
@@ -18,7 +18,7 @@ import { Button, IconButton, ProductImage, ScoreBadge, Txt } from '@/components/
 const RETICLE_W = 272;
 const RETICLE_H = 176;
 
-type Phase = 'ready' | 'looking' | 'found' | 'error';
+type Phase = 'ready' | 'looking' | 'found' | 'missing' | 'error';
 
 export default function ScanScreen() {
   const insets = useSafeAreaInsets();
@@ -28,11 +28,13 @@ export default function ScanScreen() {
   const [phase, setPhase] = useState<Phase>('ready');
   const [message, setMessage] = useState('Point at a barcode');
   const [product, setProduct] = useState<Product | null>(null);
+  const [missingCode, setMissingCode] = useState<string | null>(null);
   const lastCode = useRef<string | null>(null);
   const cancelled = useRef(false);
 
   const reset = useCallback(() => {
     setProduct(null);
+    setMissingCode(null);
     setPhase('ready');
     setMessage('Point at a barcode');
     lastCode.current = null;
@@ -49,7 +51,7 @@ export default function ScanScreen() {
   };
 
   const onScan = async ({ data }: { data: string }) => {
-    if (phase === 'looking' || phase === 'found' || lastCode.current === data) return;
+    if (phase === 'looking' || phase === 'found' || phase === 'missing' || lastCode.current === data) return;
     lastCode.current = data;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setPhase('looking');
@@ -63,7 +65,7 @@ export default function ScanScreen() {
         for (let attempt = 0; attempt < 45 && !cancelled.current; attempt += 1) {
           setMessage(job.message);
           if (job.status === 'complete' && job.product_id) { value = await api.getProduct(job.product_id); break; }
-          if (job.status === 'needs_review' || job.status === 'dead') throw new Error(job.message);
+          if (job.status === 'needs_review' || job.status === 'dead') throw new NotInCatalogue();
           await new Promise((r) => setTimeout(r, job.poll_after_ms));
           job = await api.getIngestionStatus(job.job_id);
         }
@@ -74,6 +76,14 @@ export default function ScanScreen() {
       setPhase('found');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (reason) {
+      if (cancelled.current) return;
+      if (reason instanceof NotInCatalogue || (reason as { status?: number }).status === 404) {
+        // Nobody has this product yet — ask the tester to help add it.
+        setMissingCode(data);
+        setPhase('missing');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        return;
+      }
       setPhase('error');
       setMessage(reason instanceof Error ? reason.message : 'We couldn’t identify this product.');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -90,7 +100,7 @@ export default function ScanScreen() {
           style={StyleSheet.absoluteFill}
           facing="back"
           enableTorch={torch}
-          onBarcodeScanned={phase === 'found' ? undefined : onScan}
+          onBarcodeScanned={phase === 'found' || phase === 'missing' ? undefined : onScan}
           barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128'] }}
         />
       ) : null}
@@ -119,7 +129,7 @@ export default function ScanScreen() {
           <Txt variant="title1" tone="inverse" align="center">{Constants.isDevice ? 'Scan with your camera' : 'Camera unavailable'}</Txt>
           <Txt variant="subhead" tone="inverse2" align="center" style={{ marginTop: 8, maxWidth: 290 }}>
             {Constants.isDevice
-              ? 'Elory reads the barcode only. Nothing is recorded or stored.'
+              ? 'Elory only reads the barcode. Scans help us decide which products to add next.'
               : 'The simulator has no camera. Search for a product instead.'}
           </Txt>
           <View style={{ gap: 10, marginTop: 24, alignSelf: 'stretch' }}>
@@ -133,6 +143,8 @@ export default function ScanScreen() {
       <View style={[styles.bottom, { paddingBottom: insets.bottom + 16 }]}>
         {phase === 'found' && product ? (
           <ResultCard product={product} onAgain={reset} />
+        ) : phase === 'missing' && missingCode ? (
+          <MissCard barcode={missingCode} onAgain={reset} />
         ) : cameraAvailable ? (
           <Animated.View entering={FadeIn} style={{ alignItems: 'center', gap: 16 }}>
             <View style={styles.status}>
@@ -205,11 +217,39 @@ function ResultCard({ product, onAgain }: { product: Product; onAgain: () => voi
       </View>
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
         <Button label="Scan again" variant="secondary" size="md" style={{ flex: 1 }} onPress={onAgain} />
-        <Button label="See analysis" size="md" style={{ flex: 1.4 }} onPress={() => { router.push(`/product/${product.id}` as never); setTimeout(onAgain, 400); }} />
+        <Button label="See analysis" size="md" style={{ flex: 1.4 }} onPress={() => { router.push(`/product/${product.id}?via=scan` as never); setTimeout(onAgain, 400); }} />
       </View>
     </Animated.View>
   );
 }
+
+function MissCard({ barcode, onAgain }: { barcode: string; onAgain: () => void }) {
+  return (
+    <Animated.View entering={FadeInDown.springify().damping(18)} exiting={FadeOutDown} style={styles.result}>
+      <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
+        <View style={styles.missIcon}><PackagePlus size={28} color={Palette.accent} strokeWidth={1.6} /></View>
+        <View style={{ flex: 1 }}>
+          <Txt variant="headline">We don’t know this one yet</Txt>
+          <Txt variant="footnote" tone="secondary" style={{ marginTop: 3 }}>
+            Snap the front and the ingredient list and we’ll add it. It takes about 20 seconds.
+          </Txt>
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+        <Button label="Scan again" variant="secondary" size="md" style={{ flex: 1 }} onPress={onAgain} />
+        <Button
+          label="Help add it"
+          size="md"
+          style={{ flex: 1.4 }}
+          onPress={() => { router.push({ pathname: '/submit-product', params: { barcode } } as never); setTimeout(onAgain, 400); }}
+        />
+      </View>
+    </Animated.View>
+  );
+}
+
+/** Ingestion finished without finding the product in any trusted catalogue. */
+class NotInCatalogue extends Error {}
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#050E0D' },
@@ -221,4 +261,5 @@ const styles = StyleSheet.create({
   status: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 18, paddingVertical: 12, borderRadius: Radius.pill, backgroundColor: 'rgba(244,241,234,0.12)', maxWidth: '92%' },
   dot: { width: 8, height: 8, borderRadius: 4 },
   result: { backgroundColor: Palette.surface, borderRadius: Radius.xxl, borderCurve: 'continuous', padding: 18 },
+  missIcon: { width: 68, height: 68, borderRadius: 34, backgroundColor: Palette.accentSoft, alignItems: 'center', justifyContent: 'center' },
 });

@@ -71,7 +71,7 @@ function RootLayoutNav() {
     if (!isOnboarded) {
       // User hasn't completed onboarding
       router.replace('/onboarding');
-    } else if (!inAuthGroup && segments[0] !== '(tabs)' && segments[0] !== '(premium)' && segments[0] !== 'profile-hub' && segments[0] !== 'profile' && segments[0] !== 'product' && segments[0] !== 'ingredient' && segments[0] !== 'newsletter' && segments[0] !== 'settings' && segments[0] !== 'health' && segments[0] !== 'domain' && segments[0] !== 'domains' && segments[0] !== 'research') {
+    } else if (!inAuthGroup && segments[0] !== '(tabs)' && segments[0] !== '(premium)' && segments[0] !== 'profile-hub' && segments[0] !== 'profile' && segments[0] !== 'product' && segments[0] !== 'ingredient' && segments[0] !== 'newsletter' && segments[0] !== 'settings' && segments[0] !== 'health' && segments[0] !== 'domain' && segments[0] !== 'domains' && segments[0] !== 'research' && segments[0] !== 'submit-product') {
       // After onboarding, go to main app
       router.replace('/(tabs)');
     }
@@ -126,6 +126,15 @@ function RootLayoutNav() {
         name="product/[id]"
         options={{
           presentation: 'card',
+        }}
+      />
+
+      {/* Tester: send us a product we don't have */}
+      <Stack.Screen
+        name="submit-product"
+        options={{
+          presentation: 'card',
+          animation: 'slide_from_bottom',
         }}
       />
 

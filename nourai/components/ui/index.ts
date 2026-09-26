@@ -15,6 +15,8 @@ export { ContributorBar } from './ContributorBar';
 export { EvidenceMeter } from './EvidenceMeter';
 export { ProductImage } from './ProductImage';
 export { SearchField } from './SearchField';
+export { TextField } from './TextField';
+export type { TextFieldProps } from './TextField';
 export { EmptyState, Skeleton, SkeletonCard } from './States';
 export { Sheet } from './Sheet';
 export type { SheetRef } from './Sheet';

@@ -93,6 +93,7 @@ export function Screen({
           contentContainerStyle={{ paddingTop: topPad, paddingBottom: bottom }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets
           refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={night ? Palette.nightInk : Palette.accent} /> : undefined}
         >
           {hero}

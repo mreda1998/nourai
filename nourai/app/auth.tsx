@@ -1,13 +1,13 @@
 import React, { useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TextInputProps, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { AlertCircle, Eye, EyeOff, MailCheck, X } from 'lucide-react-native';
-import { Fonts, Palette, Radius } from '@/constants/theme';
+import { Palette, Radius } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
-import { Button, EmptyState, IconButton, PressableScale, Txt } from '@/components/ui';
+import { Button, EmptyState, IconButton, PressableScale, TextField, Txt } from '@/components/ui';
 
 type Mode = 'signin' | 'signup';
 
@@ -109,10 +109,10 @@ export default function AuthScreen() {
 
         <View style={{ gap: 12 }}>
           {mode === 'signup' ? (
-            <Field label="Name" value={name} onChangeText={setName} placeholder="Your first name" autoCapitalize="words" textContentType="givenName" returnKeyType="next" onSubmitEditing={() => emailRef.current?.focus()} />
+            <TextField label="Name" value={name} onChangeText={setName} placeholder="Your first name" autoCapitalize="words" textContentType="givenName" returnKeyType="next" onSubmitEditing={() => emailRef.current?.focus()} />
           ) : null}
-          <Field ref={emailRef} label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" autoCapitalize="none" keyboardType="email-address" autoComplete="email" textContentType="emailAddress" returnKeyType="next" onSubmitEditing={() => passwordRef.current?.focus()} />
-          <Field
+          <TextField ref={emailRef} label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" autoCapitalize="none" keyboardType="email-address" autoComplete="email" textContentType="emailAddress" returnKeyType="next" onSubmitEditing={() => passwordRef.current?.focus()} />
+          <TextField
             ref={passwordRef}
             label="Password"
             value={password}
@@ -157,34 +157,9 @@ export default function AuthScreen() {
   );
 }
 
-const Field = React.forwardRef<TextInput, TextInputProps & { label: string; trailing?: React.ReactNode }>(
-  function Field({ label, trailing, ...props }, ref) {
-    const [focused, setFocused] = useState(false);
-    return (
-      <View style={[styles.field, focused && { borderColor: Palette.accent }]}>
-        <Txt variant="caption" tone={focused ? 'accent' : 'secondary'}>{label}</Txt>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <TextInput
-            ref={ref}
-            placeholderTextColor={Palette.ink4}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            style={styles.input}
-            accessibilityLabel={label}
-            {...props}
-          />
-          {trailing}
-        </View>
-      </View>
-    );
-  },
-);
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Palette.canvas },
   divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 24 },
   rule: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: Palette.hairline },
-  field: { borderRadius: Radius.lg, borderCurve: 'continuous', backgroundColor: Palette.surface, borderWidth: 1.5, borderColor: 'transparent', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 },
-  input: { flex: 1, fontFamily: Fonts.sans, fontSize: 17, color: Palette.ink, paddingVertical: 4 },
   error: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, padding: 14, borderRadius: Radius.md, backgroundColor: Palette.weakSoft },
 });
