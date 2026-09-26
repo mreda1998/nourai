@@ -34,3 +34,6 @@ build/
 
 # Viewer image cache
 .cache/
+
+# Downloaded taxonomies (Open Food Facts, CosIng)
+data/taxonomies/
