@@ -3,6 +3,9 @@ import { ActivityIndicator, View } from 'react-native';
 import { router } from 'expo-router';
 import { Check, SlidersHorizontal } from 'lucide-react-native';
 import { api, HealthDomainResponse } from '@/services/api';
+import { APP_DOMAIN_TO_BIODOMAIN } from '@/constants/biodomains';
+import { useAppState } from '@/context/app-state';
+import { isCatalogueId } from '@/lib/insights';
 import { Palette } from '@/constants/theme';
 import { scoreQualifier } from '@/utils/grade';
 import { Button, Card, EvidenceMeter, IconButton, ListGroup, ListRow, ScoreGauge, Screen, Section, Txt } from '@/components/ui';
@@ -26,12 +29,21 @@ export interface HealthDomainConfig {
  * an honest empty state — never placeholder numbers.
  */
 export function HealthDomainScreen({ config }: { config: HealthDomainConfig }) {
+  const { stack } = useAppState();
   const [remote, setRemote] = useState<HealthDomainResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const biodomain = APP_DOMAIN_TO_BIODOMAIN[config.key];
+  const stackIds = stack.map((p) => p.id).filter(isCatalogueId).join(',');
 
   useEffect(() => {
-    api.getHealthDomain(config.key).then(setRemote).catch(() => setRemote(null)).finally(() => setLoading(false));
-  }, [config.key]);
+    if (!biodomain || !stackIds) { setRemote(null); setLoading(false); return; }
+    setLoading(true);
+    api.getStackDomain(biodomain, stackIds.split(','))
+      // Zero with no contributing ingredients means "nothing in the stack affects this yet".
+      .then((r) => setRemote(r.score || r.factors.length ? r : null))
+      .catch(() => setRemote(null))
+      .finally(() => setLoading(false));
+  }, [biodomain, stackIds]);
 
   const personal = remote?.factors?.length ? remote.factors : null;
   const name = config.title.replace(/ health$/i, '').toLowerCase();
@@ -48,11 +60,13 @@ export function HealthDomainScreen({ config }: { config: HealthDomainConfig }) {
           </>
         ) : (
           <View style={{ paddingVertical: 12, alignItems: 'center' }}>
-            <Txt variant="title2" align="center">Not enough data yet</Txt>
+            <Txt variant="title2" align="center">{biodomain ? 'Not enough data yet' : 'Scoring coming soon'}</Txt>
             <Txt variant="subhead" tone="secondary" align="center" style={{ marginTop: 8 }}>
-              Add products that affect {name} to your stack and Elory will score this area for you.
+              {biodomain
+                ? `Add products that affect ${name} to your stack and Elory will score this area for you.`
+                : `We’re still building the evidence base for ${name}. Below is what the research says in general.`}
             </Txt>
-            <Button label="Add products" size="md" fullWidth={false} style={{ marginTop: 16 }} onPress={() => router.push('/(tabs)/explore' as never)} />
+            {biodomain ? <Button label="Add products" size="md" fullWidth={false} style={{ marginTop: 16 }} onPress={() => router.push('/(tabs)/explore' as never)} /> : null}
           </View>
         )}
       </Card>

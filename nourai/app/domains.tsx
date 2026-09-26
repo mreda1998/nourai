@@ -5,10 +5,13 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Dumbbell, Moon, Scissors, Sprout, Waves, Zap } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { api } from '@/services/api';
+import { APP_DOMAIN_TO_BIODOMAIN } from '@/constants/biodomains';
+import { useAppState } from '@/context/app-state';
+import { isCatalogueId } from '@/lib/insights';
 import { Palette, Radius } from '@/constants/theme';
 import { PressableScale, ScoreBadge, Screen, Txt } from '@/components/ui';
 
-const DOMAINS: { key: string; title: string; subtitle: string; Icon: LucideIcon }[] = [
+const DOMAINS: { key: keyof typeof APP_DOMAIN_TO_BIODOMAIN; title: string; subtitle: string; Icon: LucideIcon }[] = [
   { key: 'skin', title: 'Skin', subtitle: 'Barrier, texture, ageing', Icon: Waves },
   { key: 'sleep', title: 'Sleep', subtitle: 'Rhythm, quality, recovery', Icon: Moon },
   { key: 'gut', title: 'Gut', subtitle: 'Diversity, comfort', Icon: Sprout },
@@ -18,15 +21,20 @@ const DOMAINS: { key: string; title: string; subtitle: string; Icon: LucideIcon 
 ];
 
 export default function DomainsScreen() {
+  const { stack } = useAppState();
   const [scores, setScores] = useState<Record<string, number | null>>({});
+  const stackIds = stack.map((p) => p.id).filter(isCatalogueId).join(',');
 
   useEffect(() => {
+    if (!stackIds) { setScores({}); return; }
     DOMAINS.forEach((d) => {
-      api.getHealthDomain(d.key)
-        .then((r) => setScores((s) => ({ ...s, [d.key]: r.score })))
+      const biodomain = APP_DOMAIN_TO_BIODOMAIN[d.key];
+      if (!biodomain) return;
+      api.getStackDomain(biodomain, stackIds.split(','))
+        .then((r) => setScores((s) => ({ ...s, [d.key]: r.score || r.factors.length ? r.score : null })))
         .catch(() => setScores((s) => ({ ...s, [d.key]: null })));
     });
-  }, []);
+  }, [stackIds]);
 
   return (
     <Screen back title="Longevity domains" subtitle="The systems that shape how you feel and age.">
@@ -44,7 +52,7 @@ export default function DomainsScreen() {
           </Animated.View>
         ))}
       </View>
-      <Txt variant="footnote" tone="tertiary" align="center" style={{ marginTop: 20 }}>Scores appear once your stack includes products that affect each area.</Txt>
+      <Txt variant="footnote" tone="tertiary" align="center" style={{ marginTop: 20 }}>Scores appear once your stack includes products that affect each area. Hair scoring is coming soon.</Txt>
     </Screen>
   );
 }

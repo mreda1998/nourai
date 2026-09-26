@@ -103,3 +103,16 @@ export function scoredValue(score: BioDomainScore): number {
   const sign = score.direction === 'harm' ? -1 : score.direction === 'neutral' ? 0 : 1;
   return sign * score.magnitude;
 }
+
+/**
+ * The app's six longevity domains → backend biodomain keys. `hair` has no
+ * backend biodomain yet, so it shows general guidance without a score.
+ */
+export const APP_DOMAIN_TO_BIODOMAIN: Record<'skin' | 'sleep' | 'gut' | 'hormonal' | 'hair' | 'fitness', string | null> = {
+  skin: 'skin_appearance',
+  sleep: 'sleep_recovery',
+  gut: 'gut_digestive',
+  hormonal: 'hormonal_endocrine',
+  fitness: 'body_composition',
+  hair: null,
+};

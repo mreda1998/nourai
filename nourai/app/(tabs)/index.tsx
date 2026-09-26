@@ -10,6 +10,7 @@ import { Layout, Palette, Radius } from '@/constants/theme';
 import { greeting, Imagery, todayHero } from '@/constants/imagery';
 import { useAppState, type Product } from '@/context/app-state';
 import { useAuth } from '@/context/auth-context';
+import { isCatalogueId } from '@/lib/insights';
 import { api, DailyScoreResponse, ScanHistoryItem } from '@/services/api';
 import { gradeToScore, scoreQualifier } from '@/utils/grade';
 import {
@@ -24,19 +25,23 @@ export default function TodayScreen() {
   const { user } = useAuth();
   const [score, setScore] = useState<DailyScoreResponse | null>(null);
   const [scoreLoading, setScoreLoading] = useState(true);
+  const [scoreFailed, setScoreFailed] = useState(false);
   const [recent, setRecent] = useState<ScanHistoryItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const firstName = user?.name?.trim().split(' ')[0];
 
+  // Score whatever is in the stack right now (guests included).
+  const stackIds = stack.map((p) => p.id).filter(isCatalogueId).join(',');
   const load = useCallback(async () => {
     const [s, r] = await Promise.allSettled([
-      stack.length ? api.getDailyScore() : Promise.resolve(null),
+      stackIds ? api.getStackScore(stackIds.split(',')) : Promise.resolve(null),
       api.getScanHistory({ limit: 8 }),
     ]);
     setScore(s.status === 'fulfilled' ? s.value : null);
+    setScoreFailed(s.status === 'rejected');
     setRecent(r.status === 'fulfilled' ? r.value.items : []);
     setScoreLoading(false);
-  }, [stack.length]);
+  }, [stackIds]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -46,7 +51,7 @@ export default function TodayScreen() {
   return (
     <Screen tabbed hero={<Hero name={firstName} />} refreshing={refreshing} onRefresh={refresh}>
       <View style={{ marginTop: -150 }}>
-        {hasStack ? <ScoreCard score={score} loading={scoreLoading} /> : <WelcomeCard />}
+        {hasStack ? <ScoreCard score={score} loading={scoreLoading} failed={scoreFailed} /> : <WelcomeCard />}
       </View>
 
       {hasStack ? <Protocol stack={stack} /> : <HowItWorks />}
@@ -109,8 +114,10 @@ function headline(score: number | null) {
   return 'Your stack needs attention';
 }
 
-function ScoreCard({ score, loading }: { score: DailyScoreResponse | null; loading: boolean }) {
-  const value = score?.overall ?? null;
+function ScoreCard({ score, loading, failed }: { score: DailyScoreResponse | null; loading: boolean; failed: boolean }) {
+  // A zero across the board means none of the products have scored ingredients yet.
+  const noData = !score || (score.overall === 0 && score.categories.every((c) => c.value === 0));
+  const value = noData ? null : score.overall;
   const weakest = score?.categories?.length ? [...score.categories].sort((a, b) => a.value - b.value)[0] : null;
   return (
     <Animated.View entering={FadeInDown.duration(700).delay(150)}>
@@ -119,19 +126,21 @@ function ScoreCard({ score, loading }: { score: DailyScoreResponse | null; loadi
           {loading ? (
             <View style={{ height: 200, justifyContent: 'center' }}><Skeleton width={180} height={120} radius={60} /></View>
           ) : (
-            <ScoreGauge score={value} size={236} label="Stack score" qualifier={score?.qualifier ?? (value != null ? scoreQualifier(value) : 'Unavailable')} />
+            <ScoreGauge score={value} size={236} label="Stack score" qualifier={value != null ? score?.qualifier ?? scoreQualifier(value) : 'Not enough data'} />
           )}
         </View>
         <Txt variant="title1" align="center" style={{ marginTop: -8 }}>{headline(value)}</Txt>
         <Txt variant="subhead" tone="secondary" align="center" style={{ marginTop: 8, paddingHorizontal: 8 }}>
           {value == null
-            ? 'We couldn’t calculate today’s score. Pull down to try again.'
+            ? failed
+              ? 'We couldn’t calculate your score. Pull down to try again.'
+              : 'We’re still researching the ingredients in your stack, so there’s no score yet.'
             : weakest && weakest.value < 70
               ? `${weakest.label} is holding your score back. Tap it below to see why.`
               : 'Built from product quality, evidence strength and your health profile.'}
         </Txt>
 
-        {score?.categories?.length ? (
+        {!noData && score?.categories?.length ? (
           <View style={{ marginTop: 18, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Palette.hairline, paddingTop: 6 }}>
             {score.categories.slice(0, 4).map((c, i) => (
               <ContributorBar key={c.key} label={c.label} value={c.value} valueLabel={`${Math.round(c.value)}`} delay={250 + i * 90} onPress={() => router.push('/domains' as never)} />
