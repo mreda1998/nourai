@@ -134,6 +134,11 @@ class Ingredient(Base, UUIDMixin, TimestampMixin):
         String(20), nullable=False, default=IngredientRole.UNKNOWN, server_default="unknown"
     )
     function_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Canonical SMILES for single-structure compounds — drawn as the molecule.
+    smiles: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Reader-facing chemical class when the coarse category misleads,
+    # e.g. creatine is an amino acid derivative, not an amino acid.
+    class_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
 
     # Research pipeline tracking
     research_status: Mapped[str] = mapped_column(

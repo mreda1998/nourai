@@ -9,6 +9,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +23,21 @@ from app.models.product import Product, ProductIngredient
 from app.repositories.pathway import PathwayRepository
 from app.schemas.pathway import MechanismOut
 from app.services.pathway_views import ingredient_mechanism
+from app.services.molecule import molecule_facts, render_molecule_svg
+
+CATEGORY_LABEL = {
+    "vitamin": "Vitamin", "mineral": "Mineral", "amino_acid": "Amino acid", "herb": "Herbal extract",
+    "probiotic": "Probiotic", "enzyme": "Enzyme", "fatty_acid": "Fatty acid", "antioxidant": "Antioxidant",
+    "preservative": "Preservative", "sweetener": "Sweetener", "additive": "Additive", "peptide": "Peptide",
+    "other": None,
+}
+
+
+def _molecule(ingredient: Ingredient) -> dict | None:
+    facts = molecule_facts(ingredient.smiles) if ingredient.smiles else None
+    if not facts:
+        return None
+    return {"svg_path": f"/api/v1/ingredients/{ingredient.id}/structure.svg", **facts}
 
 router = APIRouter()
 
@@ -97,6 +113,10 @@ class IngredientDetail(BaseModel):
 
     # 2D chemical structure image URL (from PubChem, re-hosted on Supabase)
     structure_image_url: str | None
+
+    # Reader-facing class ("Amino acid derivative") and the drawn molecule
+    class_label: str | None = None
+    molecule: dict | None = None  # {svg_path, formula, mass}
 
     # Evidence records — sorted high→low confidence then newest→oldest
     evidence: list[EvidenceRecord]
@@ -197,6 +217,19 @@ async def search_ingredients(
         ],
         total=total,
     )
+
+
+@router.get("/{ingredient_id}/structure.svg", include_in_schema=False)
+async def get_ingredient_structure(
+    ingredient_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """The ingredient's 2D structure, drawn in Elory's style."""
+    ingredient = await db.get(Ingredient, ingredient_id)
+    svg = render_molecule_svg(ingredient.smiles) if ingredient and ingredient.smiles else None
+    if svg is None:
+        raise HTTPException(status_code=404, detail="No structure for this ingredient")
+    return Response(svg, media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @router.get("/{ingredient_id}/mechanism", response_model=MechanismOut, response_model_by_alias=True)
@@ -308,6 +341,8 @@ async def get_ingredient(
         research_status=ingredient.research_status,
         mechanism_image_url=ingredient.mechanism_image_url,
         structure_image_url=ingredient.structure_image_url,
+        class_label=ingredient.class_label or CATEGORY_LABEL.get(getattr(ingredient.category, 'value', ingredient.category)),
+        molecule=_molecule(ingredient),
         biodomain_scores=biodomain_scores,
         evidence=[
             EvidenceRecord(
