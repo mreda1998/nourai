@@ -352,6 +352,9 @@ export interface IngredientDetail {
   mechanism_image_url: string | null;
   // 2D chemical structure image (from PubChem), null when no single structure exists
   structure_image_url: string | null;
+  // Reader-facing class ("Amino acid derivative") and the drawn molecule
+  class_label?: string | null;
+  molecule?: { svg_path: string; formula: string; mass: number } | null;
   // Pre-computed per-bio-domain effect signal (JSONB from model)
   domain_effects: Record<string, {
     direction: 'benefit' | 'risk' | 'neutral' | 'mixed';

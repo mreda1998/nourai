@@ -1,4 +1,5 @@
 export { Txt } from './Txt';
+export { ClampedText } from './ClampedText';
 export type { TxtProps, TextTone } from './Txt';
 export { PressableScale } from './PressableScale';
 export { Card } from './Card';

@@ -59,7 +59,7 @@ export default function ResearchScreen() {
   const list = evidence.filter((e) => matches(e, filter));
 
   return (
-    <Screen back title="Research" eyebrow={name || undefined} subtitle={loading ? undefined : `${evidence.length} studies reviewed`}>
+    <Screen back title="Research" eyebrow={name || undefined} subtitle={loading ? undefined : `${evidence.length} studies summarised`}>
       {loading ? <ActivityIndicator color={Palette.accent} style={{ marginTop: 32 }} /> : (
         <>
           <ChipRow

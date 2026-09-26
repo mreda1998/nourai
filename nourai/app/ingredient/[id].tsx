@@ -9,10 +9,11 @@ import {
 } from 'lucide-react-native';
 import { api, IngredientDetail, IngredientEvidenceRecord } from '@/services/api';
 import { HowItWorks } from '@/components/science/HowItWorks';
+import { MoleculeThumb } from '@/components/science/MoleculeCard';
 import { Palette, Radius } from '@/constants/theme';
 import { evidenceStrength, strengthLabel, strengthTone, toneColor, Tone } from '@/utils/grade';
 import {
-  Button, Card, EmptyState, EvidenceMeter, IconButton, ListGroup, ListRow, Pill,
+  Button, Card, ClampedText, EmptyState, EvidenceMeter, IconButton, ListGroup, ListRow, Pill,
   ProductImage, Screen, Section, SegmentedControl, SkeletonCard, Txt,
 } from '@/components/ui';
 
@@ -53,12 +54,16 @@ export default function IngredientScreen() {
       {/* Identity */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: -6 }}>
         <View style={styles.structure}>
-          {data.structure_image_url
-            ? <Image source={{ uri: data.structure_image_url }} style={{ width: 60, height: 60 }} contentFit="contain" />
-            : <Molecule />}
+          <MoleculeThumb
+            molecule={data.molecule}
+            size={64}
+            fallback={data.structure_image_url
+              ? <Image source={{ uri: data.structure_image_url }} style={{ width: 60, height: 60 }} contentFit="contain" />
+              : <Molecule />}
+          />
         </View>
         <View style={{ flex: 1 }}>
-          <Txt variant="overline" tone="secondary">{data.category || 'Active ingredient'}</Txt>
+          <Txt variant="overline" tone="secondary">{data.class_label || 'Ingredient'}</Txt>
           <View style={{ marginTop: 10, alignItems: 'flex-start' }}>
             <EvidenceMeter strength={strength} width={96} />
           </View>
@@ -107,7 +112,14 @@ export default function IngredientScreen() {
         </View>
       ) : null}
 
-      {tab === 'mechanism' ? <HowItWorks ingredientId={data.id} unreviewedSummary={data.mechanism_summary} /> : null}
+      {tab === 'mechanism' ? (
+        <HowItWorks
+          ingredientId={data.id}
+          unreviewedSummary={data.mechanism_summary}
+          molecule={data.molecule ?? null}
+          classLabel={data.class_label}
+        />
+      ) : null}
 
       {tab === 'safety' ? <Safety data={data} /> : null}
 
@@ -149,7 +161,7 @@ function BeliefReality({ data, strength }: { data: IngredientDetail; strength: n
             <Quote size={16} color={Palette.ink3} strokeWidth={2} />
             <Txt variant="overline" tone="secondary">What people believe</Txt>
           </View>
-          <Txt variant="title2" italic tone="secondary" style={{ marginTop: 10 }}>{belief}</Txt>
+          <ClampedText variant="title3" italic tone="secondary" style={{ marginTop: 10 }}>{belief}</ClampedText>
         </Card>
       ) : null}
       {belief && reality ? (
@@ -165,10 +177,10 @@ function BeliefReality({ data, strength }: { data: IngredientDetail; strength: n
               <Txt variant="overline" color={toneColor(tone)}>What the evidence shows</Txt>
             </View>
           </View>
-          <Txt variant="title2" style={{ marginTop: 10 }}>{reality}</Txt>
+          <ClampedText variant="title3" style={{ marginTop: 10 }}>{reality}</ClampedText>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
             <Pill label={strengthLabel(strength)} tone={tone} />
-            {data.evidence.length ? <Txt variant="footnote" tone="secondary">{data.evidence.length} studies reviewed</Txt> : null}
+            {data.evidence.length ? <Txt variant="footnote" tone="secondary">{data.evidence.length} studies summarised</Txt> : null}
           </View>
         </Card>
       ) : null}

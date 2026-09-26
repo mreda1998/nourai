@@ -1,24 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { Palette } from '@/constants/theme';
-import { api, type IngredientMechanism, type MechanismAsset } from '@/services/api';
+import { api, type IngredientMechanism } from '@/services/api';
 import { Card, Section, Txt } from '@/components/ui';
 import { LadderBadge } from './LadderBadge';
 import { EvidenceChain } from './EvidenceChain';
 import { DoseBar } from './DoseBar';
-import { ViewerPanel } from './ViewerPanel';
+import { MoleculeCard, type Molecule } from './MoleculeCard';
 import { isPendingReview } from './labels';
-
-function asset(m: IngredientMechanism, kind: MechanismAsset['kind']) {
-  return m.assets.find((a) => a.kind === kind);
-}
 
 /**
  * The "How it works" tab: how far our knowledge goes, the reviewed route when
- * there is one, then where it acts, how it binds and the bigger pathway.
+ * there is one, the dose studied, and the molecule itself.
  * Panels without data don't render.
  */
-export function HowItWorks({ ingredientId, unreviewedSummary }: { ingredientId: string; unreviewedSummary?: string | null }) {
+export function HowItWorks({ ingredientId, unreviewedSummary, molecule, classLabel }: {
+  ingredientId: string;
+  unreviewedSummary?: string | null;
+  molecule?: Molecule | null;
+  classLabel?: string | null;
+}) {
   const [m, setM] = useState<IngredientMechanism | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -37,9 +38,6 @@ export function HowItWorks({ ingredientId, unreviewedSummary }: { ingredientId: 
 
   const route = m.route;
   const doseClaim = route?.links.flatMap((l) => l.claims).find((c) => c.dose_low != null && c.dose_unit);
-  const cell = asset(m, 'cell_locations');
-  const structure = asset(m, 'structure');
-  const pathway = asset(m, 'pathway_illustration');
 
   return (
     <View style={{ marginTop: 16 }}>
@@ -77,35 +75,10 @@ export function HowItWorks({ ingredientId, unreviewedSummary }: { ingredientId: 
         </Section>
       ) : null}
 
-      {cell ? (
-        <ViewerPanel
-          title="Where it acts"
-          caption={`The cell compartments where proteins in its pathway work${cell.payload.names?.length ? `: ${cell.payload.names.slice(0, 3).join(', ').toLowerCase()}` : ''}`}
-          viewerPath={cell.viewer_path} fallbackUrl={cell.fallback_url} attribution={cell.attribution}
-          height={250}
-        />
-      ) : null}
-
-      {structure ? (
-        <ViewerPanel
-          title="See it bind"
-          caption={structure.payload.title ? String(structure.payload.title) : 'A measured 3D structure of the molecule bound to a human protein'}
-          viewerPath={structure.viewer_path} fallbackUrl={structure.fallback_url} attribution={structure.attribution}
-          height={300} interactive
-        >
-          <Txt variant="caption" tone="tertiary">
-            {structure.reviewed ? 'Chosen by a reviewer.' : 'Found automatically — may show a protein other than its main target.'} Drag to rotate.
-          </Txt>
-        </ViewerPanel>
-      ) : null}
-
-      {pathway ? (
-        <ViewerPanel
-          title="The bigger picture"
-          caption="Its pathway, highlighted among related pathways in the body"
-          viewerPath={pathway.viewer_path} fallbackUrl={pathway.fallback_url} attribution={pathway.attribution}
-          height={260} interactive
-        />
+      {molecule ? (
+        <Section title="The molecule">
+          <MoleculeCard molecule={molecule} name={m.via_moiety ?? m.name} classLabel={classLabel} />
+        </Section>
       ) : null}
 
       {!route && unreviewedSummary ? (
