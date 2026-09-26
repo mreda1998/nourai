@@ -583,6 +583,32 @@ def _fit(column: str, value: Any) -> str | None:
     return text
 
 
+async def all_study_records(
+    session: AsyncSession,
+    ingredient_id: uuid.UUID,
+    new_records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Every stored study for the ingredient; dose details from this run where known."""
+    new_by_pmid = {r["pmid"]: r for r in new_records if r.get("pmid")}
+    rows = (await session.execute(
+        select(IngredientEvidence).where(IngredientEvidence.ingredient_id == ingredient_id)
+    )).scalars().all()
+    records = []
+    for row in rows:
+        new = new_by_pmid.get(row.pmid or "", {})
+        records.append({
+            "pmid": row.pmid,
+            "study_type": row.study_type or "other",
+            "confidence": row.confidence or "low",
+            "direction": row.direction or "neutral",
+            "finding": row.finding,
+            "dose_low": new.get("dose_low"),
+            "dose_high": new.get("dose_high"),
+            "dose_unit": new.get("dose_unit"),
+        })
+    return records
+
+
 async def store_evidence(
     session: AsyncSession,
     ingredient_id: uuid.UUID,
@@ -1034,6 +1060,7 @@ async def research_one_ingredient(
             )
 
             synthesized.append({
+                "pmid":        pmid,
                 "study_type":  result.get("study_type", "other"),
                 "confidence":  result.get("confidence", "low"),
                 "direction":   result.get("direction", "neutral"),
@@ -1044,6 +1071,12 @@ async def research_one_ingredient(
             })
 
         await asyncio.gather(*[_synthesize_and_store(a) for a in valid_articles])
+
+        # Summaries, evidence level and domain scores use every stored study for
+        # this ingredient — not just the ones added in this run, which on a
+        # re-run can be a handful and would overwrite a well-supported summary.
+        async with session_factory() as session:
+            synthesized = await all_study_records(session, iid, synthesized)
 
         # ── 5. Belief vs. reality summary (Sonnet) ────────────────────────────
         print(f"  [4/5] Generating belief vs. reality summary...")
