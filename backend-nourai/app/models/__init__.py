@@ -23,6 +23,7 @@ from app.models.ingestion import (  # noqa: F401
     QualityIssue,
     ReviewTask,
 )
+from app.models.identity import Substance, SubstanceAlias, NameResolution  # noqa: F401
 from app.models.pathway import (  # noqa: F401
     BioEntity,
     MechanismFact,

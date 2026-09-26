@@ -130,6 +130,11 @@ class ProductIngredient(Base, UUIDMixin):
     percentage: Mapped[float | None] = mapped_column(Float, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     order_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Ingredient identity: the canonical substance and its clean English name
+    substance_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("substances.id", ondelete="SET NULL"), nullable=True
+    )
+    display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
     product: Mapped["Product"] = relationship("Product", back_populates="product_ingredients")
