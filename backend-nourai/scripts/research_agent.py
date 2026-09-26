@@ -553,6 +553,36 @@ async def pmid_already_stored(
     return result.scalar_one_or_none() is not None
 
 
+_PLACEHOLDERS = {"<unknown>", "unknown", "n/a", "na", "none", "null", "not reported", "-", ""}
+
+
+def _as_text(value: Any) -> str | None:
+    """The model sometimes fills a field with a placeholder; store nothing instead."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return None if text.lower() in _PLACEHOLDERS else text
+
+
+def _as_int(value: Any) -> int | None:
+    """A whole number from 38, "1,924" or "721 participants"; never a guess."""
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    match = re.match(r"^\s*(\d[\d,]*)\b", str(value))
+    return int(match.group(1).replace(",", "")) if match else None
+
+
+def _fit(column: str, value: Any) -> str | None:
+    """Clean text clipped to its column's length, so one long field can't fail a whole ingredient."""
+    text = _as_text(value)
+    limit = getattr(IngredientEvidence.__table__.c[column].type, "length", None)
+    if text is not None and limit and len(text) > limit:
+        text = text[: limit - 1].rstrip() + "…"
+    return text
+
+
 async def store_evidence(
     session: AsyncSession,
     ingredient_id: uuid.UUID,
@@ -562,18 +592,18 @@ async def store_evidence(
     evidence = IngredientEvidence(
         ingredient_id=ingredient_id,
         pmid=str(article["pmid"]),
-        doi=article.get("doi"),
+        doi=_fit("doi", article.get("doi")),
         title=article.get("title"),
-        journal=article.get("journal"),
-        year=article.get("year") or synthesis.get("year"),
+        journal=_fit("journal", article.get("journal")),
+        year=_as_int(article.get("year")) or _as_int(synthesis.get("year")),
         raw_abstract=article["abstract"],
-        study_type=synthesis.get("study_type"),
-        population=synthesis.get("population"),
-        sample_size=synthesis.get("sample_size"),
+        study_type=_fit("study_type", synthesis.get("study_type")),
+        population=_fit("population", synthesis.get("population")),
+        sample_size=_as_int(synthesis.get("sample_size")),
         finding=synthesis["finding"],
         direction=synthesis.get("direction", EvidenceDirection.NEUTRAL),
-        effect_size=synthesis.get("effect_size"),
-        confidence=synthesis.get("confidence", "low"),
+        effect_size=_fit("effect_size", synthesis.get("effect_size")),
+        confidence=_fit("confidence", synthesis.get("confidence")) or "low",
         concern_tags=synthesis.get("concern_tags", []),
         goal_tags=synthesis.get("goal_tags", []),
     )
