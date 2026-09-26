@@ -12,7 +12,8 @@ import Purchases, {
 } from 'react-native-purchases';
 import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 
-import { ENTITLEMENT_ID } from '@/lib/revenue-cat';
+import { ENTITLEMENT_ID, isRevenueCatConfigured } from '@/lib/revenue-cat';
+import { TESTER_MODE } from '@/lib/tester-mode';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,16 +35,19 @@ const PurchasesContext = createContext<PurchasesState | undefined>(undefined);
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function PurchasesProvider({ children }: { children: React.ReactNode }) {
+  // Without RevenueCat (tester builds, or no store key) every action is a no-op.
+  const enabled = isRevenueCatConfigured();
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [offerings, setOfferings] = useState<PurchasesOfferings | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(enabled);
 
   const isPremium =
-    customerInfo?.entitlements.active[ENTITLEMENT_ID] !== undefined;
+    TESTER_MODE || customerInfo?.entitlements.active[ENTITLEMENT_ID] !== undefined;
 
   // ── Load on mount ────────────────────────────────────────────────────────
 
   useEffect(() => {
+    if (!enabled) return;
     let mounted = true;
 
     (async () => {
@@ -75,6 +79,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   // ── Actions ──────────────────────────────────────────────────────────────
 
   const refreshCustomerInfo = useCallback(async () => {
+    if (!enabled) return;
     try {
       const info = await Purchases.getCustomerInfo();
       setCustomerInfo(info);
@@ -84,6 +89,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const purchasePackage = useCallback(async (pkg: PurchasesPackage): Promise<boolean> => {
+    if (!enabled) return false;
     try {
       const { customerInfo: info } = await Purchases.purchasePackage(pkg);
       setCustomerInfo(info);
@@ -95,6 +101,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const restorePurchases = useCallback(async (): Promise<boolean> => {
+    if (!enabled) return false;
     try {
       const info = await Purchases.restorePurchases();
       setCustomerInfo(info);
@@ -105,17 +112,20 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const presentPaywall = useCallback((): Promise<PAYWALL_RESULT> => {
+  const presentPaywall = useCallback(async (): Promise<PAYWALL_RESULT> => {
+    if (!enabled) return PAYWALL_RESULT.NOT_PRESENTED;
     return RevenueCatUI.presentPaywall();
   }, []);
 
-  const presentPaywallIfNeeded = useCallback((): Promise<PAYWALL_RESULT> => {
+  const presentPaywallIfNeeded = useCallback(async (): Promise<PAYWALL_RESULT> => {
+    if (!enabled) return PAYWALL_RESULT.NOT_PRESENTED;
     return RevenueCatUI.presentPaywallIfNeeded({
       requiredEntitlementIdentifier: ENTITLEMENT_ID,
     });
   }, []);
 
-  const presentCustomerCenter = useCallback((): Promise<void> => {
+  const presentCustomerCenter = useCallback(async (): Promise<void> => {
+    if (!enabled) return;
     return RevenueCatUI.presentCustomerCenter();
   }, []);
 

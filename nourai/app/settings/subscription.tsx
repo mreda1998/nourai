@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, Crown } from 'lucide-react-native';
 import type { PurchasesPackage } from 'react-native-purchases';
+import { TESTER_MODE } from '@/lib/tester-mode';
 import { usePurchases } from '@/context/purchases-context';
 import { Palette, Radius } from '@/constants/theme';
 import { Imagery } from '@/constants/imagery';
@@ -70,6 +71,16 @@ export default function SubscriptionScreen() {
       </View>
     </View>
   );
+
+  if (TESTER_MODE) {
+    return (
+      <Screen night back hero={hero}>
+        <Txt variant="callout" tone="inverse2" style={{ marginTop: 16 }}>
+          This is a beta build — every feature is unlocked while you test. Thank you for helping shape Elory.
+        </Txt>
+      </Screen>
+    );
+  }
 
   if (isPremium) {
     return (
