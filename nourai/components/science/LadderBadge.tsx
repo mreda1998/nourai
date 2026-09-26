@@ -21,20 +21,26 @@ const EXPLAIN: Record<LadderLevel, string> = {
 };
 
 /** Four-step ladder showing how far our knowledge of an ingredient goes. */
-export function LadderBadge({ level }: { level: LadderLevel }) {
+export function LadderBadge({ level, pending = false }: { level: LadderLevel; pending?: boolean }) {
   const reached = STEPS.findIndex((s) => s.level === level);
+  // A published route nobody has reviewed yet is a draft, and says so.
+  const draft = level === 'reviewed' && pending;
+  const label = draft ? 'Draft route' : LADDER_LABEL[level];
+  const explain = draft
+    ? 'Links how it works to outcomes measured in people. Drafted from the cited studies and checked automatically; not yet reviewed by an expert.'
+    : EXPLAIN[level];
   return (
-    <View accessibilityRole="text" accessibilityLabel={`${LADDER_LABEL[level]}. ${EXPLAIN[level]}`}>
+    <View accessibilityRole="text" accessibilityLabel={`${label}. ${explain}`}>
       <View style={{ flexDirection: 'row', gap: 4 }}>
         {STEPS.map((s, i) => (
           <View
             key={s.level}
-            style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i <= reached ? (level === 'reviewed' ? Palette.strong : Palette.accent) : Palette.ink4 }}
+            style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i <= reached ? (level === 'reviewed' && !draft ? Palette.strong : Palette.accent) : Palette.ink4 }}
           />
         ))}
       </View>
-      <Txt variant="footnoteStrong" style={{ marginTop: 8 }}>{LADDER_LABEL[level]}</Txt>
-      <Txt variant="footnote" tone="secondary" style={{ marginTop: 2 }}>{EXPLAIN[level]}</Txt>
+      <Txt variant="footnoteStrong" style={{ marginTop: 8 }}>{label}</Txt>
+      <Txt variant="footnote" tone="secondary" style={{ marginTop: 2 }}>{explain}</Txt>
     </View>
   );
 }

@@ -40,12 +40,11 @@ export function HowItWorks({ ingredientId, unreviewedSummary }: { ingredientId: 
   const cell = asset(m, 'cell_locations');
   const structure = asset(m, 'structure');
   const pathway = asset(m, 'pathway_illustration');
-  const diagram = asset(m, 'pathway_diagram');
 
   return (
     <View style={{ marginTop: 16 }}>
       <Card padding={18}>
-        <LadderBadge level={m.level} />
+        <LadderBadge level={m.level} pending={!!route && isPendingReview(route)} />
         {m.via_moiety ? (
           <Txt variant="footnote" tone="secondary" style={{ marginTop: 10 }}>
             Shown for {m.via_moiety}, the active compound in this form.{m.form_note ? ` ${m.form_note}` : ''}
@@ -103,7 +102,7 @@ export function HowItWorks({ ingredientId, unreviewedSummary }: { ingredientId: 
       {pathway ? (
         <ViewerPanel
           title="The bigger picture"
-          caption={diagram?.payload.name ? `Where ${String(diagram.payload.name).toLowerCase()} sits among related pathways` : 'Where its pathway sits among related pathways'}
+          caption="Its pathway, highlighted among related pathways in the body"
           viewerPath={pathway.viewer_path} fallbackUrl={pathway.fallback_url} attribution={pathway.attribution}
           height={260} interactive
         />
