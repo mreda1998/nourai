@@ -1,5 +1,10 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { StackEntry } from '@/services/api';
+import { isCatalogueId, track } from '@/lib/insights';
+
+// The stack is kept on the device so guests don't lose it between launches.
+const STACK_KEY = 'elory.stack.v1';
 
 // Types
 export interface Product {
@@ -54,10 +59,34 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [stack, setStack] = useState<Product[]>([]);
   const [meals, setMeals] = useState<Product[]>([]);
   const [hasScannedBefore, setHasScannedBefore] = useState(false);
+  const restored = useRef(false);
+
+  // Restore the saved stack once, without clobbering anything added meanwhile.
+  useEffect(() => {
+    AsyncStorage.getItem(STACK_KEY)
+      .then((raw) => {
+        if (!raw) return;
+        const saved = (JSON.parse(raw) as (Omit<Product, 'scannedAt'> & { scannedAt: string })[])
+          .map((p) => ({ ...p, scannedAt: new Date(p.scannedAt) }));
+        if (saved.length === 0) return;
+        setStack((prev) => (prev.length > 0 ? prev : saved));
+        setHasScannedBefore(true);
+      })
+      .catch(() => {})
+      .finally(() => { restored.current = true; });
+  }, []);
+
+  useEffect(() => {
+    if (!restored.current) return;
+    AsyncStorage.setItem(STACK_KEY, JSON.stringify(stack)).catch(() => {});
+  }, [stack]);
 
   const addToStack = useCallback((product: Product) => {
     setStack((prev) => [product, ...prev]);
     setHasScannedBefore(true);
+    track('stack_add', isCatalogueId(product.id)
+      ? { product_id: product.id, meta: { category: product.category } }
+      : { meta: { ref: product.id, category: product.category } });
   }, []);
 
   const removeFromStack = useCallback((id: string) => {
