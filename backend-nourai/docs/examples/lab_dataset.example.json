@@ -1,0 +1,45 @@
+{
+  "slug": "publisher-product-testing-2026-v1",
+  "title": "Published product testing — 2026 release 1",
+  "publisher": "Example Public Laboratory",
+  "source_url": "https://publisher.example.org/datasets/product-testing-2026",
+  "version": "2026.1",
+  "published_at": "2026-08-01T00:00:00Z",
+  "license_name": "Creative Commons Attribution 4.0",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "applicability": "lot_specific",
+  "trust_grade": "B",
+  "metadata": {
+    "notes": "Replace this example with values copied from the published artifact."
+  },
+  "samples": [
+    {
+      "external_id": "sample-001",
+      "sample_name": "Example product",
+      "gtin": "4006381333931",
+      "lot_number": "LOT-2026-01",
+      "market_country": "US",
+      "analyses": [
+        {
+          "laboratory_name": "Example Public Laboratory",
+          "accreditation": "ISO/IEC 17025",
+          "method_name": "ICP-MS",
+          "method_identifier": "LAB-MET-42",
+          "analyzed_at": "2026-07-15T00:00:00Z",
+          "observations": [
+            {
+              "analyte_name": "Lead",
+              "value": 0.012,
+              "unit": "mg/kg",
+              "basis": "as sold",
+              "detection_status": "quantified",
+              "lod": 0.002,
+              "loq": 0.006,
+              "raw_value": "0.012"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

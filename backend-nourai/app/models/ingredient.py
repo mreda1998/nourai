@@ -94,6 +94,11 @@ class Ingredient(Base, UUIDMixin, TimestampMixin):
     # Set by the research agent after image generation (future step).
     mechanism_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # URL to a 2D chemical structure image (from PubChem), re-hosted on Supabase
+    # Storage. Null for ingredients with no single molecular structure
+    # (peptide blends, herbs, probiotics).
+    structure_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Circadian timing fields — written by research agent (--atelier flag)
     optimal_times: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     avoid_near_sleep: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   # Local PostgreSQL for development
   # In production, use Supabase PostgreSQL instead
@@ -36,6 +34,23 @@ services:
     volumes:
       - .:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Same codebase, independent process. PostgreSQL is the durable queue, so
+  # restarts do not lose scans and multiple worker replicas can lease safely.
+  worker:
+    build: .
+    container_name: elory-ingestion-worker
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/postgres
+      - ENVIRONMENT=development
+      - DEBUG=false
+      - INGESTION_WORKER_ID=local-worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: python -m app.workers.ingestion
 
 volumes:
   postgres_data:

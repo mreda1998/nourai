@@ -56,6 +56,17 @@ class Product(Base, UUIDMixin, TimestampMixin):
     health_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     sugar: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
+    # Canonical publication and ingestion metadata. The Product row remains the
+    # fast read projection; immutable upstream/formulation history lives in
+    # ProductRevision and SourceRecord.
+    publication_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="published"
+    )
+    data_quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    last_ingested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # JSON fields for flexible data
     marketing_claims: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     scientific_support: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
@@ -79,6 +90,18 @@ class Product(Base, UUIDMixin, TimestampMixin):
     __table_args__ = (
         Index("ix_products_health_score", "health_score"),
         Index("ix_products_category", "category"),
+        Index(
+            "ix_products_name_trgm",
+            "name",
+            postgresql_using="gin",
+            postgresql_ops={"name": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_products_brand_trgm",
+            "brand",
+            postgresql_using="gin",
+            postgresql_ops={"brand": "gin_trgm_ops"},
+        ),
     )
 
     def __repr__(self) -> str:

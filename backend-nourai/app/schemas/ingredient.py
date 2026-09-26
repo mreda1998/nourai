@@ -24,6 +24,8 @@ class IngredientResponse(BaseModel):
     contraindications: list[str] = []
     drug_interactions: list[str] = []
     evidence_level: str | None = None
+    mechanism_image_url: str | None = None
+    structure_image_url: str | None = None
     # Peptide-specific fields (null for non-peptide ingredients)
     us_regulatory_status: str | None = None
     wada_status: str | None = None

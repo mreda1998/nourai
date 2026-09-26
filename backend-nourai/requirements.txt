@@ -15,10 +15,12 @@ python-jose[cryptography]==3.3.0
 
 # HTTP client for external APIs
 httpx==0.28.0
+Pillow==11.0.0
 
 # AI / Research agent
 anthropic==0.40.0
 openai>=1.68.0
+rdkit>=2024.3.1
 
 # Development
 python-dotenv==1.0.1
