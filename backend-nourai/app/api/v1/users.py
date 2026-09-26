@@ -9,9 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, DBSession, get_subscription_service
 from app.models.user import ScanHistoryEntry, SearchHistoryEntry, UserStackEntry
-from app.models.ingredient import Ingredient
-from app.models.product import Product, ProductIngredient
-from app.services.biodomain_scorer import score_product_biodomains
+from app.models.product import Product
 from app.schemas.user import (
     UserProfileResponse,
     UserProfileUpdate,
@@ -20,37 +18,14 @@ from app.schemas.user import (
     SearchHistoryItemResponse,
     SearchHistoryResponse,
     SearchHistoryCreate,
-    DailyScoreCategory,
     DailyScoreResponse,
-    HealthDomainFactor,
     HealthDomainResponse,
 )
-from app.core.biodomains import BIODOMAIN_BY_KEY
+from app.services.stack_score import daily_score, health_domain, load_product_ingredients
 from app.schemas.subscription import SubscriptionResponse
 from app.services.subscription import SubscriptionService
 
 router = APIRouter()
-
-# Daily Longevity Score: maps the 10 canonical biodomains down to the 5
-# categories shown on the new Home screen.
-_DAILY_SCORE_CATEGORIES: list[tuple[str, str, list[str]]] = [
-    ("nutrition_quality", "Nutrition Quality", ["energy_metabolism", "body_composition"]),
-    ("inflammation_balance", "Inflammation Balance", ["inflammation_immune"]),
-    ("metabolic_support", "Metabolic Support", ["energy_metabolism"]),
-    ("hormonal_stress", "Hormonal & Stress", ["hormonal_endocrine", "sleep_recovery"]),
-    ("gut_microbiome", "Gut & Microbiome", ["gut_digestive"]),
-]
-
-
-def _score_qualifier(value: int) -> str:
-    if value >= 80:
-        return "High"
-    if value >= 65:
-        return "Good"
-    if value >= 50:
-        return "Moderate"
-    return "Low"
-
 
 def _today_start() -> datetime:
     now = datetime.now(timezone.utc)
@@ -223,71 +198,24 @@ async def get_subscription(
     )
 
 
+async def _todays_product_ids(db, user_id) -> list[UUID]:
+    result = await db.execute(
+        select(UserStackEntry.product_id).where(
+            UserStackEntry.user_id == user_id,
+            UserStackEntry.logged_at >= _today_start(),
+        )
+    )
+    return list(result.scalars().all())
+
+
 @router.get("/me/daily-score", response_model=DailyScoreResponse)
 async def get_daily_score(
     db: DBSession,
     current_user: CurrentUser,
 ):
     """Aggregate today's stack into the Daily Longevity Score and its 5 sub-scores."""
-    today = _today_start()
-
-    stack_result = await db.execute(
-        select(UserStackEntry.product_id).where(
-            UserStackEntry.user_id == current_user.id,
-            UserStackEntry.logged_at >= today,
-        )
-    )
-    product_ids = list({pid for pid in stack_result.scalars().all()})
-
-    if not product_ids:
-        return DailyScoreResponse(
-            overall=0,
-            qualifier=_score_qualifier(0),
-            categories=[
-                DailyScoreCategory(key=key, label=label, value=0)
-                for key, label, _ in _DAILY_SCORE_CATEGORIES
-            ],
-        )
-
-    pi_result = await db.execute(
-        select(ProductIngredient)
-        .where(ProductIngredient.product_id.in_(product_ids))
-        .options(
-            selectinload(ProductIngredient.ingredient).selectinload(Ingredient.biodomain_scores)
-        )
-    )
-    product_ingredients = list(pi_result.scalars().all())
-
-    domain_scores, overall = score_product_biodomains(product_ingredients)
-    domain_values = {d.biodomain: d.display_value for d in domain_scores}
-
-    categories = []
-    for key, label, domains in _DAILY_SCORE_CATEGORIES:
-        values = [domain_values[d] for d in domains if d in domain_values]
-        value = round(sum(values) / len(values)) if values else 0
-        categories.append(DailyScoreCategory(key=key, label=label, value=value))
-
-    return DailyScoreResponse(
-        overall=overall,
-        qualifier=_score_qualifier(overall),
-        categories=categories,
-    )
-
-
-def _factor_strength(confidence_weight: float) -> str:
-    if confidence_weight >= 1.0:
-        return "Strong"
-    if confidence_weight >= 0.6:
-        return "Moderate"
-    return "Limited"
-
-
-def _factor_direction(direction_sign: int) -> str:
-    if direction_sign > 0:
-        return "benefit"
-    if direction_sign < 0:
-        return "harm"
-    return "neutral"
+    product_ids = await _todays_product_ids(db, current_user.id)
+    return daily_score(await load_product_ingredients(db, product_ids))
 
 
 @router.get("/me/health-domain/{biodomain}", response_model=HealthDomainResponse)
@@ -297,57 +225,11 @@ async def get_health_domain(
     current_user: CurrentUser,
 ):
     """Score + top contributing ingredients for a single biodomain, from today's stack."""
-    domain_def = BIODOMAIN_BY_KEY.get(biodomain)
-    if not domain_def:
+    product_ids = await _todays_product_ids(db, current_user.id)
+    result = health_domain(biodomain, await load_product_ingredients(db, product_ids))
+    if result is None:
         raise HTTPException(status_code=404, detail="Unknown biodomain")
-
-    today = _today_start()
-    stack_result = await db.execute(
-        select(UserStackEntry.product_id).where(
-            UserStackEntry.user_id == current_user.id,
-            UserStackEntry.logged_at >= today,
-        )
-    )
-    product_ids = list({pid for pid in stack_result.scalars().all()})
-
-    if not product_ids:
-        return HealthDomainResponse(
-            biodomain=biodomain, label=domain_def.name, score=0,
-            qualifier=_score_qualifier(0), factors=[],
-        )
-
-    pi_result = await db.execute(
-        select(ProductIngredient)
-        .where(ProductIngredient.product_id.in_(product_ids))
-        .options(
-            selectinload(ProductIngredient.ingredient).selectinload(Ingredient.biodomain_scores)
-        )
-    )
-    product_ingredients = list(pi_result.scalars().all())
-
-    domain_scores, _ = score_product_biodomains(product_ingredients)
-    match = next((d for d in domain_scores if d.biodomain == biodomain), None)
-
-    if not match:
-        return HealthDomainResponse(
-            biodomain=biodomain, label=domain_def.name, score=0,
-            qualifier=_score_qualifier(0), factors=[],
-        )
-
-    factors = [
-        HealthDomainFactor(
-            ingredient_name=c.ingredient_name,
-            strength=_factor_strength(c.confidence_weight),
-            direction=_factor_direction(c.direction_sign),
-        )
-        for c in sorted(match.contributions, key=lambda c: abs(c.weighted_score), reverse=True)[:6]
-    ]
-
-    score = round(match.display_value)
-    return HealthDomainResponse(
-        biodomain=biodomain, label=domain_def.name, score=score,
-        qualifier=_score_qualifier(score), factors=factors,
-    )
+    return result
 
 
 @router.get("/me/search-history", response_model=SearchHistoryResponse)

@@ -2,7 +2,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict
 
 from app.models.user import BiologicalSex, TimeOfDay
 
@@ -126,6 +126,12 @@ class DailyScoreResponse(BaseModel):
     overall: int
     qualifier: str
     categories: list[DailyScoreCategory]
+
+
+class StackScoreRequest(BaseModel):
+    """Products to score — the app sends its current stack (max 50)."""
+
+    product_ids: list[UUID] = Field(default_factory=list, max_length=50)
 
 
 class HealthDomainFactor(BaseModel):
