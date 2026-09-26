@@ -23,6 +23,7 @@ from app.models.ingestion import (  # noqa: F401
     QualityIssue,
     ReviewTask,
 )
+from app.models.tester import TesterEvent, ProductSubmission  # noqa: F401
 from app.models.laboratory import (  # noqa: F401
     LabDataset,
     LabSample,
