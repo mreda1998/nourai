@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""  # Project Settings → API → service_role key
     supabase_storage_bucket: str = "product-images"
     supabase_structure_bucket: str = "ingredient-structures"
+    # Private bucket for tester product submissions (label photos)
+    supabase_submissions_bucket: str = "tester-submissions"
+    submission_daily_limit: int = 20  # per device, rolling 24 h
 
     # RevenueCat
     revenuecat_webhook_secret: str = ""
