@@ -139,6 +139,14 @@ endpoints stay, backed by the same service.
   used only in `__DEV__`. Without a key in a release build, RevenueCat is not
   configured (premium stays locked) instead of crashing.
 
+### Found during planning
+
+- The guest stack lives only in memory, so it vanishes on every cold start.
+  Persist it in AsyncStorage (`elory.stack.v1`) for everyone.
+- App domain keys (`skin`, `sleep`, …) do not match backend biodomain keys
+  (`skin_appearance`, `sleep_recovery`, …). Map them in the app; `hair` has no
+  backend domain and shows "coming soon" instead of a fake score.
+
 ## 5. Release configuration
 
 - Stop committing `nourai/ios/` (remove from git, add to `.gitignore`); EAS
