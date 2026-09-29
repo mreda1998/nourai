@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 16.0.0"
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -24,15 +25,21 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.elory.app/api/v1"
       }
+    },
+    "testflight": {
+      "extends": "production",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.elory.app/api/v1",
+        "EXPO_PUBLIC_TESTER_MODE": "1"
+      }
     }
   },
   "submit": {
     "production": {
-      "ios": {
-        "appleId": "",
-        "ascAppId": "",
-        "appleTeamId": ""
-      }
+      "ios": {}
+    },
+    "testflight": {
+      "extends": "production"
     }
   }
 }

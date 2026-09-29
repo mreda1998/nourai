@@ -7,11 +7,6 @@
     "icon": "./assets/icon.png",
     "scheme": "elory",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#F3F0E9"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -19,7 +14,38 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.elory.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "Elory uses your camera to scan product labels and ingredients."
+        "NSCameraUsageDescription": "Elory uses your camera to scan product barcodes and to photograph labels of products you ask us to add.",
+        "NSPhotoLibraryUsageDescription": "Elory lets you choose a photo of a product label to send us when we don't have that product yet.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "usesAppleSignIn": true,
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "C617.1"
+            ]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategorySystemBootTime",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "35F9.1"
+            ]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "E174.1"
+            ]
+          }
+        ]
       }
     },
     "android": {
@@ -42,12 +68,31 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Elory to access your camera to scan product labels."
+          "cameraPermission": "Elory uses your camera to scan product barcodes and to photograph labels of products you ask us to add.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
         }
       ],
       "expo-font",
       "expo-secure-store",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Elory uses your camera to scan product barcodes and to photograph labels of products you ask us to add.",
+          "photosPermission": "Elory lets you choose a photo of a product label to send us when we don't have that product yet.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 120,
+          "resizeMode": "contain",
+          "backgroundColor": "#024048"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
