@@ -116,7 +116,7 @@ function headline(score: number | null) {
 
 function ScoreCard({ score, loading, failed }: { score: DailyScoreResponse | null; loading: boolean; failed: boolean }) {
   // A zero across the board means none of the products have scored ingredients yet.
-  const noData = !score || (score.overall === 0 && score.categories.every((c) => c.value === 0));
+  const noData = !score || score.categories.every((c) => c.value === 0);
   const value = noData ? null : score.overall;
   const weakest = score?.categories?.length ? [...score.categories].sort((a, b) => a.value - b.value)[0] : null;
   return (

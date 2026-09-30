@@ -50,3 +50,13 @@ def test_service_handles_empty_input():
     assert daily_score([]).overall == 0
     assert health_domain("sleep_recovery", []).score == 0
     assert health_domain("nope", []) is None
+
+
+def test_unscored_ingredients_mean_no_score_not_a_neutral_50():
+    """Products whose ingredients have no research yet must not look 'Moderate'."""
+    from types import SimpleNamespace
+
+    unscored = [SimpleNamespace(ingredient=None, name="Mystery Gum")]
+    result = daily_score(unscored)
+    assert result.overall == 0
+    assert all(category.value == 0 for category in result.categories)

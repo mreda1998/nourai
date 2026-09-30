@@ -77,19 +77,31 @@ async def load_product_ingredients(
     return list(result.scalars().all())
 
 
+def _empty_daily_score() -> DailyScoreResponse:
+    return DailyScoreResponse(
+        overall=0,
+        qualifier=score_qualifier(0),
+        categories=[
+            DailyScoreCategory(key=key, label=label, value=0)
+            for key, label, _ in DAILY_SCORE_CATEGORIES
+        ],
+    )
+
+
 def daily_score(product_ingredients: list[ProductIngredient]) -> DailyScoreResponse:
-    """Aggregate a stack's ingredients into the daily score and its 5 categories."""
+    """
+    Aggregate a stack's ingredients into the daily score and its 5 categories.
+
+    Returns an all-zero response when nothing in the stack has researched
+    biodomain data — the scorer's neutral fallback (50) would otherwise read as
+    a real "Moderate" verdict for products we know nothing about.
+    """
     if not product_ingredients:
-        return DailyScoreResponse(
-            overall=0,
-            qualifier=score_qualifier(0),
-            categories=[
-                DailyScoreCategory(key=key, label=label, value=0)
-                for key, label, _ in DAILY_SCORE_CATEGORIES
-            ],
-        )
+        return _empty_daily_score()
 
     domain_scores, overall = score_product_biodomains(product_ingredients)
+    if not domain_scores:
+        return _empty_daily_score()
     domain_values = {d.biodomain: d.display_value for d in domain_scores}
 
     categories = []
