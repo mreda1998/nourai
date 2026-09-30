@@ -56,7 +56,7 @@ export function Button({ label, onPress, variant = 'primary', size = 'lg', icon,
           alignItems: 'center',
           justifyContent: 'center',
           gap: 8,
-          alignSelf: fullWidth ? 'stretch' : 'flex-start',
+          alignSelf: fullWidth ? 'stretch' : 'center',
         },
         style,
       ]}
