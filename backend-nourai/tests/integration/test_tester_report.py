@@ -69,7 +69,11 @@ async def test_report_ranks_what_matters(db_session):
     assert report["feedback"][0]["product"] == "P"
     assert {t["device"] for t in report["testers"]} == {D1[:8], D2[:8]}
 
+    # Only linked-but-unresearched ingredients can be handed to the research agent.
+    assert report["research_command"] == 'python scripts/research_agent.py --ingredient "B"'
+
     html = render_html(report, {"x/1.jpg": "https://example.test/signed.jpg"})
+    assert "research_agent.py --ingredient" in html
     assert "Research priority" in html
     assert "rare serum" in html
     assert "https://example.test/signed.jpg" in html

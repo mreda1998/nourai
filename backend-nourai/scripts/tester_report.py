@@ -166,6 +166,7 @@ async def gather_report(session: AsyncSession, since: datetime | None) -> dict[s
     """, since)
 
     return {
+        "research_command": research_command(research_priority),
         "generated_at": datetime.now(timezone.utc),
         "since": None if since == EPOCH else since,
         "overview": overview,
@@ -178,6 +179,15 @@ async def gather_report(session: AsyncSession, since: datetime | None) -> dict[s
         "feedback": feedback,
         "testers": testers,
     }
+
+
+def research_command(priority: list[dict[str, Any]], limit: int = 10) -> str | None:
+    """Ready-to-run research agent call for the top linked-but-unresearched ingredients."""
+    names = [row["name"] for row in priority if row["status"] == "unresearched"][:limit]
+    if not names:
+        return None
+    flags = " ".join('--ingredient "{}"'.format(name.replace('"', '\\"')) for name in names)
+    return f"python scripts/research_agent.py {flags}"
 
 
 # ─── HTML ─────────────────────────────────────────────────────────────────────
@@ -285,6 +295,8 @@ def render_html(report: dict[str, Any], photo_urls: dict[str, str]) -> str:
   .photos {{ display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }}
   .photos img {{ width:84px; height:84px; object-fit:cover; border-radius:10px; border:1px solid var(--line); }}
   .path {{ font:12px ui-monospace, monospace; color:var(--ink2); }}
+  pre {{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px;
+        font:13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space:pre-wrap; word-break:break-word; }}
   .empty {{ color:var(--ink2); background:var(--surface); border:1px dashed var(--line); border-radius:16px; padding:16px; }}
 </style></head>
 <body><main>
@@ -296,6 +308,7 @@ def render_html(report: dict[str, Any], photo_urls: dict[str, str]) -> str:
 <p class="lede">Ingredients in products testers scanned, opened or stacked that we can't explain yet —
 ranked by how many testers they reach. <em>Unlinked</em> means no canonical ingredient matched.</p>
 <div class="scroll">{_table(["Ingredient", "Status", "Testers", "Products"], priority_rows, "Nothing to research yet.")}</div>
+{f'<p class="lede" style="margin-top:14px">Research the top ones next (from <code>backend-nourai/</code>):</p><pre>{_e(report["research_command"])}</pre>' if report.get("research_command") else ''}
 
 <h2>Products we're missing</h2>
 <p class="lede">Barcodes testers scanned that still have no product, with anything they sent us.</p>
@@ -357,6 +370,8 @@ async def _main(days: int | None, out: Path | None) -> Path:
         print(f"  research: {row['name']:<40} {row['status']:<16} {row['testers']} tester(s)")
     for row in report["missed"][:10]:
         print(f"  missing:  {row['barcode']:<40} {row['testers']} tester(s), {row['scans']} scan(s)")
+    if report["research_command"]:
+        print(f"Next research run:\n  {report['research_command']}")
     print(f"Report written to {target}")
     return target
 
