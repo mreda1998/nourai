@@ -3,10 +3,10 @@
 Evidence-backed health product scanner for iOS and Android. Scan any food, supplement, or cosmetic to see what its ingredients actually do — filtered to your health profile.
 
 ```
-elory/
-├── elory/           # React Native / Expo app  (iOS & Android)
-└── backend-elory/   # FastAPI backend          (Python 3.13)
-``
+nourai/
+├── nourai/          # React Native / Expo app  (iOS & Android)
+└── backend-nourai/  # FastAPI backend          (Python 3.13)
+```
 
 ---
 
@@ -27,7 +27,7 @@ elory/
 ### 1 — Backend
 
 ```bash
-cd backend-elory
+cd backend-nourai
 
 # First time only
 make setup              # creates venv, installs deps, copies .env.example → .env
@@ -44,11 +44,11 @@ API docs → http://localhost:8001/docs
 ### 2 — Frontend
 
 ```bash
-cd elory
+cd nourai
 
 npm install
 
-# Update the API URL if needed (services/api.ts line 9)
+# Dev default is http://localhost:8001/api/v1 (services/api.ts); override with EXPO_PUBLIC_API_URL
 # Default: http://localhost:8001/api/v1
 
 npx expo start          # press i for iOS simulator, a for Android
@@ -58,5 +58,5 @@ npx expo start          # press i for iOS simulator, a for Android
 
 ## Detailed docs
 
-- [Backend →](./backend-elory/README.md) — environment variables, scripts, migrations, deployment
-- [Frontend →](./elory/README.md) — environment setup, EAS build, App Store submission
+- [Backend →](./backend-nourai/README.md) — environment variables, scripts, migrations, deployment
+- [Frontend →](./nourai/README.md) — environment setup, EAS build, App Store submission

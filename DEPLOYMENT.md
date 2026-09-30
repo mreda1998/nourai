@@ -1,5 +1,7 @@
 # Elory — Deployment & Release Guide
 
+> **Sending the app to friends first?** Follow [docs/testflight-runbook.md](docs/testflight-runbook.md) — it is the current, step-by-step path (Railway, Supabase, Apple, EAS, TestFlight). This file is the longer reference for the public App Store release.
+
 ---
 
 ## Key Dashboards
@@ -17,10 +19,10 @@
 
 | File | Purpose |
 |------|---------|
-| `elory/app.json` | Bundle ID, version, plugins |
-| `elory/eas.json` | Build profiles (dev / preview / production) |
-| `backend-elory/railway.toml` | Railway start command + healthcheck |
-| `backend-elory/Dockerfile` | Reads `$PORT` from Railway |
+| `nourai/app.json` | Bundle ID, version, plugins |
+| `nourai/eas.json` | Build profiles (dev / preview / production) |
+| `backend-nourai/railway.toml` | Railway start command + healthcheck |
+| `backend-nourai/Dockerfile` | Reads `$PORT` from Railway |
 
 ---
 
@@ -36,7 +38,7 @@
    - Bundle ID: `com.elory.app`
    - SKU: `elory-001` (any unique string)
 
-3. Note your **Team ID** and **ASC App ID**, then add them to `elory/eas.json`:
+3. Note your **Team ID** and **ASC App ID**, then add them to `nourai/eas.json`:
 
 ```json
 "submit": {
@@ -52,7 +54,7 @@
 
 ---
 
-## Phase 2 — EAS Build (run from `elory/`)
+## Phase 2 — EAS Build (run from `nourai/`)
 
 ```bash
 # First time only
@@ -108,7 +110,7 @@ npx eas submit --platform ios
 
 ## Phase 5 — Backend on Railway
 
-1. Push `backend-elory/` to GitHub
+1. Push `backend-nourai/` to GitHub
 2. Go to https://railway.app/dashboard → New Project → Deploy from GitHub
 3. Select your repo and `main` branch
 4. Set environment variables in Railway project settings:
@@ -117,7 +119,8 @@ npx eas submit --platform ios
 DATABASE_URL          postgresql://...
 ANTHROPIC_API_KEY     sk-ant-...
 SUPABASE_URL          https://[project].supabase.co
-SUPABASE_KEY          eyJhbGc...
+SUPABASE_JWT_SECRET   (Supabase → Settings → API → JWT secret)
+SUPABASE_SERVICE_ROLE_KEY  (secret; server only)
 ENVIRONMENT           production
 ```
 
@@ -132,7 +135,7 @@ ENVIRONMENT           production
 
 ## Phase 6 — Version Updates (ongoing)
 
-1. Bump version in `elory/app.json` → `"version": "1.x.0"`
+1. Bump version in `nourai/app.json` → `"version": "1.x.0"`
 2. Commit and push to `main`
 3. Run production build: `npx eas build --platform ios --profile production`
 4. Submit: `npx eas submit --platform ios`

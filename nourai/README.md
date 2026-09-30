@@ -10,8 +10,8 @@ React Native / Expo app for iOS and Android. Scans product barcodes, surfaces ev
 |-------|-----------|
 | Framework | React Native 0.81 + Expo SDK 54 |
 | Navigation | Expo Router (file-based) |
-| Auth | Clerk (`@clerk/clerk-expo`) |
-| Fonts | Cormorant Garamond + Manrope (Google Fonts) |
+| Auth | Supabase Auth (email + Sign in with Apple); guests supported |
+| Fonts | Instrument Serif + Inter (Google Fonts) |
 | Animations | React Native Reanimated 4 |
 | Camera | expo-camera (barcode scanning) |
 | Storage | expo-secure-store (tokens), AsyncStorage (onboarding state) |
@@ -30,7 +30,7 @@ React Native / Expo app for iOS and Android. Scans product barcodes, surfaces ev
 ## Install
 
 ```bash
-cd elory
+cd nourai
 npm install
 ```
 
@@ -48,7 +48,7 @@ Then press:
 - `w` — open in browser (limited — no camera)
 - Scan the QR code with **Expo Go** on your phone
 
-The app points to `http://localhost:8001/api/v1` when running in development. Make sure the backend is running (`make dev` in `backend-elory/`).
+The app points to `http://localhost:8001/api/v1` when running in development. Make sure the backend is running (`make dev` in `backend-nourai/`).
 
 ---
 
@@ -65,7 +65,7 @@ const API_BASE_URL = __DEV__
 
 Change the production URL to your deployed backend before submitting to the App Store / Play Store.
 
-For secrets (Clerk publishable key, etc.), use Expo's `extra` field in `app.json` + `expo-constants`, or EAS environment variables (see deployment section).
+`.env` files are git-ignored, so EAS builds don't see them. Set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` as EAS environment variables — see [docs/testflight-runbook.md](../docs/testflight-runbook.md).
 
 ---
 
@@ -193,7 +193,7 @@ Camera permission is declared in `app.json`:
 ## Deployment checklist
 
 - [ ] Update `API_BASE_URL` production URL in `services/api.ts`
-- [ ] Set Clerk publishable key for production environment
+- [ ] Set `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` as EAS environment variables (production)
 - [ ] Run `npx tsc --noEmit` — zero type errors
 - [ ] Test barcode scanning on a physical device (simulators can't use camera)
 - [ ] Build with EAS: `eas build --platform all --profile production`

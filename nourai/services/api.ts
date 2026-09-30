@@ -6,7 +6,7 @@ import { getDeviceId } from '@/lib/device-id';
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ??
-  (__DEV__ ? 'http://localhost:8000/api/v1' : 'https://api.elory.app/api/v1');
+  (__DEV__ ? 'http://localhost:8001/api/v1' : 'https://api.elory.app/api/v1');
 
 export interface Ingredient {
   name: string;
