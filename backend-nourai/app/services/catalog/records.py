@@ -10,7 +10,7 @@ import hashlib
 import html
 import sys
 import unicodedata
-from collections.abc import Iterable, Iterator
+from collections.abc import AsyncIterable, AsyncIterator, Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -61,6 +61,21 @@ def iter_tsv(lines: Iterable[str]) -> Iterator[dict[str, str]]:
     if not header:
         return
     for values in reader:
+        yield dict(zip(header, values))
+
+
+async def aiter_tsv(lines: AsyncIterable[str]) -> AsyncIterator[dict[str, str]]:
+    """iter_tsv for a streamed dump: the first line is the header; blank lines are skipped."""
+    header: list[str] | None = None
+    async for line in lines:
+        if not line.strip():
+            continue
+        values = next(csv.reader([line], delimiter="\t", quoting=csv.QUOTE_NONE), None)
+        if values is None:
+            continue
+        if header is None:
+            header = values
+            continue
         yield dict(zip(header, values))
 
 
