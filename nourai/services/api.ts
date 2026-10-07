@@ -863,6 +863,7 @@ class APIService {
     if (params?.limit) qp.append('limit', params.limit.toString());
     if (params?.category) qp.append('category', params.category);
     if (params?.country) qp.append('country', params.country);
+    qp.append('include_catalog', 'true');
     return this.fetch<ProductSearchResponse>(`/products/search?${qp.toString()}`);
   }
 

@@ -145,6 +145,8 @@ async def search_products(
     q: str = Query(..., min_length=2),
     category: str | None = None,
     country: str | None = Query(None, min_length=2, max_length=2),
+    # Builds that predate catalog:<n> ids can't open them, so index hits are opt-in.
+    include_catalog: bool = False,
     pagination: Annotated[PaginationParams, Depends(get_pagination)] = None,
     service: Annotated[ProductService, Depends(get_product_service)] = None,
     catalog: Annotated[CatalogRepository, Depends(get_catalog_repository)] = None,
@@ -159,7 +161,7 @@ async def search_products(
 
     products, _ = await service.search_products(query=q, category=category_enum, limit=_SEARCH_WINDOW, offset=0)
     entries: list[CatalogEntry] = []
-    if catalog_query_ok(q):
+    if include_catalog and catalog_query_ok(q):
         try:
             entries = await catalog.search(
                 q, category=category_enum.value if category_enum else None, limit=_SEARCH_WINDOW

@@ -137,7 +137,7 @@ async def test_search_merges_curated_and_catalog_results_without_duplicates(clie
     await _entry(code=NUTELLA, product_id=product_id)  # linked to the curated product
     await _entry(code="8000500310427", name="Nutella Biscuits", popularity=500)
 
-    response = await client.get("/api/v1/products/search", params={"q": "nutella", "country": "US"})
+    response = await client.get("/api/v1/products/search", params={"q": "nutella", "country": "US", "include_catalog": "true"})
 
     assert response.status_code == 200
     items = response.json()["products"]
@@ -153,5 +153,13 @@ async def test_search_merges_curated_and_catalog_results_without_duplicates(clie
 async def test_short_queries_search_curated_products_only(client, hydrator):
     await _product(name="Ab crunch")
     await _entry(code="8000500310427", name="Ab bar")
-    items = (await client.get("/api/v1/products/search", params={"q": "ab"})).json()["products"]
+    items = (await client.get("/api/v1/products/search", params={"q": "ab", "include_catalog": "true"})).json()["products"]
     assert [item["name"] for item in items] == ["Ab crunch"]
+
+
+async def test_older_app_builds_get_curated_results_only(client, hydrator):
+    """Builds that predate catalog:<n> ids can't open them, so catalog hits are opt-in."""
+    product_id = await _product(name="Nutella")
+    await _entry(code="8000500310427", name="Nutella Biscuits", popularity=500)
+    items = (await client.get("/api/v1/products/search", params={"q": "nutella"})).json()["products"]
+    assert [item["id"] for item in items] == [str(product_id)]
