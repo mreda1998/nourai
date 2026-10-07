@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, computed_field
 
 from app.models.product import IngredientStatus, ProductCategory
 from app.schemas.claim import ClaimResponse  # kept for __init__ re-export
+from app.schemas.measure import AdditivesSummary, Measure, NutritionPanel, ProcessingInfo
 
 # ─── Bio-domain scoring ───────────────────────────────────────────────────────
 # Delegated to app/services/biodomain_scorer.py.
@@ -251,6 +252,11 @@ class ProductWithDetails(BaseModel):
     recommendations: list[Recommendation] = []
     citations: list[Citation] = []
     attribution: ProductAttribution | None = None
+    # Structured measures (bars). The legacy `ingredients` nutrient rows stay for older builds.
+    nutrition: NutritionPanel | None = None
+    doses: list[Measure] = []
+    additives: AdditivesSummary | None = None
+    processing: ProcessingInfo | None = None
 
     @classmethod
     def _grade_from_score(cls, score: int | None) -> str:
@@ -312,8 +318,42 @@ class ProductWithDetails(BaseModel):
             nutrient_items = _parse_nutriments(product.extra_data, ingredient_lookup)
             ingredients.extend(nutrient_items)
 
-        # ── Biodomain scoring ─────────────────────────────────────────────────
+        # ── Measures (bars) ───────────────────────────────────────────────────
         # Lazy imports avoid circular dependency: schemas.product ↔ services.*
+        from app.services.measures import (  # noqa: PLC0415
+            build_additives_summary,
+            build_dose_measure,
+            build_nutrition_panel,
+            build_processing,
+        )
+
+        extra = product.extra_data or {}
+        rows = product.product_ingredients or []
+        nutrition = None
+        processing = None
+        if product.category == ProductCategory.FOOD:
+            nutrition = build_nutrition_panel(
+                extra.get("nutriments"),
+                extra.get("serving_quantity"),
+                getattr(product, "serving_size", None) or extra.get("serving_size"),
+            )
+            processing = build_processing(extra)
+        doses: list[Measure] = []
+        if product.category == ProductCategory.SUPPLEMENT:
+            for pi, mobile in zip(rows, ingredients):
+                canonical = getattr(pi, "ingredient", None)
+                measure = build_dose_measure(
+                    pi.name,
+                    mobile.concentration,
+                    canonical_name=getattr(canonical, "canonical_name", None),
+                    typical_dose_range=getattr(canonical, "typical_dose_range", None),
+                    ingredient_id=mobile.ingredient_id,
+                )
+                if measure:
+                    doses.append(measure)
+        additives = build_additives_summary(rows) if rows else None
+
+        # ── Biodomain scoring ─────────────────────────────────────────────────
         from app.services.biodomain_scorer import (  # noqa: PLC0415
             score_product_biodomains,
             score_nutrient_rows,
@@ -372,6 +412,10 @@ class ProductWithDetails(BaseModel):
             recommendations=[],
             citations=citations,
             attribution=attribution,
+            nutrition=nutrition,
+            doses=doses,
+            additives=additives,
+            processing=processing,
         )
 
 

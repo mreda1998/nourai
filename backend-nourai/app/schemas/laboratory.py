@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.schemas.measure import Measure
+
 
 class LabInterpretationImport(BaseModel):
     classification: str
@@ -122,6 +124,7 @@ class LabObservationResponse(BaseModel):
     applicability: str
     trust_grade: str
     interpretations: list[LabInterpretationResponse] = Field(default_factory=list)
+    measure: Measure | None = None
 
 
 class ProductLabResultsResponse(BaseModel):
