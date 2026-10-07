@@ -6,8 +6,8 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { AlertTriangle, Check, CircleSlash, Plus, Sparkles, Target } from 'lucide-react-native';
 import { Palette, Radius } from '@/constants/theme';
-import { api, getProductWithFallback } from '@/services/api';
-import type { Ingredient, LabObservation, Product, ServerPersonalAnalysis } from '@/services/api';
+import { api, getProductWithFallback, isBarcodeIngestionResponse } from '@/services/api';
+import type { BarcodeIngestionResponse, Ingredient, LabObservation, Product, ServerPersonalAnalysis } from '@/services/api';
 import { useAppState } from '@/context/app-state';
 import { useAuth } from '@/context/auth-context';
 import { analyzeIngredients, buildPersonalAnalysis } from '@/utils/personalization';
@@ -40,6 +40,10 @@ export default function ProductDetailScreen() {
   const [lab, setLab] = useState<LabObservation[]>([]);
   const [openCards, setOpenCards] = useState<Set<CardKey> | null>(null);
   const [resolving, setResolving] = useState<string | null>(null);
+  // A catalog product loading for the first time: what the index knows, while details arrive.
+  const [pending, setPending] = useState<BarcodeIngestionResponse | null>(null);
+  const alive = useRef(true);
+  useEffect(() => () => { alive.current = false; }, []);
 
   const inStack = product ? stack.some((p) => p.id === product.id) : false;
 
@@ -48,9 +52,11 @@ export default function ProductDetailScreen() {
     if (!id) return;
     setLoading(true);
     setError(null);
+    setPending(null);
     try {
       const data = await getProductWithFallback(id);
       if (!data) { setError('We couldn’t find this product.'); return; }
+      if (isBarcodeIngestionResponse(data)) { await waitForDetails(data); return; }
       setProduct(data);
       if (isSignedIn) api.addToScanHistory(data.id).catch(() => {});
       track('product_view', isCatalogueId(data.id)
@@ -63,6 +69,28 @@ export default function ProductDetailScreen() {
     }
   };
   useEffect(() => { load(); }, [id]);
+
+  const waitForDetails = async (initial: BarcodeIngestionResponse) => {
+    setPending(initial);
+    let job = initial;
+    for (let attempt = 0; attempt < 45 && alive.current; attempt += 1) {
+      if (job.status === 'complete' && job.product_id) {
+        router.replace(`/product/${job.product_id}?via=${via ?? 'other'}` as never);
+        return;
+      }
+      if (job.status === 'needs_review' || job.status === 'dead') {
+        setPending(null);
+        setError('We couldn’t load this product’s details yet.');
+        return;
+      }
+      await new Promise((r) => setTimeout(r, job.poll_after_ms));
+      job = { ...job, ...(await api.getIngestionStatus(job.job_id)) };
+    }
+    if (alive.current) {
+      setPending(null);
+      setError('This is taking longer than usual. Try again in a moment.');
+    }
+  };
 
   const hasProfile = !!onboardingProfile && (onboardingProfile.healthConcerns.length > 0 || onboardingProfile.goals.length > 0);
 
@@ -132,6 +160,23 @@ export default function ProductDetailScreen() {
   const askRight = <IconButton icon={Sparkles} label="Ask Elory about this product" onPress={() => router.push('/(premium)/ask-elory' as never)} />;
 
   // ── States ──────────────────────────────────────────────────────────────────
+  if (pending) {
+    const preview = pending.preview;
+    return (
+      <Screen back>
+        <View style={{ alignItems: 'center', marginTop: -8 }}>
+          <ProductImage uri={preview?.image_url} category={preview?.category} size={148} radius={40} />
+          {preview?.brand ? <Txt variant="overline" tone="secondary" style={{ marginTop: 20 }}>{preview.brand}</Txt> : null}
+          <Txt variant="title1" align="center" style={{ marginTop: 8, paddingHorizontal: 12 }}>{preview?.name ?? 'Loading product'}</Txt>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16 }}>
+            <ActivityIndicator color={Palette.accent} />
+            <Txt variant="footnote" tone="secondary">Loading details…</Txt>
+          </View>
+        </View>
+        <SkeletonCard lines={2} /><SkeletonCard lines={4} />
+      </Screen>
+    );
+  }
   if (loading) {
     return (
       <Screen back right={askRight}>

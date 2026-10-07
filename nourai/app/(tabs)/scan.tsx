@@ -62,8 +62,10 @@ export default function ScanScreen() {
       if (isBarcodeIngestionResponse(initial)) {
         // New product: the backend researches it. Poll with its guidance.
         let job = initial;
+        const preview = initial.preview;
+        const loadingLabel = preview ? `${preview.name}${preview.brand ? ` · ${preview.brand}` : ''} — loading details…` : null;
         for (let attempt = 0; attempt < 45 && !cancelled.current; attempt += 1) {
-          setMessage(job.message);
+          setMessage(loadingLabel ?? job.message);
           if (job.status === 'complete' && job.product_id) { value = await api.getProduct(job.product_id); break; }
           if (job.status === 'needs_review' || job.status === 'dead') throw new NotInCatalogue();
           await new Promise((r) => setTimeout(r, job.poll_after_ms));

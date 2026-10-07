@@ -131,13 +131,14 @@ export interface Product {
 }
 
 export interface ProductListItem {
-  id: string;
+  id: string;                 // product UUID, or "catalog:<n>" for a product we haven't loaded yet
   name: string;
   brand?: string;
   category: string;
-  grade: string;
+  grade: string | null;       // null until we hold the full product
   is_ai_generated: boolean;
   image_url?: string;
+  in_catalog_only?: boolean;
 }
 
 export interface ProductSearchResponse {
@@ -154,6 +155,14 @@ export type IngestionJobStatus =
   | 'needs_review'
   | 'dead';
 
+/** What the catalog index knows about a product while its full details load. */
+export interface CatalogPreview {
+  name: string;
+  brand?: string | null;
+  image_url?: string | null;
+  category: string;
+}
+
 export interface BarcodeIngestionResponse {
   job_id: string;
   status: IngestionJobStatus;
@@ -161,6 +170,7 @@ export interface BarcodeIngestionResponse {
   product_id?: string | null;
   poll_after_ms: number;
   message: string;
+  preview?: CatalogPreview | null;
 }
 
 export function isBarcodeIngestionResponse(
@@ -818,6 +828,12 @@ class APIService {
     return this.fetch<Product>(`/products/${productId}`);
   }
 
+  /** Open any product id — including "catalog:<n>", which may answer 202 with a preview while it loads. */
+  async openProduct(productId: string): Promise<Product | BarcodeIngestionResponse> {
+    if (productId.startsWith('usda-')) return this.getProduct(productId);
+    return this.fetch<Product | BarcodeIngestionResponse>(`/products/${encodeURIComponent(productId)}`);
+  }
+
   /**
    * Get product by barcode (used by scanner)
    */
@@ -841,11 +857,12 @@ class APIService {
    */
   async searchProducts(
     query: string,
-    params?: { limit?: number; category?: string }
+    params?: { limit?: number; category?: string; country?: string }
   ): Promise<ProductSearchResponse> {
     const qp = new URLSearchParams({ q: query });
     if (params?.limit) qp.append('limit', params.limit.toString());
     if (params?.category) qp.append('category', params.category);
+    if (params?.country) qp.append('country', params.country);
     return this.fetch<ProductSearchResponse>(`/products/search?${qp.toString()}`);
   }
 
@@ -1276,9 +1293,9 @@ export const api = new APIService();
  * Fetch a product by ID, returning null instead of throwing on error.
  * Used by the product detail screen so it can show a graceful error state.
  */
-export async function getProductWithFallback(id: string): Promise<Product | null> {
+export async function getProductWithFallback(id: string): Promise<Product | BarcodeIngestionResponse | null> {
   try {
-    return await api.getProduct(id);
+    return await api.openProduct(id);
   } catch {
     return null;
   }

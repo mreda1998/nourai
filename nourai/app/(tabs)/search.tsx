@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Apple, Droplet, FlaskConical, History, Pill as PillIcon, SearchX } from 'lucide-react-native';
 import { api, IngredientListItem, ProductListItem, SearchHistoryItem } from '@/services/api';
+import { deviceRegion } from '@/lib/region';
 import { track } from '@/lib/insights';
 import { Palette, Radius } from '@/constants/theme';
 import { JOURNAL } from '@/constants/journal';
@@ -57,7 +58,7 @@ export default function DiscoverScreen() {
           if (alive) setIngredients(v.ingredients);
           api.addToSearchHistory(q, 'ingredient').catch(() => {});
         } else if (q.length >= 2) {
-          const v = await api.searchProducts(q, { limit: 30, category: category ?? undefined });
+          const v = await api.searchProducts(q, { limit: 30, category: category ?? undefined, country: deviceRegion() });
           if (alive) setProducts(v.products);
           api.addToSearchHistory(q, 'product').catch(() => {});
         } else if (category) {
