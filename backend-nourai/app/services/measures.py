@@ -167,6 +167,27 @@ def _nutrient_value(nutriments: dict, key: str, basis: str, serving_quantity: fl
     return v
 
 
+def _servings_note(ref: NutrientReference, value: float, basis: str) -> str | None:
+    """How many servings reach a limit or meet a goal — a portion you can picture."""
+    if basis != "serving" or ref.kind == "reference" or value <= 0:
+        return None
+    target = ref.panel_label[0].lower() + ref.panel_label[1:]
+    limit = ref.kind == "limit"
+    if limit and value > ref.value:
+        return f"One serving is over the {target}"
+    if not limit and value >= ref.value:
+        return f"One serving meets the {target}"
+    servings = ref.value / value
+    if servings > 20:
+        return f"Over 20 servings to {'reach' if limit else 'meet'} the {target}"
+    rounded = max(1.0, round(servings * 2) / 2)
+    if rounded == 1:
+        return f"1 serving {'reaches' if limit else 'meets'} the {target}"
+    whole = int(rounded)
+    count = f"{whole}½" if rounded % 1 else str(whole)
+    return f"{count} servings {'reach' if limit else 'meet'} the {target}"
+
+
 def _nutrient_measure(ref: NutrientReference, grams: float, basis: str) -> Measure:
     value = round(grams * ref.g_factor, 2)
     percent = round(value / ref.value * 100)
@@ -205,6 +226,7 @@ def _nutrient_measure(ref: NutrientReference, grams: float, basis: str) -> Measu
         tone=tone,
         verdict=verdict,
         sentence=f"{subject} is {percent}% of the {source_name} {per}.",
+        servings_note=_servings_note(ref, value, basis),
         panel_label=ref.panel_label,
         scale=MeasureScale(
             max=ref.value,
@@ -272,14 +294,17 @@ def _daily_value_measure(
     top = max(ul or 0, dv if ul else dv * 2, value) * 1.2
     if ul is None:
         zones = [MeasureZone(start=0, end=dv, tone="neutral"), MeasureZone(start=dv, end=top, tone="good")]
+        band_label, limit_label = "At or above daily value", None
     elif ul >= dv:
         zones = [
             MeasureZone(start=0, end=dv, tone="neutral"),
             MeasureZone(start=dv, end=ul, tone="good"),
             MeasureZone(start=ul, end=top, tone="weak"),
         ]
+        band_label, limit_label = "Daily value to upper limit", "Upper limit"
     else:  # supplemental upper limit below the all-sources daily value (magnesium)
         zones = [MeasureZone(start=0, end=ul, tone="neutral"), MeasureZone(start=ul, end=top, tone="weak")]
+        band_label, limit_label = None, "Upper limit"
     ticks = sorted({0, dv, *([ul] if ul is not None else [])})
 
     note = f" ({ref.ul_note})" if ref.ul_note else ""
@@ -298,7 +323,10 @@ def _daily_value_measure(
         verdict=verdict,
         sentence=f"{fmt(value)} {shown} is {percent}% of the FDA Daily Value{tail}",
         panel_label="Dose vs daily value",
-        scale=MeasureScale(max=round(top, 6), ticks=[_tick(t, shown) for t in ticks], zones=zones),
+        scale=MeasureScale(
+            max=round(top, 6), ticks=[_tick(t, shown) for t in ticks], zones=zones,
+            band_label=band_label, limit_label=limit_label,
+        ),
         sources=[
             MeasureSource(name=FDA_DV[0], url=FDA_DV[1], detail=f"{fmt(dv)} {shown} a day"),
             MeasureSource(
@@ -345,6 +373,7 @@ def _studied_range_measure(
                 MeasureZone(start=low, end=high, tone="good"),
                 MeasureZone(start=high, end=top, tone="moderate"),
             ],
+            band_label="Studied range",
         ),
         sources=[MeasureSource(name=RESEARCH_LIBRARY, detail=range_text)],
         ingredient_id=ingredient_id,
@@ -442,6 +471,7 @@ def build_contaminant_measure(
                 MeasureZone(start=0, end=threshold_value, tone="good"),
                 MeasureZone(start=threshold_value, end=top, tone="weak"),
             ],
+            limit_label=threshold_name or "Regulatory limit",
         ),
         sources=[MeasureSource(name=threshold_name or "Regulatory limit", url=threshold_source_url)],
     )

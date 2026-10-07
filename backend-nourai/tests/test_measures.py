@@ -319,3 +319,47 @@ def test_lab_observation_uses_the_first_interpretation_with_a_threshold():
     measure = measure_for_lab_observation(observation, interpretations)
     assert measure.percent == 20
     assert measure_for_lab_observation(observation, interpretations[:1]) is None
+
+
+# ─── Servings to the reference & ruler labels ─────────────────────────────────
+
+@pytest.mark.parametrize("sodium_g, note", [
+    (1.56, "1½ servings reach the daily sodium limit"),
+    (2.3, "1 serving reaches the daily sodium limit"),
+    (3.0, "One serving is over the daily sodium limit"),
+    (0.46, "5 servings reach the daily sodium limit"),
+])
+def test_limits_say_how_many_servings_reach_the_reference(sodium_g, note):
+    sodium = _measure(build_nutrition_panel({"sodium_serving": sodium_g}, None, None), "sodium")
+    assert sodium.servings_note == note
+
+
+def test_goals_say_how_many_servings_meet_the_goal():
+    protein = _measure(build_nutrition_panel({"proteins_serving": 10}, None, None), "proteins")
+    assert protein.servings_note == "5 servings meet the daily protein goal"
+
+
+def test_servings_note_is_skipped_per_100g_for_references_and_when_far_off():
+    per_100g = _measure(build_nutrition_panel({"sodium_100g": 1.0}, None, None), "sodium")
+    kcal = _measure(build_nutrition_panel({"energy-kcal_serving": 180}, None, None), "energy-kcal")
+    tiny = _measure(build_nutrition_panel({"sodium_serving": 0.01}, None, None), "sodium")
+    assert per_100g.servings_note is None
+    assert kcal.servings_note is None
+    assert tiny.servings_note == "Over 20 servings to reach the daily sodium limit"
+
+
+def test_dose_ruler_labels_the_band_and_the_upper_limit():
+    d = build_dose_measure("Vitamin D3", "2000 IU")
+    assert d.scale.band_label == "Daily value to upper limit"
+    assert d.scale.limit_label == "Upper limit"
+    studied = build_dose_measure("Melatonin", "5mg", typical_dose_range="0.5–5mg")
+    assert studied.scale.band_label == "Studied range"
+    assert studied.scale.limit_label is None
+    b12 = build_dose_measure("Vitamin B12", "8mcg")
+    assert b12.scale.band_label == "At or above daily value"
+    assert b12.scale.limit_label is None
+
+
+def test_contaminant_ruler_labels_the_threshold():
+    assert _lab().scale.limit_label == "EU maximum"
+    assert _lab().scale.band_label is None

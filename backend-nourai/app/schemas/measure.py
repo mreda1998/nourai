@@ -22,6 +22,8 @@ class MeasureScale(BaseModel):
     max: float
     ticks: list[MeasureTick]
     zones: list[MeasureZone] = []
+    band_label: str | None = None    # names the bracketed "good" zone on a ruler
+    limit_label: str | None = None   # names the line where the "weak" zone starts
 
 
 class MeasureSource(BaseModel):
@@ -43,6 +45,7 @@ class Measure(BaseModel):
     tone: Tone
     verdict: str                  # "High in sodium", "Below the studied range"
     sentence: str                 # one plain-language line under the bar
+    servings_note: str | None = None  # "1½ servings reach the daily sodium limit"
     panel_label: str              # overline above the bar, e.g. "Daily sodium limit"
     scale: MeasureScale
     sources: list[MeasureSource]
