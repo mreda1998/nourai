@@ -20,6 +20,6 @@ export type { TextFieldProps } from './TextField';
 export { EmptyState, Skeleton, SkeletonCard } from './States';
 export { Sheet } from './Sheet';
 export type { SheetRef } from './Sheet';
-export { CellMeter, MeasureBar } from './MeasureBar';
+export { MeasureBar } from './MeasureBar';
 export { MeasureRow, showMeasureSources } from './MeasureRow';
 export { SummaryCard } from './SummaryCard';

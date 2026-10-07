@@ -62,6 +62,14 @@ rulers; no app shows a supplement dose against DV/UL), the measures were redrawn
 - **Collapsed rows** show the share as a small tinted tag ("68%") instead of a dot.
 - **Processing**: four NOVA cells in the same cell language.
 
+### Trimmed (same day, after review)
+
+Too much was said at once ("68%" appeared three times). Expanded rows now show only the instrument, the
+servings line (foods) and one source line that opens the full citation sheet; the long sentence is the
+bar's accessibility label. Rulers drop the serif reading and legend — the limit is named on its own
+label ("4,000 IU limit") and "0" is never labelled. Processing drops the scale entirely: one plain
+sentence on what the NOVA group means, with the source.
+
 ## Deviation from the agreed design
 
 Dose references were going to be new numeric columns on `ingredients` (migration). The shared local

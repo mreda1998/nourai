@@ -11,7 +11,7 @@ import type {
   AdditiveItem, AdditivesSummary, BioDomain, Ingredient, LabObservation, Measure, MeasureTone, NutritionPanel,
   ProcessingInfo, Product,
 } from '@/services/api';
-import { CellMeter, ContributorBar, ListRow, MeasureRow, PressableScale, SummaryCard, Txt, showMeasureSources } from '@/components/ui';
+import { ContributorBar, ListRow, MeasureRow, PressableScale, SummaryCard, Txt, showMeasureSources } from '@/components/ui';
 
 type CardProps = { open: boolean; onToggle: () => void };
 
@@ -101,9 +101,6 @@ export function DoseCard({ doses, open, onToggle }: CardProps & { doses: Measure
 
   return (
     <SummaryCard title="Dose check" verdict={verdict} tone={tone} open={open} onToggle={onToggle}>
-      <View style={styles.strip}>
-        <Txt variant="footnote" tone="secondary">Per serving, against FDA daily values, NIH upper limits and the studied range.</Txt>
-      </View>
       {doses.map((d, i) => (
         <MeasureRow
           key={keyOf(d, i)}
@@ -219,30 +216,27 @@ function TierGroup({ title, items, tone }: { title: string; items: AdditiveItem[
 
 const NOVA_SHORT: Record<number, string> = { 1: 'Minimally processed', 2: 'Culinary ingredient', 3: 'Processed', 4: 'Ultra-processed' };
 
+// Plain-language meaning of each NOVA group — words, not a gauge.
+const NOVA_MEANING: Record<number, string> = {
+  1: 'Whole foods that are at most cleaned, dried, frozen or pasteurised.',
+  2: 'An ingredient you cook with, such as oil, butter, sugar or salt.',
+  3: 'Whole foods with salt, sugar or oil added, like cheese, bread or canned vegetables.',
+  4: 'Made mostly from industrial ingredients and additives rather than whole foods.',
+};
+
 export function ProcessingCard({ processing, open, onToggle }: CardProps & { processing: ProcessingInfo }) {
   return (
     <SummaryCard title="Processing" verdict={NOVA_SHORT[processing.nova_group] ?? processing.label} tone={processing.tone} open={open} onToggle={onToggle}>
       <View style={styles.panel}>
         <View style={[styles.margin, { borderLeftColor: MeasureInk[processing.tone] }]}>
-          <Txt variant="footnoteStrong" tone="secondary">Processing level</Txt>
-          <CellMeter
-            cells={4}
-            position={processing.nova_group / 4}
-            tone={processing.tone}
-            callout={{ value: `${processing.nova_group}`, caption: 'of 4 on the NOVA scale' }}
-            legend={{ left: 'Unprocessed', right: 'Ultra-processed' }}
-            style={{ marginTop: 10 }}
-          />
-          <Txt variant="footnote" style={{ marginTop: 14 }}>
-            NOVA group {processing.nova_group}: {processing.label.toLowerCase()}.<Txt variant="footnote" tone="accent">¹</Txt>
-          </Txt>
+          <Txt variant="callout">{NOVA_MEANING[processing.nova_group] ?? processing.label}</Txt>
           <Pressable
-            onPress={() => (processing.source.url ? Linking.openURL(processing.source.url) : showMeasureSources({ panel_label: 'Processing level', sources: [processing.source] }))}
-            hitSlop={6}
-            style={{ marginTop: 12 }}
+            onPress={() => showMeasureSources({ panel_label: 'Processing level', sources: [{ ...processing.source, detail: `Group ${processing.nova_group} of 4: ${processing.label.toLowerCase()}` }] })}
+            hitSlop={8}
+            style={{ marginTop: 12, alignSelf: 'flex-start' }}
             accessibilityRole="link"
           >
-            <Txt variant="caption" tone="tertiary"><Txt variant="caption" tone="accent">¹ </Txt>{processing.source.name}</Txt>
+            <Txt variant="caption" tone="tertiary">NOVA group {processing.nova_group} · via Open Food Facts</Txt>
           </Pressable>
         </View>
       </View>
