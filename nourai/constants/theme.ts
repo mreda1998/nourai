@@ -77,6 +77,38 @@ export const Palette = {
   nightInk3: 'rgba(244, 241, 234, 0.40)',
 } as const;
 
+// Measure bars. One fixed ramp per kind spans the whole track and the fill
+// only reveals it up to the value — so the colour at the marker is the verdict.
+export const MeasureRamp = {
+  limit: ['#A9C9C1', '#6FAE97', '#C9A465', '#C38A26', '#BE5B3B'],
+  goal: ['#CFE0D8', '#8DC0AA', '#2E8567', '#0F5652'],
+  reference: ['#D6D2C8', '#A3ADA9', '#6E7F7B'],
+} as const;
+
+// Where each ramp colour sits along 0–100% of the reference. Anchored to the
+// FDA bands (limits: low ≤5%, high ≥20%; goals: good ≥10%, high ≥20%) so the
+// colour at the marker always agrees with the verdict text.
+export const MeasureRampStops = {
+  limit: [0, 0.04, 0.12, 0.22, 0.45],
+  goal: [0, 0.1, 0.2, 0.6],
+  reference: [0, 0.5, 1],
+} as const;
+
+// Zone fills for dose / contaminant bars, and the ink each tone reads in.
+export const MeasureZone = {
+  neutral: 'rgba(14, 31, 30, 0.10)',
+  good: '#A6D0BE',
+  moderate: '#E6C88E',
+  weak: '#E3A68F',
+} as const;
+
+export const MeasureInk = {
+  neutral: Palette.ink3,
+  good: Palette.strong,
+  moderate: Palette.moderate,
+  weak: Palette.weak,
+} as const;
+
 // Legacy colour map — every key existing screens import, re-pointed at the
 // new palette so un-migrated screens inherit the redesign.
 export const Colors = {

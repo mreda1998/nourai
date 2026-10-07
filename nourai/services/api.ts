@@ -34,6 +34,66 @@ export interface Citation {
   journal?: string;
 }
 
+// ─── Measures: a label value against a cited reference (every bar) ────────────
+
+export type MeasureTone = 'neutral' | 'good' | 'moderate' | 'weak';
+
+export interface MeasureSource {
+  name: string;
+  url?: string | null;
+  detail?: string | null;
+}
+
+export interface Measure {
+  key: string;
+  label: string;
+  kind: 'limit' | 'goal' | 'reference' | 'dose' | 'contaminant';
+  value: number;
+  unit: string;
+  display_value: string;
+  percent?: number | null;
+  position: number;          // 0–1 along the scale
+  band: string;
+  tone: MeasureTone;
+  verdict: string;
+  sentence: string;
+  panel_label: string;
+  scale: {
+    max: number;
+    ticks: { value: number; label: string }[];
+    zones: { start: number; end: number; tone: MeasureTone }[];
+  };
+  sources: MeasureSource[];
+  ingredient_id?: string | null;
+}
+
+export interface NutritionPanel {
+  basis: 'serving' | '100g';
+  serving_label: string;
+  measures: Measure[];
+}
+
+export interface AdditiveItem {
+  name: string;
+  ingredient_id?: string | null;
+  reason?: string | null;
+}
+
+export interface AdditivesSummary {
+  avoid: AdditiveItem[];
+  watch: AdditiveItem[];
+  clean_count: number;
+  unreviewed_count: number;
+}
+
+export interface ProcessingInfo {
+  nova_group: number;
+  label: string;
+  position: number;
+  tone: MeasureTone;
+  source: MeasureSource;
+}
+
 export interface Product {
   id: string;
   barcode?: string;
@@ -61,6 +121,10 @@ export interface Product {
     image_license_name?: string | null;
     image_license_url?: string | null;
   } | null;
+  nutrition?: NutritionPanel | null;
+  doses?: Measure[];
+  additives?: AdditivesSummary | null;
+  processing?: ProcessingInfo | null;
 }
 
 export interface ProductListItem {
@@ -140,6 +204,7 @@ export interface LabObservation {
   license_name?: string | null;
   applicability: string;
   trust_grade: string;
+  measure?: Measure | null;
   interpretations: LabInterpretation[];
 }
 
