@@ -54,4 +54,5 @@ class CatalogEntry(Base):
         ),
         Index("ix_catalog_entries_category_popularity", "category", text("popularity DESC")),
         Index("ix_catalog_entries_product_id", "product_id"),
+        Index("ix_catalog_entries_popularity", text("popularity DESC")),
     )

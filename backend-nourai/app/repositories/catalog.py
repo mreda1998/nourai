@@ -68,7 +68,7 @@ class CatalogRepository:
             return []
         q = normalize_search_text(query)
         words = [w for w in q.split() if len(w) >= 2]
-        stmt = (
+        base = (
             select(CatalogEntry)
             .join(DataSource, DataSource.id == CatalogEntry.source_id)
             .where(
@@ -77,24 +77,28 @@ class CatalogRepository:
             )
         )
         if category:
-            stmt = stmt.where(CatalogEntry.category == category)
-        # Names that start with the first word come first, so the candidate window
-        # (later re-ranked in Python) keeps the strongest matches.
-        stmt = stmt.order_by(
-            CatalogEntry.search_text.like(f"{_like_escape(q.split()[0])}%", escape="\\").desc(),
-            CatalogEntry.popularity.desc(),
-        ).limit(limit)
+            base = base.where(CatalogEntry.category == category)
+        # Two small popularity-ordered queries instead of one "prefix first" sort, which had
+        # to fetch every match of a common word ("chocolate": 100k+ rows). The first keeps
+        # names that start with the query even when they're not popular; rank() re-sorts.
+        prefix = base.where(
+            CatalogEntry.search_text.like(f"{_like_escape(q.split()[0])}%", escape="\\")
+        ).order_by(CatalogEntry.popularity.desc()).limit(max(limit // 2, 1))
+        popular = base.order_by(CatalogEntry.popularity.desc()).limit(limit)
 
         async with self._sessions() as session:
             async with session.begin():
                 await session.execute(text(f"SET LOCAL statement_timeout = {int(timeout_ms)}"))
                 try:
-                    return list((await session.execute(stmt)).scalars().all())
+                    found = list((await session.execute(prefix)).scalars().all())
+                    found += (await session.execute(popular)).scalars().all()
                 except DBAPIError as exc:
                     if "statement timeout" in str(exc).lower():
                         logger.warning("catalog search timed out for %r", query)
                         raise CatalogSearchTimeout(query) from exc
                     raise
+        unique = {entry.id: entry for entry in found}
+        return list(unique.values())[:limit]
 
     async def link_product(self, gtin14: str, product_id: uuid.UUID) -> None:
         async with self._sessions() as session:

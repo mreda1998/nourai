@@ -63,6 +63,8 @@ def upgrade() -> None:
         ["category", sa.text("popularity DESC")],
     )
     op.create_index("ix_catalog_entries_product_id", "catalog_entries", ["product_id"])
+    # Lets search walk the most popular matches first and stop at the window size.
+    op.create_index("ix_catalog_entries_popularity", "catalog_entries", [sa.text("popularity DESC")])
 
     op.execute(
         """
@@ -80,6 +82,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index("ix_catalog_entries_popularity", table_name="catalog_entries")
     op.drop_index("ix_catalog_entries_product_id", table_name="catalog_entries")
     op.drop_index("ix_catalog_entries_category_popularity", table_name="catalog_entries")
     op.drop_index("ix_catalog_entries_search_trgm", table_name="catalog_entries")

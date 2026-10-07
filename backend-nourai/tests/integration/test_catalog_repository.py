@@ -98,3 +98,12 @@ async def test_get_returns_an_entry_by_id():
     repo = CatalogRepository(async_session_factory)
     assert (await repo.get(entry_id)).name == "Nutella"
     assert await repo.get(999_999) is None
+
+
+async def test_an_unpopular_name_prefix_match_survives_a_window_full_of_popular_matches():
+    for i in range(70):
+        await _add("open-food-facts", f"p{i}", f"Spread with nutella {i}", popularity=1000 + i, gtin14=f"000000000{i:05d}")
+    await _add("open-food-facts", "rare", "Nutella", popularity=0, gtin14="00000000099999")
+    results = await CatalogRepository(async_session_factory).search("nutella", category=None, limit=60)
+    assert len(results) == 60
+    assert results[0].external_id == "rare"
