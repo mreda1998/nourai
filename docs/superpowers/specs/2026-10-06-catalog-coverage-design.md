@@ -209,6 +209,20 @@ Decided while writing the phase 1 plan (`docs/superpowers/plans/2026-10-07-catal
 - Reuse the existing `open-food-facts` source row; add `open-beauty-facts`. Lower `priority` wins.
 - Restricted GS1 numbers (in-store `2…` prefixes) and placeholder codes are never indexed.
 
+## Phase 1 results (2026-10-07, local)
+
+- **Index:** Open Food Facts 4,535,553 rows read → 3,539,198 indexed in 645 s; Open Beauty Facts
+  64,237 → 38,196 in 8 s. 3,577,351 entries; database 2.1 GB (of the 7 GB budget).
+- **Search** (20 common queries through the repository, full index): p50 47 ms · p95 107 ms · max 185 ms.
+  The first design ("prefix first" ORDER BY) failed the gate (p95 348 ms, max 438 ms) because common words
+  forced a sort of every match; search now runs two popularity-ordered queries over a popularity index.
+- **GTIN lookup:** ≤ 6 ms.
+- **First scan** of a product only in the index hydrates inline in ~0.5–0.7 s; the second scan is ~12 ms.
+- **Found and fixed:** OFF API v3.6 leaves `nutriments` empty (nutrition moved to
+  `nutrition.aggregated_set`), so every product ingested since had no nutrition. The connector rebuilds
+  the classic values from label sets (estimates skipped) and ignores serving sets that copy the per-100
+  values.
+
 ## Out of scope
 
 Category percentile and better-alternative swap (they build on phase 3's subcategories), user-submitted
