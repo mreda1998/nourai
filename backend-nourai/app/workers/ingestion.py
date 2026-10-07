@@ -10,8 +10,8 @@ from uuid import UUID
 from app.core.config import settings
 from app.db.session import async_session_factory
 from app.models.ingestion import IngestionJob
-from app.services.ingestion.connectors.openfoodfacts import OpenFoodFactsNotFound
 from app.services.ingestion.image_pipeline import ProductImagePipeline
+from app.services.ingestion.product_job import run_product_job
 from app.services.ingestion.product_pipeline import ProductIngestionPipeline
 from app.services.ingestion.queue import IngestionQueue
 
@@ -73,58 +73,12 @@ class IngestionWorker:
                 )
             else:
                 raise ValueError(f"Unsupported ingestion job type: {job.job_type}")
-        except OpenFoodFactsNotFound:
-            await self.queue.needs_review(
-                job.id,
-                result={
-                    "reason": "not_found",
-                    "message": "No trusted catalog record was found for this barcode",
-                },
-            )
         except Exception as exc:
             logger.exception("job failed job=%s", job.id)
             await self.queue.fail(job.id, exc)
 
     async def _ingest_product(self, job: IngestionJob) -> None:
-        barcode = str(job.payload["barcode"])
-        gtin14 = str(job.payload["gtin14"])
-        async with async_session_factory() as session:
-            result = await self.products.ingest_barcode(
-                session,
-                barcode=barcode,
-                gtin14=gtin14,
-                job=job,
-            )
-
-        if result.needs_review:
-            await self.queue.needs_review(
-                job.id,
-                product_id=result.product_id,
-                source_record_id=result.source_record_id,
-                result={"message": result.message or "Editorial review required"},
-            )
-            return
-
-        for asset_id in result.asset_ids:
-            async with async_session_factory() as session:
-                async with session.begin():
-                    await self.queue.enqueue(
-                        session,
-                        job_type="process_image",
-                        idempotency_key=f"image:authentic-v1:{asset_id}",
-                        payload={"asset_id": str(asset_id)},
-                        priority=150,
-                    )
-        await self.queue.complete(
-            job.id,
-            product_id=result.product_id,
-            source_record_id=result.source_record_id,
-            result={
-                "product_id": str(result.product_id),
-                "revision_created": result.revision_created,
-                "image_jobs": len(result.asset_ids),
-            },
-        )
+        await run_product_job(self.queue, self.products, job, async_session_factory)
 
 
 async def _run(once: bool) -> None:
