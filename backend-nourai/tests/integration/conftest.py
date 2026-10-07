@@ -25,7 +25,7 @@ if not TEST_URL or TEST_URL != settings.database_url:
     )
 
 _TABLES = (
-    "tester_events, product_submissions, ingestion_jobs, product_ingredients, "
+    "catalog_entries, tester_events, product_submissions, ingestion_jobs, product_ingredients, "
     "product_identifiers, products, ingredients"
 )
 
