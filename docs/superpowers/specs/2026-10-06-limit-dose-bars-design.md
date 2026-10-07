@@ -42,6 +42,26 @@ Where Baseline is weak, and what we do differently:
   contaminants), `MeasureRow` (collapsed verdict row → expanded bar + cited sentence), `SummaryCard`;
   sections in `components/product/ProductSections.tsx`.
 
+## Visual language — an instrument, not a slider (revision, same day)
+
+The first build copied Baseline's look (gradient track, black pill thumb, 0/half/max labels, grey panel,
+uppercase overline + ⓘ, value dot). After a Mobbin review (Superpower, Visible, Tempo, Bevel, Noom/Me+
+rulers; no app shows a supplement dose against DV/UL), the measures were redrawn in Elory's own idiom:
+
+- **Nutrients: twenty 5% cells** filled in the verdict colour; the FDA 5%/20% cut-offs fall on cell edges
+  and are notched. A serif reading ("68% of daily limit") sits over the end of the fill; legend
+  "Low ≤5% · high ≥20%" and "100% = 2,300 mg".
+- **No thumb** — nothing looks draggable.
+- **Servings to the reference** (server `servings_note`): "1½ servings reach the daily sodium limit",
+  set in serif italic. Per-serving foods only; skipped for neutral references.
+- **Doses and contaminants: a ruler** with fine ticks, the good range bracketed ├──┤, the upper limit
+  ruled in clay, an ink needle with a serif reading; reference values coloured by meaning; a legend
+  names the bracket and the rule (server `scale.band_label` / `scale.limit_label`).
+- **Footnotes instead of the grey panel and ⓘ**: the expanded row keeps the card surface with a margin
+  rule in the verdict colour; the sentence carries ¹,² markers and the sources are listed and tappable.
+- **Collapsed rows** show the share as a small tinted tag ("68%") instead of a dot.
+- **Processing**: four NOVA cells in the same cell language.
+
 ## Deviation from the agreed design
 
 Dose references were going to be new numeric columns on `ingredients` (migration). The shared local
