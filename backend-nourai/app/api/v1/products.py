@@ -22,14 +22,21 @@ from app.models.ingestion import IngredientAlias, IngestionJob
 from app.models.product import ProductCategory
 from app.core.config import settings
 from app.db.session import async_session_factory
-from app.schemas.ingestion import BarcodeIngestionResponse, IngestionJobResponse
+from app.models.catalog import CatalogEntry
+from app.repositories.catalog import CatalogRepository, CatalogSearchTimeout, catalog_query_ok
+from app.schemas.ingestion import BarcodeIngestionResponse, CatalogPreview, IngestionJobResponse
 from app.schemas.personalization import PersonalAnalysisResponse
 from app.schemas.product import (
     NUTRIENT_DISPLAY_NAMES,
     ProductResponse,
     ProductSearchResponse,
+    ProductSearchResultsResponse,
     ProductWithDetails,
+    SearchResultItem,
 )
+from app.services.catalog.hydration import CatalogHydrator, HydrationResult
+from app.services.catalog.ranking import Candidate, rank
+from app.services.ingestion.product_pipeline import ProductIngestionPipeline
 from app.services.personalization import PersonalizationService
 from app.services.product import ProductService
 from app.services.ingestion.normalization import normalize_gtin
@@ -37,6 +44,54 @@ from app.services.ingestion.queue import IngestionQueue
 from app.services.insights import record_event
 
 router = APIRouter()
+
+# Search fetches this many candidates from each side before ranking and paging.
+_SEARCH_WINDOW = 60
+
+
+def get_catalog_repository() -> CatalogRepository:
+    return CatalogRepository(async_session_factory)
+
+
+def get_catalog_hydrator() -> CatalogHydrator:
+    queue = IngestionQueue(
+        async_session_factory,
+        lease_seconds=settings.ingestion_job_lease_seconds,
+        default_max_attempts=settings.ingestion_job_max_attempts,
+    )
+    return CatalogHydrator(queue, ProductIngestionPipeline(), async_session_factory)
+
+
+def _preview(entry: CatalogEntry | None) -> CatalogPreview | None:
+    if entry is None:
+        return None
+    return CatalogPreview(name=entry.name, brand=entry.brand, image_url=entry.image_url, category=entry.category)
+
+
+def _pending_response(
+    result: HydrationResult, gtin14: str, entry: CatalogEntry | None
+) -> JSONResponse:
+    """202 while a product loads (or once it's known to be missing), with what the index knows."""
+    job = result.job
+    status = "needs_review" if result.status == "not_found" else job.status
+    existing_message = (
+        job.result.get("message")
+        if isinstance(getattr(job, "result", None), dict) and isinstance(job.result.get("message"), str)
+        else None
+    )
+    response = BarcodeIngestionResponse(
+        job_id=job.id,
+        status=status,
+        gtin14=gtin14,
+        product_id=job.product_id,
+        message=existing_message or (
+            "Product verification could not be completed"
+            if status in ("dead", "needs_review")
+            else "We are verifying this product from trusted source data"
+        ),
+        preview=_preview(entry),
+    )
+    return JSONResponse(status_code=202, content=response.model_dump(mode="json"))
 
 
 async def _build_ingredient_lookup(db: AsyncSession) -> dict[str, str]:
@@ -85,14 +140,16 @@ async def list_products(
     )
 
 
-@router.get("/search", response_model=ProductSearchResponse)
+@router.get("/search", response_model=ProductSearchResultsResponse)
 async def search_products(
     q: str = Query(..., min_length=2),
     category: str | None = None,
+    country: str | None = Query(None, min_length=2, max_length=2),
     pagination: Annotated[PaginationParams, Depends(get_pagination)] = None,
     service: Annotated[ProductService, Depends(get_product_service)] = None,
+    catalog: Annotated[CatalogRepository, Depends(get_catalog_repository)] = None,
 ):
-    """Search products by name or brand."""
+    """Search curated products and the catalog index together, ranked as one list."""
     category_enum = None
     if category:
         try:
@@ -100,34 +157,110 @@ async def search_products(
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid category: {category}")
 
-    products, total = await service.search_products(
-        query=q,
-        category=category_enum,
+    products, _ = await service.search_products(query=q, category=category_enum, limit=_SEARCH_WINDOW, offset=0)
+    entries: list[CatalogEntry] = []
+    if catalog_query_ok(q):
+        try:
+            entries = await catalog.search(
+                q, category=category_enum.value if category_enum else None, limit=_SEARCH_WINDOW
+            )
+        except CatalogSearchTimeout:
+            entries = []
+
+    linked = {entry.product_id: entry for entry in entries if entry.product_id}
+    candidates = []
+    for product in products:
+        entry = linked.get(product.id)
+        candidates.append(Candidate(
+            key=f"p:{product.id}", name=product.name, brand=product.brand,
+            popularity=entry.popularity if entry else 0,
+            countries=tuple(entry.countries) if entry else (),
+            hydrated=True, payload=product,
+        ))
+    for entry in entries:
+        key = f"p:{entry.product_id}" if entry.product_id else f"c:{entry.id}"
+        candidates.append(Candidate(
+            key=key, name=entry.name, brand=entry.brand, popularity=entry.popularity,
+            countries=tuple(entry.countries), hydrated=entry.product_id is not None, payload=entry,
+        ))
+
+    ranked = rank(q, candidates, country=country)
+    page = ranked[pagination.offset: pagination.offset + pagination.limit]
+    return ProductSearchResultsResponse(
+        products=[_search_item(c.payload) for c in page],
+        total=len(ranked),
         limit=pagination.limit,
         offset=pagination.offset,
     )
 
-    return ProductSearchResponse(
-        products=[ProductResponse.model_validate(p) for p in products],
-        total=total,
-        limit=pagination.limit,
-        offset=pagination.offset,
+
+def _search_item(payload) -> SearchResultItem:
+    if isinstance(payload, CatalogEntry):
+        return SearchResultItem(
+            id=str(payload.product_id) if payload.product_id else f"catalog:{payload.id}",
+            name=payload.name,
+            brand=payload.brand,
+            category=payload.category,
+            image_url=payload.image_url,
+            grade=None,
+            in_catalog_only=payload.product_id is None,
+        )
+    product = ProductResponse.model_validate(payload)
+    return SearchResultItem(
+        id=str(product.id),
+        name=product.name,
+        brand=product.brand,
+        category=product.category.value,
+        image_url=product.image_url,
+        grade=product.grade,
     )
 
 
-@router.get("/{product_id}", response_model=ProductWithDetails)
+@router.get("/{product_id}", response_model=ProductWithDetails | BarcodeIngestionResponse)
 async def get_product(
-    product_id: UUID,
+    product_id: str,
     db: DBSession,
     service: Annotated[ProductService, Depends(get_product_service)] = None,
+    catalog: Annotated[CatalogRepository, Depends(get_catalog_repository)] = None,
+    hydrator: Annotated[CatalogHydrator, Depends(get_catalog_hydrator)] = None,
     current_user: OptionalUser = None,
 ):
-    """Get a product by ID with full details."""
-    product = await service.get_product(product_id)
+    """A product by UUID, or `catalog:<n>` for an index entry — hydrated on first open."""
+    if product_id.startswith("catalog:"):
+        return await _open_catalog_entry(product_id, db, service, catalog, hydrator)
+    try:
+        uuid = UUID(product_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Product not found")
+    product = await service.get_product(uuid)
 
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
+    lookup = await _build_ingredient_lookup(db)
+    return ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)
+
+
+async def _open_catalog_entry(product_id, db, service, catalog, hydrator):
+    try:
+        entry = await catalog.get(int(product_id.split(":", 1)[1]))
+    except ValueError:
+        entry = None
+    if entry is None or not entry.gtin14:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    target = entry.product_id
+    if target is None:
+        digits = normalize_gtin(entry.external_id).digits if entry.external_id.isdigit() else entry.gtin14
+        result = await hydrator.hydrate(db, digits=digits, gtin14=entry.gtin14)
+        if result.status != "hydrated":
+            return _pending_response(result, entry.gtin14, entry)
+        target = result.product_id
+        await catalog.link_product(entry.gtin14, target)
+
+    product = await service.get_product(target)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
     lookup = await _build_ingredient_lookup(db)
     return ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)
 
@@ -217,9 +350,11 @@ async def get_product_by_barcode(
     device_id: DeviceId,
     app_version: AppVersion,
     service: Annotated[ProductService, Depends(get_product_service)] = None,
+    catalog: Annotated[CatalogRepository, Depends(get_catalog_repository)] = None,
+    hydrator: Annotated[CatalogHydrator, Depends(get_catalog_hydrator)] = None,
     current_user: OptionalUser = None,
 ):
-    """Return a cached product or queue idempotent background verification."""
+    """A known product, or hydrate it inline; while it loads, 202 with a preview from the index."""
     async def record_scan(result: str, **fields) -> None:
         meta = {"result": result, **fields.pop("meta", {})}
         await record_event(
@@ -245,49 +380,19 @@ async def get_product_by_barcode(
         lookup = await _build_ingredient_lookup(db)
         return ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)
 
-    queue = IngestionQueue(
-        async_session_factory,
-        lease_seconds=settings.ingestion_job_lease_seconds,
-        default_max_attempts=settings.ingestion_job_max_attempts,
-    )
-    job = await queue.enqueue(
-        db,
-        job_type="product_barcode",
-        idempotency_key=f"barcode:off-v3.6:{normalized.gtin14}",
-        payload={"barcode": normalized.digits, "gtin14": normalized.gtin14},
-        priority=50,
-    )
-    await db.commit()
-
-    # A prior idempotent job may have completed between the initial read and
-    # enqueue. Return its product immediately when possible.
-    if job.status == "complete" and job.product_id:
-        product = await service.get_product(job.product_id)
+    result = await hydrator.hydrate(db, digits=normalized.digits, gtin14=normalized.gtin14)
+    if result.status == "hydrated":
+        product = await service.get_product(result.product_id)
         if product:
-            await record_scan("cached", barcode=normalized.gtin14, product_id=product.id)
+            await catalog.link_product(normalized.gtin14, product.id)
+            await record_scan("hydrated", barcode=normalized.gtin14, product_id=product.id)
             lookup = await _build_ingredient_lookup(db)
             return ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)
 
+    entry = await catalog.best_for_gtin(normalized.gtin14)
     await record_scan(
-        "queued",
+        "queued" if result.status == "queued" else "not_found",
         barcode=normalized.gtin14,
-        meta={"job_id": str(job.id), "status": job.status},
+        meta={"job_id": str(result.job.id), "in_index": entry is not None},
     )
-
-    existing_message = (
-        job.result.get("message")
-        if isinstance(job.result, dict) and isinstance(job.result.get("message"), str)
-        else None
-    )
-    response = BarcodeIngestionResponse(
-        job_id=job.id,
-        status=job.status,
-        gtin14=normalized.gtin14,
-        product_id=job.product_id,
-        message=existing_message or (
-            "Product verification could not be completed"
-            if job.status == "dead"
-            else "We are verifying this product from trusted source data"
-        ),
-    )
-    return JSONResponse(status_code=202, content=response.model_dump(mode="json"))
+    return _pending_response(result, normalized.gtin14, entry)

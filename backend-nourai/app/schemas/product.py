@@ -419,6 +419,28 @@ class ProductWithDetails(BaseModel):
         )
 
 
+# ─── Search results (curated products + catalog index) ──────────────────────
+
+class SearchResultItem(BaseModel):
+    """One search hit. `id` is a product UUID, or `catalog:<n>` for an index entry not yet hydrated."""
+
+    id: str
+    name: str
+    brand: str | None = None
+    category: str
+    image_url: str | None = None
+    grade: str | None = None          # None until we hold the full product
+    is_ai_generated: bool = False
+    in_catalog_only: bool = False
+
+
+class ProductSearchResultsResponse(BaseModel):
+    products: list[SearchResultItem]
+    total: int
+    limit: int
+    offset: int
+
+
 # ─── Paginated list response ──────────────────────────────────────────────────
 
 class ProductSearchResponse(BaseModel):

@@ -42,3 +42,25 @@ async def _clean_tables():
 async def db_session():
     async with async_session_factory() as session:
         yield session
+
+
+@pytest.fixture(autouse=True)
+def _offline_hydration():
+    """Integration tests never call Open Food Facts: jobs are enqueued for real, never run inline."""
+    from app.api.v1.products import get_catalog_hydrator
+    from app.main import app
+    from app.services.catalog.hydration import CatalogHydrator, CircuitBreaker
+    from app.services.ingestion.queue import IngestionQueue
+
+    async def never_finishes(queue, pipeline, job, session_factory):
+        raise TimeoutError
+
+    def offline():
+        return CatalogHydrator(
+            IngestionQueue(async_session_factory), pipeline=None, session_factory=async_session_factory,
+            breaker=CircuitBreaker(), budget_s=0.01, run_job=never_finishes,
+        )
+
+    app.dependency_overrides[get_catalog_hydrator] = offline
+    yield
+    app.dependency_overrides.pop(get_catalog_hydrator, None)
