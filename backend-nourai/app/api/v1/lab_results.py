@@ -19,6 +19,7 @@ from app.schemas.laboratory import (
     LabObservationResponse,
     ProductLabResultsResponse,
 )
+from app.services.measures import measure_for_lab_observation
 
 
 router = APIRouter()
@@ -97,6 +98,9 @@ async def get_product_lab_results(
             applicability=dataset.applicability,
             trust_grade=dataset.trust_grade,
             interpretations=interpretations_by_observation.get(observation.id, []),
+            measure=measure_for_lab_observation(
+                observation, interpretations_by_observation.get(observation.id, [])
+            ),
         )
         for observation, analysis, sample, dataset in rows
     ]

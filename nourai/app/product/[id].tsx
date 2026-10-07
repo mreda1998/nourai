@@ -1,12 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
-import {
-  AlertTriangle, BookOpenCheck, Check, CircleSlash, ExternalLink, FlaskConical, Plus, Sparkles, Target,
-} from 'lucide-react-native';
+import { AlertTriangle, Check, CircleSlash, Plus, Sparkles, Target } from 'lucide-react-native';
 import { Palette, Radius } from '@/constants/theme';
 import { api, getProductWithFallback } from '@/services/api';
 import type { Ingredient, LabObservation, Product, ServerPersonalAnalysis } from '@/services/api';
@@ -19,11 +17,14 @@ import { FeedbackSheet } from '@/components/FeedbackSheet';
 import { isCatalogueId, track } from '@/lib/insights';
 import { syncAddToStack, syncRemoveFromStack } from '@/lib/stack-sync';
 import {
-  Button, Card, ContributorBar, EmptyState, IconButton, ListGroup, ListRow, Pill, ProductImage,
-  ScoreBadge, Screen, Section, SegmentedControl, SkeletonCard, Txt,
+  Button, Card, EmptyState, IconButton, ListGroup, ListRow, Pill, ProductImage,
+  ScoreBadge, Screen, Section, SkeletonCard, Txt,
 } from '@/components/ui';
+import {
+  DoseCard, IngredientsCard, LabCard, LegacyNutritionCard, NutritionCard, ProcessingCard, SourceCard, SupportsCard,
+} from '@/components/product/ProductSections';
 
-type Tab = 'ingredients' | 'nutrition' | 'details';
+type CardKey = 'nutrition' | 'doses' | 'ingredients' | 'processing' | 'lab' | 'supports' | 'source';
 
 export default function ProductDetailScreen() {
   const { id, via } = useLocalSearchParams<{ id: string; via?: string }>();
@@ -37,7 +38,7 @@ export default function ProductDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [serverAnalysis, setServerAnalysis] = useState<ServerPersonalAnalysis | null>(null);
   const [lab, setLab] = useState<LabObservation[]>([]);
-  const [tab, setTab] = useState<Tab>('ingredients');
+  const [openCards, setOpenCards] = useState<Set<CardKey> | null>(null);
   const [resolving, setResolving] = useState<string | null>(null);
 
   const inStack = product ? stack.some((p) => p.id === product.id) : false;
@@ -151,13 +152,32 @@ export default function ProductDetailScreen() {
   const nutrients = product.ingredients.filter((i) => i.is_nutrient);
   const score = gradeToScore(product.grade);
   const linked = ingredients.filter((i) => i.ingredient_id).length;
-  const flagged = ingredients.filter((i) => perIngredient?.get(i.name)?.concernFlags.length || i.tag_type === 'warning').length;
+  // Unmatched ingredients default to "watch" at ingestion — only library matches count as flagged.
+  const isFlagged = (ing: Ingredient) => !!perIngredient?.get(ing.name)?.concernFlags.length || (ing.tag_type === 'warning' && !!ing.ingredient_id);
+  const flagged = product.additives
+    ? product.additives.avoid.length + product.additives.watch.length
+    : ingredients.filter(isFlagged).length;
   const supports = product.bio_domains.filter((d) => d.value > 0 && !d.is_negative).sort((a, b) => b.value - a.value);
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'ingredients', label: `Ingredients ${ingredients.length}` },
-    ...(nutrients.length ? [{ key: 'nutrition' as Tab, label: 'Nutrition' }] : []),
-    { key: 'details', label: 'Details' },
-  ];
+  const doses = product.doses ?? [];
+
+  // The first card with something to measure starts open; the rest read as verdicts.
+  const defaultOpen: CardKey = product.nutrition || nutrients.length ? 'nutrition' : doses.length ? 'doses' : 'ingredients';
+  const open = openCards ?? new Set<CardKey>([defaultOpen]);
+  const toggleCard = (key: CardKey) => setOpenCards(() => {
+    const next = new Set(open);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+  const cardProps = (key: CardKey) => ({ open: open.has(key), onToggle: () => toggleCard(key) });
+
+  const describe = (ing: Ingredient) => {
+    const p = perIngredient?.get(ing.name);
+    const flaggedHere = isFlagged(ing);
+    const helps = !!p?.goalSupports.length;
+    const dot = flaggedHere ? Palette.weak : helps ? Palette.strong : ing.ingredient_id ? Palette.accent : Palette.ink4;
+    const note = flaggedHere ? (p?.concernFlags[0]?.label ?? ing.tag) : helps ? `Supports ${p!.goalSupports[0].label.toLowerCase()}` : undefined;
+    return { dot, subtitle: [ing.concentration, note].filter(Boolean).join(' · ') || undefined };
+  };
 
   return (
     <Screen
@@ -244,94 +264,27 @@ export default function ProductDetailScreen() {
         </Card>
       ) : null}
 
-      {/* Tabs */}
-      <SegmentedControl style={{ marginTop: 32 }} options={tabs} value={tab} onChange={setTab} />
-
-      {tab === 'ingredients' ? (
-        <View style={{ marginTop: 16 }}>
-          {ingredients.length ? (
-            <ListGroup>
-              {ingredients.map((ing) => {
-                const p = perIngredient?.get(ing.name);
-                const isFlagged = !!p?.concernFlags.length || ing.tag_type === 'warning';
-                const helps = !!p?.goalSupports.length;
-                const dot = isFlagged ? Palette.weak : helps ? Palette.strong : ing.ingredient_id ? Palette.accent : Palette.ink4;
-                return (
-                  <ListRow
-                    key={ing.name}
-                    leading={<View style={[styles.dot, { backgroundColor: dot }]} />}
-                    title={ing.name}
-                    subtitle={[ing.concentration, isFlagged ? (p?.concernFlags[0]?.label ?? ing.tag) : helps ? `Supports ${p!.goalSupports[0].label.toLowerCase()}` : ing.tag].filter(Boolean).join(' · ') || undefined}
-                    trailing={resolving === ing.name ? <ActivityIndicator size="small" color={Palette.accent} /> : null}
-                    onPress={() => openIngredient(ing)}
-                  />
-                );
-              })}
-            </ListGroup>
-          ) : <EmptyState icon={FlaskConical} title="No ingredients listed" message="We don’t have an ingredient list for this product yet." />}
-          <View style={styles.legend}>
-            <Legend color={Palette.strong} label="Helps your goals" />
-            <Legend color={Palette.weak} label="Flagged" />
-            <Legend color={Palette.accent} label="Researched" />
-          </View>
-        </View>
-      ) : null}
-
-      {tab === 'nutrition' ? (
-        <View style={{ marginTop: 16 }}>
-          <ListGroup>
-            {nutrients.map((n) => (
-              <ListRow key={n.name} title={n.name} value={resolving === n.name ? '…' : n.concentration} chevron={false} onPress={() => openIngredient(n)} />
-            ))}
-          </ListGroup>
-        </View>
-      ) : null}
-
-      {tab === 'details' ? (
-        <View>
-          {supports.length ? (
-            <Section title="What it supports" style={{ marginTop: 24 }}>
-              <Card padding={18} style={{ paddingVertical: 6 }}>
-                {supports.slice(0, 6).map((d, i) => <ContributorBar key={d.name} label={d.name} value={d.value} valueLabel={`${Math.round(d.value)}`} delay={i * 70} />)}
-              </Card>
-            </Section>
-          ) : null}
-
-          {lab.length ? (
-            <Section title="Independent lab results" caption="Measured on a tested sample — shown separately from Elory’s score">
-              <ListGroup>
-                {lab.slice(0, 8).map((o) => (
-                  <ListRow
-                    key={o.observation_id}
-                    icon={BookOpenCheck}
-                    title={o.analyte_name}
-                    subtitle={`${o.publisher} · Grade ${o.trust_grade}${o.lot_number ? ` · Lot ${o.lot_number}` : ''}`}
-                    value={`${o.raw_value ?? `${o.qualifier ?? ''}${o.value ?? '—'}`} ${o.unit ?? ''}`.trim()}
-                    onPress={() => Linking.openURL(o.source_url)}
-                  />
-                ))}
-              </ListGroup>
-            </Section>
-          ) : null}
-
-          {product.attribution ? (
-            <Section title="Source">
-              <ListGroup>
-                <ListRow
-                  icon={ExternalLink}
-                  title={product.attribution.source_name}
-                  subtitle={[product.attribution.data_license_name, product.attribution.image_license_name && `Images ${product.attribution.image_license_name}`].filter(Boolean).join(' · ') || product.attribution.attribution_text}
-                  onPress={() => Linking.openURL(product.attribution!.source_url)}
-                />
-              </ListGroup>
-            </Section>
-          ) : null}
-
-          {!supports.length && !lab.length && !product.attribution ? (
-            <EmptyState title="No additional details" message="Lab results and source information appear here when available." />
-          ) : null}
-        </View>
-      ) : null}
+      {/* Stacked summary cards */}
+      <View style={{ marginTop: 28, gap: 12 }}>
+        {product.nutrition ? (
+          <NutritionCard panel={product.nutrition} {...cardProps('nutrition')} />
+        ) : nutrients.length ? (
+          <LegacyNutritionCard nutrients={nutrients} {...cardProps('nutrition')} />
+        ) : null}
+        {doses.length ? <DoseCard doses={doses} {...cardProps('doses')} /> : null}
+        <IngredientsCard
+          ingredients={ingredients}
+          additives={product.additives}
+          describe={describe}
+          resolving={resolving}
+          onOpenIngredient={openIngredient}
+          {...cardProps('ingredients')}
+        />
+        {product.processing ? <ProcessingCard processing={product.processing} {...cardProps('processing')} /> : null}
+        {lab.length ? <LabCard lab={lab} {...cardProps('lab')} /> : null}
+        {supports.length ? <SupportsCard supports={supports} {...cardProps('supports')} /> : null}
+        {product.attribution ? <SourceCard attribution={product.attribution} {...cardProps('source')} /> : null}
+      </View>
 
       <Button
         label="Something look wrong?"
@@ -361,20 +314,8 @@ function Stat({ value, label, tone }: { value: number; label: string; tone?: 'we
   );
 }
 
-function Legend({ color, label }: { color: string; label: string }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-      <View style={[styles.dotSm, { backgroundColor: color }]} />
-      <Txt variant="caption" tone="secondary">{label}</Txt>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   stats: { flexDirection: 'row', alignItems: 'center', marginTop: 18, paddingTop: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Palette.hairline },
   statRule: { width: StyleSheet.hairlineWidth, height: 32, backgroundColor: Palette.hairline },
   alert: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', backgroundColor: Palette.weakSoft, borderColor: 'transparent', borderRadius: Radius.lg },
-  dot: { width: 10, height: 10, borderRadius: 5, marginHorizontal: 10 },
-  dotSm: { width: 8, height: 8, borderRadius: 4 },
-  legend: { flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 14 },
 });

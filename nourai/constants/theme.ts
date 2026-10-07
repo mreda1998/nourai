@@ -77,6 +77,37 @@ export const Palette = {
   nightInk3: 'rgba(244, 241, 234, 0.40)',
 } as const;
 
+// Measures read like a lab instrument: cells that fill in one verdict colour,
+// rulers with zone strips, and the verdict's ink for text.
+export const MeasureFill = {
+  neutral: '#9AA8A4',
+  good: '#4F9D7F',
+  moderate: '#D19F40',
+  weak: '#C4613F',
+} as const;
+
+export const MeasureSoft = {
+  neutral: Palette.sunken,
+  good: Palette.strongSoft,
+  moderate: Palette.moderateSoft,
+  weak: Palette.weakSoft,
+} as const;
+
+// Zone fills for dose / contaminant bars, and the ink each tone reads in.
+export const MeasureZone = {
+  neutral: 'rgba(14, 31, 30, 0.10)',
+  good: '#A6D0BE',
+  moderate: '#E6C88E',
+  weak: '#E3A68F',
+} as const;
+
+export const MeasureInk = {
+  neutral: Palette.ink3,
+  good: Palette.strong,
+  moderate: Palette.moderate,
+  weak: Palette.weak,
+} as const;
+
 // Legacy colour map — every key existing screens import, re-pointed at the
 // new palette so un-migrated screens inherit the redesign.
 export const Colors = {
