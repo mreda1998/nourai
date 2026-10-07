@@ -57,11 +57,14 @@ export interface Measure {
   tone: MeasureTone;
   verdict: string;
   sentence: string;
+  servings_note?: string | null;  // "1½ servings reach the daily sodium limit"
   panel_label: string;
   scale: {
     max: number;
     ticks: { value: number; label: string }[];
     zones: { start: number; end: number; tone: MeasureTone }[];
+    band_label?: string | null;   // names the bracketed range on a ruler
+    limit_label?: string | null;  // names the ruled-in limit
   };
   sources: MeasureSource[];
   ingredient_id?: string | null;

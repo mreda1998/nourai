@@ -3,7 +3,7 @@ import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-n
 import { router } from 'expo-router';
 import {
   Beef, BookOpenCheck, Candy, CandyCane, ChevronDown, ChevronRight, Croissant, Droplet, ExternalLink,
-  FlaskConical, Flame, Hexagon, Info, Pill, Wheat,
+  FlaskConical, Flame, Hexagon, Pill, Wheat,
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { MeasureInk, Palette } from '@/constants/theme';
@@ -11,7 +11,7 @@ import type {
   AdditiveItem, AdditivesSummary, BioDomain, Ingredient, LabObservation, Measure, MeasureTone, NutritionPanel,
   ProcessingInfo, Product,
 } from '@/services/api';
-import { ContributorBar, ListRow, MeasureBar, MeasureRow, PressableScale, SummaryCard, Txt, showMeasureSources } from '@/components/ui';
+import { CellMeter, ContributorBar, ListRow, MeasureRow, PressableScale, SummaryCard, Txt, showMeasureSources } from '@/components/ui';
 
 type CardProps = { open: boolean; onToggle: () => void };
 
@@ -223,18 +223,28 @@ export function ProcessingCard({ processing, open, onToggle }: CardProps & { pro
   return (
     <SummaryCard title="Processing" verdict={NOVA_SHORT[processing.nova_group] ?? processing.label} tone={processing.tone} open={open} onToggle={onToggle}>
       <View style={styles.panel}>
-        <View style={styles.panelHead}>
-          <Txt variant="overline" tone="secondary">Processing level</Txt>
-          <Pressable hitSlop={12} onPress={() => showMeasureSources({ panel_label: 'Processing level', sources: [processing.source] })} accessibilityLabel="Where this comes from">
-            <Info size={16} color={Palette.ink3} />
+        <View style={[styles.margin, { borderLeftColor: MeasureInk[processing.tone] }]}>
+          <Txt variant="footnoteStrong" tone="secondary">Processing level</Txt>
+          <CellMeter
+            cells={4}
+            position={processing.nova_group / 4}
+            tone={processing.tone}
+            callout={{ value: `${processing.nova_group}`, caption: 'of 4 on the NOVA scale' }}
+            legend={{ left: 'Unprocessed', right: 'Ultra-processed' }}
+            style={{ marginTop: 10 }}
+          />
+          <Txt variant="footnote" style={{ marginTop: 14 }}>
+            NOVA group {processing.nova_group}: {processing.label.toLowerCase()}.<Txt variant="footnote" tone="accent">¹</Txt>
+          </Txt>
+          <Pressable
+            onPress={() => (processing.source.url ? Linking.openURL(processing.source.url) : showMeasureSources({ panel_label: 'Processing level', sources: [processing.source] }))}
+            hitSlop={6}
+            style={{ marginTop: 12 }}
+            accessibilityRole="link"
+          >
+            <Txt variant="caption" tone="tertiary"><Txt variant="caption" tone="accent">¹ </Txt>{processing.source.name}</Txt>
           </Pressable>
         </View>
-        <MeasureBar kind="limit" spectrum position={processing.position} style={{ marginTop: 14 }} />
-        <View style={styles.ends}>
-          <Txt variant="caption" tone="tertiary">Unprocessed</Txt>
-          <Txt variant="caption" tone="tertiary">Ultra-processed</Txt>
-        </View>
-        <Txt variant="footnote" style={{ marginTop: 12 }}>NOVA group {processing.nova_group} of 4: {processing.label.toLowerCase()}.</Txt>
       </View>
     </SummaryCard>
   );
@@ -308,6 +318,5 @@ const styles = StyleSheet.create({
   tierHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 14, paddingBottom: 4 },
   tierRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingVertical: 12 },
   panel: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 18, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Palette.hairline },
-  panelHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  ends: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  margin: { borderLeftWidth: 2, paddingLeft: 14, paddingVertical: 2 },
 });
