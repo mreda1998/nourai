@@ -102,7 +102,7 @@ with `DATABASE_URL`; a monthly schedule is phase 4.
 - Unhydrated results carry `id = "catalog:<entry id>"`.
 - Trigram match on `search_text` with a similarity threshold; `statement_timeout` ≈ 300 ms with fallback
   to a prefix-only search over `products`.
-- Logs a `search` insights event with `result_count` (needed for the success metric).
+- The app's existing `search` event (`meta.results`) measures zero-result searches.
 
 ### Opening a result — `GET /products/{id}`
 
@@ -183,7 +183,7 @@ Each phase gets its own implementation plan, written when the previous phase shi
 
 ## 7. Success metrics
 
-Measured from insights events (`scan` already logged; `search` added in phase 1):
+Measured from insights events (`scan` logged by the API; `search` sent by the app with its result count):
 
 | metric | target |
 |---|---|
@@ -192,6 +192,22 @@ Measured from insights events (`scan` already logged; `search` added in phase 1)
 | Supplements with ≥ 1 dose bar | ~2 → > 100,000 |
 | Hydrated foods with English ingredient names | ≥ 95% |
 | NOVA present on OFF-sourced foods where OFF has it | 100% |
+
+## Planning notes (phase 1)
+
+Decided while writing the phase 1 plan (`docs/superpowers/plans/2026-10-07-catalog-coverage-phase-1.md`):
+
+- Imports read the OFF/OBF **CSV** exports (TSV, read by header name) rather than JSONL: 1.28 GB vs ~7 GB
+  gzipped, and they already carry `image_url`, `unique_scans_n`, `completeness`, `countries_tags`,
+  `additives_tags` and `nova_group`.
+- Batched `INSERT … ON CONFLICT DO UPDATE WHERE content_hash differs` instead of `COPY` + staging — simpler,
+  and it reports inserted vs updated rows.
+- The ">20% changed" guard becomes a **format guard**: upserts never delete, so a truncated dump cannot wipe
+  the index; the realistic failure is a changed format writing garbage, so a run aborts before its first
+  write if fewer than 20% of the first 50,000 rows parse.
+- No server-side `search` event: the app already sends `search` with `meta.results`.
+- Reuse the existing `open-food-facts` source row; add `open-beauty-facts`. Lower `priority` wins.
+- Restricted GS1 numbers (in-store `2…` prefixes) and placeholder codes are never indexed.
 
 ## Out of scope
 
