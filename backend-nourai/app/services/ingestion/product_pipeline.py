@@ -357,13 +357,17 @@ class ProductIngestionPipeline:
         product.name = record.name
         product.brand = record.brand
         product.category = record.category.value
-        product.serving_size = record.product.get("serving_size")
+        serving_quantity = normalized.get("serving_quantity")
+        product.serving_size = record.product.get("serving_size") or (
+            f"{serving_quantity:g} g" if serving_quantity else None
+        )
         product.publication_status = PublicationStatus.PUBLISHED.value
         product.last_ingested_at = ingested_at
         product.extra_data = {
             **(product.extra_data or {}),
             "source": OpenFoodFactsConnector.SOURCE_SLUG,
             "nutriments": normalized.get("nutriments") or {},
+            "serving_quantity": serving_quantity,
             "nutriscore_grade": normalized.get("nutriscore_grade"),
             "nova_group": normalized.get("nova_group"),
             "ingredients_text": normalized.get("ingredient_statement"),
