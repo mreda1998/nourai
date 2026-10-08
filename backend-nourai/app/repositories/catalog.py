@@ -5,6 +5,7 @@ must not leak into the rest of a request.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import uuid
@@ -62,7 +63,10 @@ class CatalogRepository:
         *,
         category: str | None,
         limit: int = 60,
-        timeout_ms: int = 300,
+        # Warm searches take ~20 ms; the budget covers a cold cache, where a common
+        # word's first search can take ~0.5 s. Timing out returns no catalog results.
+        timeout_ms: int = 800,
+        prefix_timeout_ms: int = 150,
     ) -> list[CatalogEntry]:
         if not catalog_query_ok(query):
             return []
@@ -79,26 +83,77 @@ class CatalogRepository:
         if category:
             base = base.where(CatalogEntry.category == category)
         # Two small popularity-ordered queries instead of one "prefix first" sort, which had
-        # to fetch every match of a common word ("chocolate": 100k+ rows). The first keeps
-        # names that start with the query even when they're not popular; rank() re-sorts.
+        # to fetch every match of a common word ("chocolate": 100k+ rows). They run in
+        # parallel, each in its own transaction: the popular query is the result (its
+        # timeout falls back to curated search); the prefix query only adds names that
+        # start with the query, so if it's slow it's skipped. rank() re-sorts in Python.
         prefix = base.where(
             CatalogEntry.search_text.like(f"{_like_escape(q.split()[0])}%", escape="\\")
         ).order_by(CatalogEntry.popularity.desc()).limit(max(limit // 2, 1))
         popular = base.order_by(CatalogEntry.popularity.desc()).limit(limit)
 
+        popular_rows, prefix_rows = await asyncio.gather(
+            self._race(popular, timeout_ms, query),
+            self._run_prefix(prefix, prefix_timeout_ms, query),
+            return_exceptions=True,
+        )
+        if isinstance(popular_rows, BaseException):
+            raise popular_rows
+        if isinstance(prefix_rows, CatalogSearchTimeout):
+            prefix_rows = []
+        elif isinstance(prefix_rows, BaseException):
+            raise prefix_rows
+        unique = {entry.id: entry for entry in [*prefix_rows, *popular_rows]}
+        return list(unique.values())[:limit]
+
+    async def _run_prefix(self, stmt, timeout_ms: int, query: str) -> list[CatalogEntry]:
+        # Best effort, planner's choice: it only adds names that start with the query.
+        return await self._run(stmt, timeout_ms, query)
+
+    async def _race(self, stmt, timeout_ms: int, query: str) -> list[CatalogEntry]:
+        """Run the popular query under both plans and keep whichever answers first.
+
+        Walking the popularity index is fast when a word is common and slow when it is
+        rare; the trigram bitmap is the reverse. The planner often guesses wrong
+        ("shampoo"), and both plans return the same rows, so race them.
+        """
+        tasks = [
+            asyncio.create_task(self._run(stmt, timeout_ms, query, bitmap_only=False)),
+            asyncio.create_task(self._run(stmt, timeout_ms, query, bitmap_only=True)),
+        ]
+        failure: BaseException | None = None
+        try:
+            for finished in asyncio.as_completed(tasks):
+                try:
+                    return await finished
+                except CatalogSearchTimeout as exc:
+                    failure = exc
+            assert failure is not None
+            raise failure
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _run(self, stmt, timeout_ms: int, query: str, *, bitmap_only: bool = False) -> list[CatalogEntry]:
         async with self._sessions() as session:
             async with session.begin():
                 await session.execute(text(f"SET LOCAL statement_timeout = {int(timeout_ms)}"))
+                if bitmap_only:
+                    # No plain index scans: forces the trigram bitmap, never the popularity walk.
+                    await session.execute(text("SET LOCAL enable_indexscan = off"))
+                # Bound LIKE patterns hide the search word from a cached generic plan, which
+                # then walks the popularity index even for rare words ("shampoo": millions of
+                # rows). Plan each search for its actual words.
+                await session.execute(text("SET LOCAL plan_cache_mode = force_custom_plan"))
                 try:
-                    found = list((await session.execute(prefix)).scalars().all())
-                    found += (await session.execute(popular)).scalars().all()
+                    return list((await session.execute(stmt)).scalars().all())
                 except DBAPIError as exc:
                     if "statement timeout" in str(exc).lower():
                         logger.warning("catalog search timed out for %r", query)
                         raise CatalogSearchTimeout(query) from exc
                     raise
-        unique = {entry.id: entry for entry in found}
-        return list(unique.values())[:limit]
 
     async def link_product(self, gtin14: str, product_id: uuid.UUID) -> None:
         async with self._sessions() as session:

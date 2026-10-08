@@ -216,6 +216,12 @@ Decided while writing the phase 1 plan (`docs/superpowers/plans/2026-10-07-catal
 - **Search** (20 common queries through the repository, full index): p50 47 ms · p95 107 ms · max 185 ms.
   The first design ("prefix first" ORDER BY) failed the gate (p95 348 ms, max 438 ms) because common words
   forced a sort of every match; search now runs two popularity-ordered queries over a popularity index.
+- **Live API check on `main` (smoke test)** found common words timing out in the full request path
+  (bound parameters → cached generic plans; one plan can't serve both common and rare words). Search now
+  forces custom plans, races the popularity-walk and trigram-bitmap plans for the main query (same rows,
+  first answer wins), runs the prefix query best-effort (150 ms) in parallel, and gives the main query an
+  800 ms budget for cold caches. Warm API search over 24 queries: p50 17 ms · p95 32 ms · max ~230 ms,
+  no empty results.
 - **GTIN lookup:** ≤ 6 ms.
 - **First scan** of a product only in the index hydrates inline in ~0.5–0.7 s; the second scan is ~12 ms.
 - **Found and fixed:** OFF API v3.6 leaves `nutriments` empty (nutrition moved to

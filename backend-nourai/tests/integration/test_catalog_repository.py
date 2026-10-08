@@ -107,3 +107,48 @@ async def test_an_unpopular_name_prefix_match_survives_a_window_full_of_popular_
     results = await CatalogRepository(async_session_factory).search("nutella", category=None, limit=60)
     assert len(results) == 60
     assert results[0].external_id == "rare"
+
+
+async def test_a_slow_prefix_query_is_skipped_not_fatal(monkeypatch):
+    """The prefix query only improves the window; if it times out, popular matches still return."""
+    from app.repositories.catalog import CatalogSearchTimeout
+
+    await _add("open-food-facts", "1", "Chocolate bar", popularity=50, gtin14="00000000000001")
+    repo = CatalogRepository(async_session_factory)
+
+    async def slow_prefix(*args, **kwargs):
+        raise CatalogSearchTimeout("chocolate")
+
+    monkeypatch.setattr(repo, "_run_prefix", slow_prefix)
+    results = await repo.search("chocolate", category=None)
+    assert [r.external_id for r in results] == ["1"]
+
+
+async def test_when_one_query_plan_times_out_the_other_answers(monkeypatch):
+    """Popular-first index walks are fast for common words, trigram bitmaps for rare ones; we race both."""
+    from app.repositories.catalog import CatalogSearchTimeout
+
+    await _add("open-beauty-facts", "s1", "Shampoo", category="cosmetic", gtin14="00000000000001")
+    repo = CatalogRepository(async_session_factory)
+    real_run = repo._run
+
+    async def index_walk_times_out(stmt, timeout_ms, query, *, bitmap_only=False):
+        if not bitmap_only:
+            raise CatalogSearchTimeout(query)
+        return await real_run(stmt, timeout_ms, query, bitmap_only=True)
+
+    monkeypatch.setattr(repo, "_run", index_walk_times_out)
+    assert [r.external_id for r in await repo.search("shampoo", category=None)] == ["s1"]
+
+
+async def test_when_both_query_plans_time_out_the_search_times_out(monkeypatch):
+    from app.repositories.catalog import CatalogSearchTimeout
+
+    repo = CatalogRepository(async_session_factory)
+
+    async def always_times_out(stmt, timeout_ms, query, *, bitmap_only=False):
+        raise CatalogSearchTimeout(query)
+
+    monkeypatch.setattr(repo, "_run", always_times_out)
+    with pytest.raises(CatalogSearchTimeout):
+        await repo.search("shampoo", category=None)
