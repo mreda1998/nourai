@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
 
-import Purchases from 'react-native-purchases';
 import { supabase } from '@/lib/supabase';
 import { api, configureAuthTokenProvider, type OnboardingProfile, type UserHealthProfile } from '@/services/api';
 
@@ -68,7 +67,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session?.user) {
           setUser(userFromSupabase(session.user));
           setIsSignedIn(true);
-          Purchases.logIn(session.user.id).catch(() => {});
 
           // If there's a live session but no local profile, fetch from backend.
           // Covers: post-signOut restart, OS-cleared AsyncStorage, or fresh install
@@ -219,11 +217,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { session } = data;
     if (!session?.access_token) return;
 
-    // Identify this user in RevenueCat so purchases are tied to their account.
-    if (session.user?.id) {
-      Purchases.logIn(session.user.id).catch(() => {});
-    }
-
     // Always pull the authoritative profile from the backend first.
     // This handles: new device, reinstall, different user signing in.
     const backendRestored = await restoreProfileFromBackend(session.access_token);
@@ -251,10 +244,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (session?.access_token && onboardingProfile) {
       await syncProfileToBackend(session.access_token, onboardingProfile);
-    }
-
-    if (session?.user?.id) {
-      Purchases.logIn(session.user.id).catch(() => {});
     }
 
     // When email confirmation is required, Supabase returns user but no session
@@ -288,10 +277,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { session } = data;
     if (!session?.access_token) return;
 
-    if (session.user?.id) {
-      Purchases.logIn(session.user.id).catch(() => {});
-    }
-
     const backendRestored = await restoreProfileFromBackend(session.access_token);
     if (!backendRestored) {
       const localProfile =
@@ -305,9 +290,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    // Reset RevenueCat to anonymous — clears the user ID so the next
-    // user who signs in on this device starts with a clean entitlement state.
-    Purchases.logOut().catch(() => {});
     // Clear per-user profile so a different account signing in on this device
     // doesn't inherit the previous user's concern/goal tags.
     // We keep ONBOARDING_KEY + isOnboarded so the same user won't re-onboard.

@@ -11,7 +11,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Query
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DBSession
+from app.api.deps import PremiumUser, DBSession
 from app.models.ingredient import Ingredient, IngredientCategory
 from app.schemas.ingredient import PeptidesResponse
 
@@ -23,7 +23,7 @@ WADA_PROHIBITED = {"prohibited_in_competition", "prohibited_all"}
 @router.get("", response_model=PeptidesResponse)
 async def list_peptides(
     db: DBSession,
-    current_user: CurrentUser,
+    current_user: PremiumUser,
     search: str | None = Query(default=None, min_length=2),
     us_status: str | None = Query(default=None),
     wada_safe: bool = Query(default=False),

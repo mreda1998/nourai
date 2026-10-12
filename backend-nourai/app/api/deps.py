@@ -1,10 +1,11 @@
 """Shared API dependencies."""
 from typing import Annotated
 
-from fastapi import Depends, Header, Query
+from fastapi import Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.security import get_current_user, get_current_user_optional
 from app.db.session import get_db
 from app.models.user import UserProfile
@@ -105,3 +106,17 @@ def get_subscription_service(
 ) -> SubscriptionService:
     """Get SubscriptionService instance."""
     return SubscriptionService(sub_repo, user_repo)
+
+
+async def require_premium(
+    current_user: CurrentUser,
+    service: Annotated[SubscriptionService, Depends(get_subscription_service)],
+) -> UserProfile:
+    if settings.premium_open_beta:
+        return current_user
+    if not await service.is_premium(current_user.id):
+        raise HTTPException(status_code=403, detail="An active Elory Premium subscription is required")
+    return current_user
+
+
+PremiumUser = Annotated[UserProfile, Depends(require_premium)]

@@ -919,12 +919,9 @@ class APIService {
   /**
    * Verify subscription status with RevenueCat
    */
-  async verifySubscription(authToken: string): Promise<{
-    is_premium: boolean;
-    entitlements: string[];
-    expires_at: string | null;
-  }> {
+  async verifySubscription(authToken: string): Promise<Subscription> {
     return this.fetch('/users/me/subscription/verify', {
+      method: 'POST',
       headers: { Authorization: `Bearer ${authToken}` },
     });
   }
@@ -1060,9 +1057,14 @@ class APIService {
    * Returns StackEntry[] — each entry has its own UUID (id) used for deletion.
    */
   async getStack(authToken: string): Promise<StackEntry[]> {
-    return this.fetch<StackEntry[]>('/users/me/stack', {
-      headers: { Authorization: `Bearer ${authToken}` },
-    });
+    const entries: StackEntry[] = [];
+    for (let offset = 0; ; offset += 100) {
+      const page = await this.fetch<StackEntry[]>(`/users/me/stack?scope=all&limit=100&offset=${offset}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      entries.push(...page);
+      if (page.length < 100) return entries;
+    }
   }
 
   /**

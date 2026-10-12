@@ -64,7 +64,7 @@ class UserRepository(BaseRepository[UserProfile]):
             select(UserStackEntry)
             .where(UserStackEntry.user_id == user_id)
             .options(selectinload(UserStackEntry.product))
-            .order_by(UserStackEntry.logged_at.desc())
+            .order_by(UserStackEntry.logged_at.desc(), UserStackEntry.id.desc())
         )
 
         if start_date:

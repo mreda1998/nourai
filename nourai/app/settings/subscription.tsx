@@ -2,36 +2,39 @@ import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, Crown } from 'lucide-react-native';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { TESTER_MODE } from '@/lib/tester-mode';
+import { useAuth } from '@/context/auth-context';
 import { usePurchases } from '@/context/purchases-context';
+import { selectSubscriptionPackage } from '@/utils/subscription-plans';
 import { Palette, Radius } from '@/constants/theme';
 import { Imagery } from '@/constants/imagery';
 import { Button, PressableScale, Screen, Txt } from '@/components/ui';
 
 const FEATURES = [
-  ['Ask Elory', 'Answers grounded in your own stack'],
-  ['Timing protocol', 'What to take, and when'],
-  ['Interaction map', 'Synergies and conflicts at a glance'],
-  ['Exposure ledger', 'Cumulative additive load over time'],
-  ['Evidence pulse', 'New research, translated weekly'],
-  ['Peptides library', 'Mechanisms, evidence and regulation'],
+  ['Ask Elory', 'Personal answers grounded in your stack'],
+  ['Routine timing', 'Explore ingredient timing information'],
+  ['Interaction map', 'See competing ingredients at a glance'],
+  ['Ingredient overview', 'Review label-based flags and their limits'],
+  ['Evidence pulse', 'New research, translated clearly'],
+  ['Peptides library', 'Mechanisms, evidence and safety'],
 ];
-
-const isAnnual = (p: PurchasesPackage) => /annual|year/i.test(p.packageType ?? '') || /year/i.test(p.identifier);
-const isMonthly = (p: PurchasesPackage) => /monthly|month/i.test(p.packageType ?? '') || /month/i.test(p.identifier);
 
 export default function SubscriptionScreen() {
   const insets = useSafeAreaInsets();
-  const { isLoading, isPremium, offerings, purchasePackage, restorePurchases, presentPaywall, presentCustomerCenter } = usePurchases();
+  const { isSignedIn } = useAuth();
+  const { isLoading, isPremium, error, refreshCustomerInfo, offerings, purchasePackage, restorePurchases, presentCustomerCenter } = usePurchases();
   const packages = offerings?.current?.availablePackages ?? [];
-  const annual = packages.find(isAnnual);
-  const monthly = packages.find(isMonthly);
-  const [choice, setChoice] = useState<'annual' | 'monthly'>(annual ? 'annual' : 'monthly');
+  // Only ever sell the exact period shown: a missing yearly plan never falls back to monthly.
+  const annual = selectSubscriptionPackage(packages, 'annual');
+  const monthly = selectSubscriptionPackage(packages, 'monthly');
+  const [choice, setChoice] = useState<'annual' | 'monthly' | null>(null);
   const [busy, setBusy] = useState(false);
-  const selected = (choice === 'annual' ? annual : monthly) ?? packages[0];
+  const period = choice ?? (annual ? 'annual' : 'monthly');
+  const selected = period === 'annual' ? annual : monthly;
 
   const savings = useMemo(() => {
     if (!annual || !monthly) return null;
@@ -39,11 +42,11 @@ export default function SubscriptionScreen() {
     return pct > 0 ? pct : null;
   }, [annual, monthly]);
 
-  const hasTrial = !!selected?.product.introPrice;
-
   const buy = async () => {
+    if (!isSignedIn) { router.push('/auth'); return; }
+    if (!selected || busy) return;
     setBusy(true);
-    try { if (selected) await purchasePackage(selected); else await presentPaywall(); }
+    try { await purchasePackage(selected); }
     catch (e) { Alert.alert('Purchase didn’t complete', e instanceof Error ? e.message : 'Please try again.'); }
     finally { setBusy(false); }
   };
@@ -52,6 +55,9 @@ export default function SubscriptionScreen() {
     try {
       const found = await restorePurchases();
       Alert.alert(found ? 'Restored' : 'Nothing to restore', found ? 'Your Elory Premium access is active.' : 'No active subscription was found for this account.');
+    } catch (e) {
+      // A failed check is not the same as "no purchases".
+      Alert.alert('Restore unavailable', e instanceof Error ? e.message : 'We couldn’t check your purchases. Please try again.');
     } finally { setBusy(false); }
   };
 
@@ -86,13 +92,24 @@ export default function SubscriptionScreen() {
     return (
       <Screen night back hero={hero}>
         <Txt variant="callout" tone="inverse2" style={{ marginTop: 16 }}>Every evidence tool is unlocked. Thank you for supporting independent research.</Txt>
-        <Button label="Manage subscription" variant="night" style={{ marginTop: 24 }} onPress={() => presentCustomerCenter()} />
+        <Button
+          label="Manage subscription"
+          variant="night"
+          style={{ marginTop: 24 }}
+          onPress={() => presentCustomerCenter().catch(() => Alert.alert('Management unavailable', 'Please try again, or manage your subscription in your store account.'))}
+        />
       </Screen>
     );
   }
 
   return (
     <Screen night back hero={hero}>
+      {error ? (
+        <View style={{ marginTop: 16 }}>
+          <Txt variant="callout" tone="inverse2">{error}</Txt>
+          <Button label="Retry verification" variant="tertiary" disabled={busy} onPress={() => refreshCustomerInfo()} style={{ marginTop: 4 }} />
+        </View>
+      ) : null}
       <View style={{ gap: 14, marginTop: 20 }}>
         {FEATURES.map(([t, d]) => (
           <View key={t} style={{ flexDirection: 'row', gap: 12 }}>
@@ -105,17 +122,27 @@ export default function SubscriptionScreen() {
         ))}
       </View>
 
-      {packages.length ? (
+      {annual || monthly ? (
         <View style={{ gap: 10, marginTop: 28 }}>
-          {annual ? <Plan pkg={annual} title="Yearly" selected={choice === 'annual'} onPress={() => setChoice('annual')} badge={savings ? `Save ${savings}%` : undefined} period="year" /> : null}
-          {monthly ? <Plan pkg={monthly} title="Monthly" selected={choice === 'monthly'} onPress={() => setChoice('monthly')} period="month" /> : null}
+          {annual ? <Plan pkg={annual} title="Yearly" selected={period === 'annual'} onPress={() => setChoice('annual')} badge={savings ? `Save ${savings}%` : undefined} period="year" /> : null}
+          {monthly ? <Plan pkg={monthly} title="Monthly" selected={period === 'monthly'} onPress={() => setChoice('monthly')} period="month" /> : null}
         </View>
-      ) : null}
+      ) : (
+        <Txt variant="callout" tone="inverse2" style={{ marginTop: 28 }}>Plans couldn’t be loaded. Please try again later.</Txt>
+      )}
 
-      <Button label={hasTrial ? 'Start free trial' : packages.length ? 'Subscribe' : 'See plans'} variant="night" loading={busy} style={{ marginTop: 20 }} onPress={buy} />
+      <Button
+        label={isSignedIn ? 'Continue to checkout' : 'Sign in to subscribe'}
+        variant="night"
+        loading={busy}
+        disabled={isSignedIn && !selected}
+        style={{ marginTop: 20 }}
+        onPress={buy}
+      />
       <Button label="Restore purchases" variant="tertiary" disabled={busy} onPress={restore} style={{ marginTop: 4 }} />
+      <Button label="Privacy & data" variant="tertiary" onPress={() => router.push('/settings/privacy')} />
       <Txt variant="caption" tone="inverse3" align="center" style={{ marginTop: 12 }}>
-        Renews automatically unless cancelled at least 24 hours before the period ends. Managed by your {Platform.OS === 'ios' ? 'Apple' : 'Google Play'} account.
+        The store shows the final price and any offer you’re eligible for before you confirm. Renews automatically unless cancelled at least 24 hours before the period ends. Managed by your {Platform.OS === 'ios' ? 'Apple' : 'Google Play'} account.
       </Txt>
     </Screen>
   );

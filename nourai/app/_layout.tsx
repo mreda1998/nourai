@@ -1,6 +1,6 @@
 import '../global.css';
 
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback } from 'react';
 import { configureRevenueCat } from '@/lib/revenue-cat';
 
 // Configure RevenueCat as early as possible — before any component mounts.
@@ -25,43 +25,16 @@ import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { Palette } from '@/constants/theme';
 import * as SplashScreen from 'expo-splash-screen';
 
-import { AppStateProvider, useAppState } from '@/context/app-state';
+import { AppStateProvider } from '@/context/app-state';
 import { AuthProvider, useAuth } from '@/context/auth-context';
 import { PurchasesProvider } from '@/context/purchases-context';
-import { supabase } from '@/lib/supabase';
-import { api } from '@/services/api';
 
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
-  const { isLoading, isOnboarded, isSignedIn } = useAuth();
-  const { stack } = useAppState();
+  const { isLoading, isOnboarded } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-
-  // Migrate guest stack to server on sign-in (fire-and-forget, best-effort).
-  const prevIsSignedInRef = useRef(false);
-  useEffect(() => {
-    const wasSignedIn = prevIsSignedInRef.current;
-    prevIsSignedInRef.current = isSignedIn;
-
-    if (!isSignedIn || wasSignedIn || stack.length === 0) return;
-
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-      for (const product of stack) {
-        try {
-          await api.addToStack(session.access_token, product.id, product.timeOfDay, {
-            loggedAt: product.scannedAt,
-            notes: product.quantity,
-          });
-        } catch {
-          // Non-fatal — the stack tab will reload from server anyway
-        }
-      }
-    })();
-  }, [isSignedIn]);
 
   useEffect(() => {
     if (isLoading) return;

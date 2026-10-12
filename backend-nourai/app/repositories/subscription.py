@@ -1,10 +1,11 @@
 """Subscription repository using SQLAlchemy 2.0."""
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
 
 from app.models.subscription import Subscription, SubscriptionStatus, SubscriptionTier
+from app.models.user import UserProfile
 from app.repositories.base import BaseRepository
 
 
@@ -12,6 +13,10 @@ class SubscriptionRepository(BaseRepository[Subscription]):
     """Repository for Subscription entity."""
 
     model = Subscription
+
+    async def lock_user(self, user_id: UUID) -> None:
+        # Serialize reconciliation before the remote read, including first purchase.
+        await self.db.execute(select(UserProfile.id).where(UserProfile.id == user_id).with_for_update())
 
     async def get_by_user_id(self, user_id: UUID) -> Subscription | None:
         """Get subscription by user ID."""
@@ -30,6 +35,7 @@ class SubscriptionRepository(BaseRepository[Subscription]):
         revenuecat_id: str | None = None,
         expires_at: datetime | None = None,
         started_at: datetime | None = None,
+        canceled_at: datetime | None = None,
     ) -> Subscription:
         """Create or update a subscription."""
         subscription = await self.get_by_user_id(user_id)
@@ -41,6 +47,7 @@ class SubscriptionRepository(BaseRepository[Subscription]):
             subscription.store_transaction_id = store_transaction_id
             subscription.revenuecat_id = revenuecat_id
             subscription.expires_at = expires_at
+            subscription.canceled_at = canceled_at
             if started_at:
                 subscription.started_at = started_at
         else:
@@ -52,7 +59,8 @@ class SubscriptionRepository(BaseRepository[Subscription]):
                 store_transaction_id=store_transaction_id,
                 revenuecat_id=revenuecat_id,
                 expires_at=expires_at,
-                started_at=started_at or datetime.utcnow(),
+                canceled_at=canceled_at,
+                started_at=started_at or datetime.now(timezone.utc),
             )
             self.db.add(subscription)
 
@@ -75,7 +83,7 @@ class SubscriptionRepository(BaseRepository[Subscription]):
             store=store,
             store_transaction_id=store_transaction_id,
             expires_at=expires_at,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
         )
 
     async def cancel(self, user_id: UUID) -> Subscription | None:
@@ -85,7 +93,7 @@ class SubscriptionRepository(BaseRepository[Subscription]):
             return None
 
         subscription.status = SubscriptionStatus.CANCELED
-        subscription.canceled_at = datetime.utcnow()
+        subscription.canceled_at = datetime.now(timezone.utc)
         await self.db.commit()
         await self.db.refresh(subscription)
         return subscription

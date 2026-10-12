@@ -1,6 +1,6 @@
 """Stack API endpoints for user supplement logs."""
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -46,11 +46,18 @@ def _entry_with_product(entry) -> StackEntryWithProduct:
 @router.get("", response_model=list[StackEntryWithProduct])
 async def get_stack(
     stack_date: date | None = Query(None, alias="date"),
+    scope: Literal["day", "all"] = Query("day"),
+    limit: int = Query(100, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     current_user: CurrentUser = None,
     service: Annotated[StackService, Depends(get_stack_service)] = None,
 ):
     """Get user's stack for a specific date (defaults to today)."""
-    if stack_date:
+    if scope == "all":
+        if stack_date:
+            raise HTTPException(status_code=422, detail="Choose a date or all entries, not both")
+        entries = await service.get_stack(current_user.id, limit=limit, offset=offset)
+    elif stack_date:
         target_datetime = datetime.combine(stack_date, datetime.min.time())
         entries = await service.get_daily_stack(current_user.id, target_datetime)
     else:

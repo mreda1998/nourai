@@ -21,7 +21,7 @@ import {
 const HERO_H = 380;
 
 export default function TodayScreen() {
-  const { stack } = useAppState();
+  const { stack, isStackLoading, stackError, refreshStack } = useAppState();
   const { user } = useAuth();
   const [score, setScore] = useState<DailyScoreResponse | null>(null);
   const [scoreLoading, setScoreLoading] = useState(true);
@@ -45,16 +45,24 @@ export default function TodayScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const refresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
+  const refresh = async () => {
+    setRefreshing(true);
+    await Promise.allSettled([load(), refreshStack()]);
+    setRefreshing(false);
+  };
   const hasStack = stack.length > 0;
+  // Until the saved stack loads (or if it can't), don't greet a returning user as new.
+  const stackUnknown = !hasStack && (isStackLoading || !!stackError);
 
   return (
     <Screen tabbed hero={<Hero name={firstName} />} refreshing={refreshing} onRefresh={refresh}>
       <View style={{ marginTop: -150 }}>
-        {hasStack ? <ScoreCard score={score} loading={scoreLoading} failed={scoreFailed} /> : <WelcomeCard />}
+        {hasStack ? <ScoreCard score={score} loading={scoreLoading} failed={scoreFailed} />
+          : stackUnknown ? <StackStatus failed={!!stackError} onRetry={() => refreshStack().catch(() => undefined)} />
+            : <WelcomeCard />}
       </View>
 
-      {hasStack ? <Protocol stack={stack} /> : <HowItWorks />}
+      {hasStack ? <Protocol stack={stack} /> : stackUnknown ? null : <HowItWorks />}
 
       {recent.length > 0 ? (
         <Section title="Recently scanned" action="History" onAction={() => router.push('/(tabs)/history' as never)}>
@@ -158,6 +166,26 @@ function ScoreCard({ score, loading, failed }: { score: DailyScoreResponse | nul
   );
 }
 
+function StackStatus({ failed, onRetry }: { failed: boolean; onRetry: () => void }) {
+  return (
+    <Card padding={24}>
+      {failed ? (
+        <>
+          <Txt variant="title2">Your stack couldn’t be loaded.</Txt>
+          <Txt variant="subhead" tone="secondary" style={{ marginTop: 8 }}>Check your connection and try again.</Txt>
+          <Button label="Try again" variant="secondary" style={{ marginTop: 18 }} onPress={onRetry} />
+        </>
+      ) : (
+        <View style={{ gap: 12 }}>
+          <Skeleton width={140} height={14} />
+          <Skeleton width={220} height={24} />
+          <Skeleton width={180} height={14} />
+        </View>
+      )}
+    </Card>
+  );
+}
+
 // ─── First run ────────────────────────────────────────────────────────────────
 
 function WelcomeCard() {
@@ -218,7 +246,7 @@ function Protocol({ stack }: { stack: Product[] }) {
   })).filter((g) => g.items.length), [stack]);
 
   return (
-    <Section title="Today’s protocol" caption={`${stack.length} product${stack.length === 1 ? '' : 's'} in your stack`} action="Edit" onAction={() => router.push('/(tabs)/stack' as never)}>
+    <Section title="Your routine" caption={`${stack.length} saved product${stack.length === 1 ? '' : 's'} · actual use may vary`} action="Edit" onAction={() => router.push('/(tabs)/stack' as never)}>
       <Card padding={18}>
         {groups.map((g, gi) => (
           <View key={g.key} style={{ flexDirection: 'row', gap: 14 }}>
@@ -229,7 +257,7 @@ function Protocol({ stack }: { stack: Product[] }) {
             <View style={{ flex: 1, paddingBottom: gi < groups.length - 1 ? 18 : 0 }}>
               <Txt variant="overline" tone="secondary" style={{ marginTop: 7, marginBottom: 8 }}>{g.label}</Txt>
               {g.items.map((p) => (
-                <PressableScale key={p.id} onPress={() => router.push(`/product/${p.id}?via=stack` as never)} style={styles.protoRow} accessibilityLabel={p.name}>
+                <PressableScale key={p.stackEntryId ?? p.id} onPress={() => router.push(`/product/${p.id}?via=stack` as never)} style={styles.protoRow} accessibilityLabel={p.name}>
                   <ProductImage uri={p.imageUri} category={p.category} size={40} />
                   <View style={{ flex: 1 }}>
                     <Txt variant="subheadStrong" numberOfLines={1}>{p.name}</Txt>

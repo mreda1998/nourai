@@ -35,7 +35,13 @@ class Settings(BaseSettings):
     submission_daily_limit: int = 20  # per device, rolling 24 h
 
     # RevenueCat
-    revenuecat_webhook_secret: str = ""
+    revenuecat_webhook_secret: str = ""  # Exact Authorization header configured in RevenueCat
+    revenuecat_secret_api_key: str = ""  # Server-only v1 API key
+    revenuecat_entitlement_id: str = "Elory Pro"
+    revenuecat_allow_sandbox: bool = False
+    # Friends beta (EXPO_PUBLIC_TESTER_MODE builds skip RevenueCat): every signed-in
+    # user gets premium features. Must be off before selling subscriptions.
+    premium_open_beta: bool = False
 
     # External APIs
     openfoodfacts_api_base: str = "https://world.openfoodfacts.org/api/v3.6"

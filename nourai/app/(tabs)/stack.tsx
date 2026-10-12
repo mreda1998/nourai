@@ -1,17 +1,14 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActionSheetIOS, Alert, Platform, View } from 'react-native';
+import { ActionSheetIOS, ActivityIndicator, Alert, Platform, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { Clock, GitCompareArrows, Layers, Moon, Plus, ScanLine, Sun, Sunrise, Sunset } from 'lucide-react-native';
 import { useAppState, type Product } from '@/context/app-state';
-import { useAuth } from '@/context/auth-context';
-import { api } from '@/services/api';
-import { accessToken, syncRemoveFromStack } from '@/lib/stack-sync';
 import { Palette } from '@/constants/theme';
-import { categoryLabel, gradeToScore, scoreQualifier } from '@/utils/grade';
+import { categoryLabel } from '@/utils/grade';
 import {
-  Button, Card, ChipRow, EmptyState, IconButton, ListGroup, ListRow, ProductImage, ScoreBadge, Screen, Section, Txt,
+  Button, Card, ChipRow, EmptyState, IconButton, ListGroup, ListRow, ProductImage, Screen, Section, Txt,
 } from '@/components/ui';
 
 const SLOTS = [
@@ -23,33 +20,29 @@ const SLOTS = [
 ] as const;
 
 export default function StackScreen() {
-  const { stack, hydrateFromServer, removeFromStack } = useAppState();
-  const { isSignedIn } = useAuth();
+  const { stack, refreshStack, removeFromStack, isStackLoading, stackError } = useAppState();
   const [filter, setFilter] = useState('all');
+  const [removing, setRemoving] = useState(false);
 
-  useFocusEffect(useCallback(() => {
-    if (!isSignedIn) return;
-    let alive = true;
-    (async () => {
-      const token = await accessToken();
-      if (!token) return;
-      const entries = await api.getStack(token);
-      if (alive) hydrateFromServer(entries);
-    })().catch(() => {});
-    return () => { alive = false; };
-  }, [hydrateFromServer, isSignedIn]));
+  // The server is the record for signed-in accounts; refresh whenever the tab is shown.
+  useFocusEffect(useCallback(() => { refreshStack().catch(() => undefined); }, [refreshStack]));
 
   const categories = useMemo(() => Array.from(new Set(stack.map((p) => p.category))), [stack]);
   const filtered = filter === 'all' ? stack : stack.filter((p) => p.category === filter);
   const groups = SLOTS.map((s) => ({ ...s, items: filtered.filter((p) => (p.timeOfDay ?? 'anytime') === s.key) })).filter((g) => g.items.length);
+  const missingAmounts = stack.filter((p) => !p.quantity?.trim()).length;
 
-  const scores = stack.map((p) => gradeToScore(p.grade)).filter((s): s is number => s != null);
-  const average = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
-
-  const remove = (item: Product) => {
+  // Waits for the server before the row disappears, and says so when it fails.
+  const remove = async (item: Product) => {
+    if (removing) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    removeFromStack(item.id);
-    if (isSignedIn) syncRemoveFromStack(item.id);
+    setRemoving(true);
+    try {
+      if (!item.stackEntryId) throw new Error('Refresh your stack before removing this product.');
+      await removeFromStack(item.stackEntryId);
+    } catch (error) {
+      Alert.alert('Product not removed', error instanceof Error ? error.message : 'Please try again.');
+    } finally { setRemoving(false); }
   };
 
   const openActions = (item: Product) => {
@@ -70,6 +63,23 @@ export default function StackScreen() {
 
   const addButton = <IconButton icon={Plus} label="Add a product" variant="accent" onPress={() => router.push('/(tabs)/explore' as never)} />;
 
+  const status = stackError ? (
+    <Card padding={16} style={{ marginTop: 8 }}>
+      <Txt variant="callout" tone="secondary">
+        {stack.length ? 'We couldn’t refresh your stack. What’s shown may be out of date.' : 'Your stack couldn’t be loaded.'}
+      </Txt>
+      <Button label="Try again" variant="tertiary" onPress={() => refreshStack().catch(() => undefined)} style={{ marginTop: 4 }} />
+    </Card>
+  ) : null;
+
+  if (!stack.length && (isStackLoading || stackError)) {
+    return (
+      <Screen tabbed title="Your stack" right={addButton}>
+        {status ?? <ActivityIndicator color={Palette.accent} style={{ marginTop: 48 }} />}
+      </Screen>
+    );
+  }
+
   if (!stack.length) {
     return (
       <Screen tabbed title="Your stack" right={addButton}>
@@ -77,7 +87,7 @@ export default function StackScreen() {
           <EmptyState
             icon={Layers}
             title="Build your stack"
-            message="Add the supplements, skincare and foods you use. Elory scores how they work together and flags conflicts."
+            message="Add the products you actually use, with the amount from the label, so you can review the evidence in context."
           />
           <View style={{ gap: 10, padding: 12, paddingTop: 0 }}>
             <Button label="Scan a product" icon={<ScanLine size={19} color={Palette.onAccent} />} onPress={() => router.push('/(tabs)/scan' as never)} />
@@ -90,18 +100,23 @@ export default function StackScreen() {
 
   return (
     <Screen tabbed title="Your stack" subtitle={`${stack.length} product${stack.length === 1 ? '' : 's'}`} right={addButton}>
+      {status}
       <Animated.View entering={FadeInDown.duration(500)}>
         <Card padding={20}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-            <ScoreBadge score={average} size={68} />
-            <View style={{ flex: 1 }}>
-              <Txt variant="overline" tone="secondary">Average product score</Txt>
-              <Txt variant="title2" style={{ marginTop: 2 }}>{scoreQualifier(average)}</Txt>
-              <Txt variant="footnote" tone="secondary" style={{ marginTop: 2 }}>
-                {categories.map((c) => `${stack.filter((p) => p.category === c).length} ${categoryLabel(c).toLowerCase()}`).join(' · ')}
-              </Txt>
+          <View style={{ flexDirection: 'row', gap: 28 }}>
+            <View>
+              <Txt variant="title1">{stack.length}</Txt>
+              <Txt variant="footnote" tone="secondary">saved product{stack.length === 1 ? '' : 's'}</Txt>
+            </View>
+            <View>
+              <Txt variant="title1">{missingAmounts}</Txt>
+              <Txt variant="footnote" tone="secondary">missing amount{missingAmounts === 1 ? '' : 's'}</Txt>
             </View>
           </View>
+          <Txt variant="footnote" tone="secondary" style={{ marginTop: 12 }}>
+            {categories.map((c) => `${stack.filter((p) => p.category === c).length} ${categoryLabel(c).toLowerCase()}`).join(' · ')}
+            {' · '}Saved isn’t the same as taken — actual use may vary.
+          </Txt>
         </Card>
       </Animated.View>
 
@@ -125,11 +140,10 @@ export default function StackScreen() {
             <ListGroup>
               {g.items.map((p) => (
                 <ListRow
-                  key={p.id}
+                  key={p.stackEntryId ?? p.id}
                   leading={<ProductImage uri={p.imageUri} category={p.category} size={44} />}
                   title={p.name}
-                  subtitle={[p.brand, p.quantity].filter(Boolean).join(' · ') || categoryLabel(p.category)}
-                  trailing={<ScoreBadge score={gradeToScore(p.grade)} size={36} />}
+                  subtitle={[p.brand || categoryLabel(p.category), p.quantity?.trim() || 'Amount not recorded'].join(' · ')}
                   chevron={false}
                   onPress={() => openActions(p)}
                 />

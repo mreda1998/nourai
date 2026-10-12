@@ -1,6 +1,6 @@
 """Subscription models using SQLAlchemy 2.0."""
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -72,10 +72,17 @@ class Subscription(Base, UUIDMixin, TimestampMixin):
     @property
     def is_premium(self) -> bool:
         """Check if subscription grants premium access."""
-        return (
-            self.tier == SubscriptionTier.PREMIUM
-            and self.status in (SubscriptionStatus.ACTIVE, SubscriptionStatus.GRACE_PERIOD)
-        )
+        if self.tier != SubscriptionTier.PREMIUM or self.status not in (
+            SubscriptionStatus.ACTIVE, SubscriptionStatus.GRACE_PERIOD, SubscriptionStatus.CANCELED,
+        ):
+            return False
+        if self.expires_at is None:
+            # Elory currently sells recurring plans only.
+            return False
+        expiry = self.expires_at
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+        return expiry > datetime.now(timezone.utc)
 
     def __repr__(self) -> str:
         return f"<Subscription {self.tier} ({self.status}) for user {self.user_id}>"

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
@@ -15,12 +15,10 @@ const PERKS = [
   { Icon: Newspaper, text: 'Weekly evidence brief' },
 ];
 
-/** Paywall overlay for premium routes. In dev builds it offers a preview. */
+/** Paywall overlay for premium routes. */
 export function PremiumLock({ featureName }: { featureName?: string }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [bypassed, setBypassed] = useState(false);
-  if (bypassed) return null;
 
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -42,10 +40,10 @@ export function PremiumLock({ featureName }: { featureName?: string }) {
           ))}
         </View>
         <Button
-          label={__DEV__ ? 'Preview (dev build)' : 'See plans'}
+          label="See plans"
           variant="night"
           style={{ marginTop: 24 }}
-          onPress={() => (__DEV__ ? setBypassed(true) : router.push('/settings/subscription'))}
+          onPress={() => router.push('/settings/subscription')}
         />
       </Animated.View>
     </View>

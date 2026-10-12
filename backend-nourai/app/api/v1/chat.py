@@ -11,7 +11,7 @@ import anthropic
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import delete, func, select
 
-from app.api.deps import CurrentUser, DBSession, OptionalUser
+from app.api.deps import CurrentUser, DBSession, PremiumUser
 from app.core.config import settings
 from app.models.chat_message import ChatMessage
 from app.schemas.chat import (
@@ -139,7 +139,7 @@ async def clear_chat_history(
 async def chat_message(
     request: ChatRequest,
     db: DBSession,
-    current_user: OptionalUser,
+    current_user: PremiumUser,
 ) -> ChatResponse:
     """
     Send a message to the Elory stack assistant.

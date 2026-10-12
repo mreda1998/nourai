@@ -23,7 +23,7 @@ from app.schemas.user import (
 )
 from app.services.stack_score import daily_score, health_domain, load_product_ingredients
 from app.schemas.subscription import SubscriptionResponse
-from app.services.subscription import SubscriptionService
+from app.services.subscription import SubscriptionService, SubscriptionUnavailable
 
 router = APIRouter()
 
@@ -195,6 +195,22 @@ async def get_subscription(
         status=subscription.status,
         is_premium=subscription.is_premium,
         expires_at=subscription.expires_at,
+    )
+
+
+@router.post("/me/subscription/verify", response_model=SubscriptionResponse)
+async def verify_subscription(
+    current_user: CurrentUser,
+    service: Annotated[SubscriptionService, Depends(get_subscription_service)],
+):
+    """Verify only the authenticated user's entitlement; never accept client grants."""
+    try:
+        subscription = await service.reconcile(current_user.id, current_user.supabase_id)
+    except SubscriptionUnavailable:
+        raise HTTPException(status_code=503, detail="Subscription verification unavailable")
+    return SubscriptionResponse(
+        tier=subscription.tier, status=subscription.status,
+        is_premium=subscription.is_premium, expires_at=subscription.expires_at,
     )
 
 

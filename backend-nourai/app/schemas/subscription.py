@@ -2,7 +2,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.models.subscription import SubscriptionStatus, SubscriptionTier
 
@@ -45,6 +45,19 @@ class RevenueCatWebhookPayload(BaseModel):
 
     api_version: str
     event: dict  # Contains type, id, app_id, etc.
+
+    @model_validator(mode="after")
+    def validate_event(self):
+        if not isinstance(self.event.get("type"), str) or not self.event["type"]:
+            raise ValueError("Missing event type")
+        for key in ("app_user_id", "id"):
+            if self.event.get(key) is not None and not isinstance(self.event[key], str):
+                raise ValueError(f"Invalid {key}")
+        for key in ("aliases", "transferred_from", "transferred_to"):
+            value = self.event.get(key)
+            if value is not None and (not isinstance(value, list) or any(not isinstance(item, str) for item in value)):
+                raise ValueError(f"Invalid {key}")
+        return self
 
     @property
     def event_type(self) -> str:

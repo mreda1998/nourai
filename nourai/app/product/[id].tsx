@@ -15,7 +15,6 @@ import { categoryLabel, gradeToScore, scoreQualifier, scoreTone, toneColor } fro
 import { AddToStackSheet, type StackEntry } from '@/components/AddToStackSheet';
 import { FeedbackSheet } from '@/components/FeedbackSheet';
 import { isCatalogueId, track } from '@/lib/insights';
-import { syncAddToStack, syncRemoveFromStack } from '@/lib/stack-sync';
 import {
   Button, Card, EmptyState, IconButton, ListGroup, ListRow, Pill, ProductImage,
   ScoreBadge, Screen, Section, SkeletonCard, Txt,
@@ -40,6 +39,7 @@ export default function ProductDetailScreen() {
   const [lab, setLab] = useState<LabObservation[]>([]);
   const [openCards, setOpenCards] = useState<Set<CardKey> | null>(null);
   const [resolving, setResolving] = useState<string | null>(null);
+  const [savingStack, setSavingStack] = useState(false);
   // A catalog product loading for the first time: what the index knows, while details arrive.
   const [pending, setPending] = useState<BarcodeIngestionResponse | null>(null);
   const alive = useRef(true);
@@ -130,31 +130,42 @@ export default function ProductDetailScreen() {
   };
 
   const onStackPress = () => {
-    if (!product) return;
+    if (!product || savingStack) return;
     if (!inStack) { sheet.current?.present(); return; }
+    const entries = stack.filter((p) => p.id === product.id);
+    // Several saved entries (different times or amounts): choose which one on the stack tab.
+    if (entries.length !== 1 || !entries[0].stackEntryId) { router.push('/(tabs)/stack' as never); return; }
+    const entryId = entries[0].stackEntryId;
     Alert.alert('Remove from stack?', `${product.name} will no longer count toward your stack score.`, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Remove', style: 'destructive', onPress: () => {
+        text: 'Remove', style: 'destructive', onPress: async () => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          removeFromStack(product.id);
-          if (isSignedIn) syncRemoveFromStack(product.id);
+          setSavingStack(true);
+          try { await removeFromStack(entryId); }
+          catch (e) { Alert.alert('Product not removed', e instanceof Error ? e.message : 'Please try again.'); }
+          finally { setSavingStack(false); }
         },
       },
     ]);
   };
 
-  const onAdd = (entry: StackEntry) => {
-    if (!product) return;
+  // The stack only changes once the account (or the device, for guests) has saved it.
+  const onAdd = async (entry: StackEntry) => {
+    if (!product || savingStack) return;
     const grade = (['A', 'B', 'C', 'D'] as const).find((g) => g === product.grade) ?? 'C';
-    addToStack({
-      id: product.id, name: product.name, brand: product.brand || '', category: product.category, grade,
-      ingredients: product.ingredients.map((i) => i.name), imageUri: product.image_url,
-      scannedAt: entry.loggedAt, timeOfDay: entry.timeOfDay, protocol: entry.protocol, quantity: entry.quantity,
-    });
-    if (isSignedIn) syncAddToStack(product.id, entry.timeOfDay, entry.loggedAt, entry.quantity);
-    sheet.current?.dismiss();
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setSavingStack(true);
+    try {
+      await addToStack({
+        id: product.id, name: product.name, brand: product.brand || '', category: product.category, grade,
+        ingredients: product.ingredients.map((i) => i.name), imageUri: product.image_url,
+        scannedAt: entry.loggedAt, timeOfDay: entry.timeOfDay, protocol: entry.protocol, quantity: entry.quantity,
+      });
+      sheet.current?.dismiss();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      Alert.alert('Product not saved', e instanceof Error ? e.message : 'Please try again.');
+    } finally { setSavingStack(false); }
   };
 
   const askRight = <IconButton icon={Sparkles} label="Ask Elory about this product" onPress={() => router.push('/(premium)/ask-elory' as never)} />;
@@ -237,6 +248,7 @@ export default function ProductDetailScreen() {
             variant={inStack ? 'secondary' : 'primary'}
             icon={inStack ? <Check size={19} color={Palette.strong} strokeWidth={2.4} /> : <Plus size={19} color={Palette.onAccent} strokeWidth={2.4} />}
             onPress={onStackPress}
+            loading={savingStack}
             style={{ flex: 1 }}
           />
         </View>

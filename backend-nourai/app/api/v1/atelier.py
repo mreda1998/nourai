@@ -10,25 +10,18 @@ import uuid
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DBSession
+from app.api.deps import CurrentUser, DBSession, require_premium
 from app.models.ingredient import Ingredient
 from app.models.ingredient_evidence import IngredientEvidence
 from app.models.ingredient_interaction import IngredientInteraction
 from app.models.product import Product, ProductIngredient
 from app.models.user import UserStackEntry
 
-router = APIRouter()
-
-
-# ─── require_premium (no-op until subscriptions go live) ─────────────────────
-
-async def require_premium(current_user: CurrentUser) -> CurrentUser:
-    # TODO: check current_user.subscription.is_premium
-    return current_user
+router = APIRouter(dependencies=[Depends(require_premium)])
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────

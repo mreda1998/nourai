@@ -9,29 +9,32 @@ const STORE_KEY = Platform.select({
   ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY,
   android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY,
 });
+const STORE_PREFIX = Platform.select({ ios: 'appl_', android: 'goog_' });
 
-export const RC_API_KEY = STORE_KEY || (__DEV__ ? DEV_TEST_KEY : undefined);
-
-export const ENTITLEMENT_ID = 'Elory Pro';
+export const ENTITLEMENT_ID = process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID || 'Elory Pro';
 
 let configured = false;
 
-export function isRevenueCatConfigured() {
-  return configured;
+/** A store key for this platform, or (dev builds only) a Test Store key. */
+function apiKey(): string | undefined {
+  if (__DEV__ && process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY) return process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY;
+  if (STORE_PREFIX && STORE_KEY?.startsWith(STORE_PREFIX)) return STORE_KEY;
+  return __DEV__ ? DEV_TEST_KEY : undefined;
 }
 
 /**
  * Configure RevenueCat once. Skipped in tester builds (premium is unlocked
- * for friends) and when no store key is set, so a missing key leaves premium
- * locked instead of crashing the app.
+ * for friends), on web, and when no valid store key is set, so a missing key
+ * leaves premium locked instead of crashing the app.
  */
 export function configureRevenueCat(): boolean {
   if (configured) return true;
-  if (TESTER_MODE || !RC_API_KEY) return false;
+  const key = apiKey();
+  if (TESTER_MODE || Platform.OS === 'web' || !key) return false;
   if (__DEV__) {
     Purchases.setLogLevel(LOG_LEVEL.DEBUG);
   }
-  Purchases.configure({ apiKey: RC_API_KEY });
+  Purchases.configure({ apiKey: key });
   configured = true;
   return true;
 }
