@@ -24,6 +24,17 @@ logger = logging.getLogger(__name__)
 # queries ("ab", "m&m's") would scan the whole table.
 _INDEXABLE = re.compile(r"[a-z0-9]{3,}")
 
+# Planner settings for each racing query; a plan not listed here is the planner's choice.
+# Both racers are pinned: the planner badly underestimates common words ("chocolate":
+# 357 rows estimated, 94k real) and, left to choose, sent both down the trigram bitmap.
+_PLANS = {
+    # Walk the covering popularity index, index-only, until the window is full. No sorts:
+    # expecting few matches, the planner would scan the whole index and sort ("olive oil").
+    "walk": ("enable_bitmapscan = off", "enable_seqscan = off", "enable_sort = off"),
+    # No index or table scans: forces the trigram bitmap, never the popularity walk.
+    "bitmap": ("enable_indexscan = off", "enable_seqscan = off"),
+}
+
 
 class CatalogSearchTimeout(RuntimeError):
     """The catalog query hit its statement timeout; callers fall back to curated search."""
@@ -90,7 +101,12 @@ class CatalogRepository:
         prefix = base.where(
             CatalogEntry.search_text.like(f"{_like_escape(q.split()[0])}%", escape="\\")
         ).order_by(CatalogEntry.popularity.desc()).limit(max(limit // 2, 1))
-        popular = base.order_by(CatalogEntry.popularity.desc()).limit(limit)
+        # The window's ids come from index columns alone (an index-only walk); only the
+        # rows that made the window are then read from the table. Those rows are ordered
+        # here, not in SQL: the walk disables sorts, and an outer ORDER BY would then be
+        # met by walking the whole table in popularity order.
+        window = base.with_only_columns(CatalogEntry.id).order_by(CatalogEntry.popularity.desc()).limit(limit)
+        popular = select(CatalogEntry).where(CatalogEntry.id.in_(window.scalar_subquery()))
 
         popular_rows, prefix_rows = await asyncio.gather(
             self._race(popular, timeout_ms, query),
@@ -103,6 +119,7 @@ class CatalogRepository:
             prefix_rows = []
         elif isinstance(prefix_rows, BaseException):
             raise prefix_rows
+        popular_rows = sorted(popular_rows, key=lambda entry: entry.popularity, reverse=True)
         unique = {entry.id: entry for entry in [*prefix_rows, *popular_rows]}
         return list(unique.values())[:limit]
 
@@ -118,8 +135,8 @@ class CatalogRepository:
         ("shampoo"), and both plans return the same rows, so race them.
         """
         tasks = [
-            asyncio.create_task(self._run(stmt, timeout_ms, query, bitmap_only=False)),
-            asyncio.create_task(self._run(stmt, timeout_ms, query, bitmap_only=True)),
+            asyncio.create_task(self._run(stmt, timeout_ms, query, plan="walk")),
+            asyncio.create_task(self._run(stmt, timeout_ms, query, plan="bitmap")),
         ]
         failure: BaseException | None = None
         try:
@@ -136,17 +153,19 @@ class CatalogRepository:
                     task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def _run(self, stmt, timeout_ms: int, query: str, *, bitmap_only: bool = False) -> list[CatalogEntry]:
+    async def _configure(self, session: AsyncSession, timeout_ms: int, plan: str | None) -> None:
+        await session.execute(text(f"SET LOCAL statement_timeout = {int(timeout_ms)}"))
+        for setting in _PLANS.get(plan, ()):
+            await session.execute(text(f"SET LOCAL {setting}"))
+        # Bound LIKE patterns hide the search word from a cached generic plan, which
+        # then walks the popularity index even for rare words ("shampoo": millions of
+        # rows). Plan each search for its actual words.
+        await session.execute(text("SET LOCAL plan_cache_mode = force_custom_plan"))
+
+    async def _run(self, stmt, timeout_ms: int, query: str, *, plan: str | None = None) -> list[CatalogEntry]:
         async with self._sessions() as session:
             async with session.begin():
-                await session.execute(text(f"SET LOCAL statement_timeout = {int(timeout_ms)}"))
-                if bitmap_only:
-                    # No plain index scans: forces the trigram bitmap, never the popularity walk.
-                    await session.execute(text("SET LOCAL enable_indexscan = off"))
-                # Bound LIKE patterns hide the search word from a cached generic plan, which
-                # then walks the popularity index even for rare words ("shampoo": millions of
-                # rows). Plan each search for its actual words.
-                await session.execute(text("SET LOCAL plan_cache_mode = force_custom_plan"))
+                await self._configure(session, timeout_ms, plan)
                 try:
                     return list((await session.execute(stmt)).scalars().all())
                 except DBAPIError as exc:

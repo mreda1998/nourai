@@ -1,8 +1,8 @@
 """Catalog index lookups: GTIN priority, multi-word search, query guards, product links."""
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 
-from app.db.session import async_session_factory
+from app.db.session import async_session_factory, engine
 from app.models.catalog import CatalogEntry
 from app.models.ingestion import DataSource
 from app.models.product import Product
@@ -28,6 +28,18 @@ async def _add(slug, code, name, *, brand=None, category="food", popularity=0, g
         session.add(entry)
         await session.commit()
         return entry.id
+
+
+async def _vacuum_catalog() -> None:
+    """Production's bulk-loaded catalog is vacuumed, so the planner can trust index-only scans."""
+    async with engine.connect() as conn:
+        conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
+        await conn.execute(text("VACUUM ANALYZE catalog_entries"))
+
+
+async def _explain(session, stmt) -> str:
+    sql = stmt.compile(dialect=session.bind.dialect, compile_kwargs={"literal_binds": True})
+    return "\n".join((await session.execute(text(f"EXPLAIN {sql}"))).scalars())
 
 
 @pytest.fixture
@@ -132,13 +144,51 @@ async def test_when_one_query_plan_times_out_the_other_answers(monkeypatch):
     repo = CatalogRepository(async_session_factory)
     real_run = repo._run
 
-    async def index_walk_times_out(stmt, timeout_ms, query, *, bitmap_only=False):
-        if not bitmap_only:
+    async def index_walk_times_out(stmt, timeout_ms, query, *, plan=None):
+        if plan != "bitmap":
             raise CatalogSearchTimeout(query)
-        return await real_run(stmt, timeout_ms, query, bitmap_only=True)
+        return await real_run(stmt, timeout_ms, query, plan=plan)
 
     monkeypatch.setattr(repo, "_run", index_walk_times_out)
     assert [r.external_id for r in await repo.search("shampoo", category=None)] == ["s1"]
+
+
+@pytest.mark.parametrize(
+    ("query", "category", "walked_index"),
+    [
+        ("chocolate", None, "ix_catalog_entries_popularity_cover"),
+        ("chocolate scrub", None, "ix_catalog_entries_popularity_cover"),
+        ("chocolate", "cosmetic", "ix_catalog_entries_category_popularity_cover"),
+    ],
+)
+async def test_each_racing_query_is_pinned_to_its_own_plan(monkeypatch, query, category, walked_index):
+    """In production the planner misjudged common words ("chocolate": 357 rows estimated, 94k
+    real) and sent both racers down the trigram bitmap, so every common-word search timed out.
+    One racer must walk popularity order without reading the table; the other must use a bitmap."""
+    for i in range(20):
+        await _add(
+            "open-beauty-facts", f"c{i}", f"Chocolate scrub {i}", category="cosmetic",
+            popularity=i, gtin14=f"0000000000{i:04d}",
+        )
+    await _vacuum_catalog()
+    repo = CatalogRepository(async_session_factory)
+    real_run = repo._run
+    plans: dict[str | None, str] = {}
+
+    async def explain_then_run(stmt, timeout_ms, query, *, plan=None):
+        async with async_session_factory() as session, session.begin():
+            await repo._configure(session, timeout_ms, plan)
+            plans[plan] = await _explain(session, stmt)
+        return await real_run(stmt, timeout_ms, query, plan=plan)
+
+    monkeypatch.setattr(repo, "_run", explain_then_run)
+    assert len(await repo.search(query, category=category)) == 20
+    walk, bitmap = plans["walk"], plans["bitmap"]
+    assert f"Index Only Scan using {walked_index}" in walk
+    assert "Bitmap" not in walk
+    assert "Bitmap Index Scan" in bitmap
+    assert "Index Only Scan" not in bitmap
+    assert "Seq Scan on catalog_entries" not in bitmap
 
 
 async def test_when_both_query_plans_time_out_the_search_times_out(monkeypatch):
@@ -146,7 +196,7 @@ async def test_when_both_query_plans_time_out_the_search_times_out(monkeypatch):
 
     repo = CatalogRepository(async_session_factory)
 
-    async def always_times_out(stmt, timeout_ms, query, *, bitmap_only=False):
+    async def always_times_out(stmt, timeout_ms, query, *, plan=None):
         raise CatalogSearchTimeout(query)
 
     monkeypatch.setattr(repo, "_run", always_times_out)
