@@ -96,6 +96,12 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "674b5af6-5f57-4393-821f-62b403a1e9a9"
+      }
+    },
+    "owner": "red1998"
   }
 }

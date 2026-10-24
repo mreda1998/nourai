@@ -30,7 +30,7 @@
     "testflight": {
       "extends": "production",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.elory.app/api/v1",
+        "EXPO_PUBLIC_API_URL": "https://nourai-production.up.railway.app/api/v1",
         "EXPO_PUBLIC_TESTER_MODE": "1"
       }
     }
