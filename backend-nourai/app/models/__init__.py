@@ -3,6 +3,7 @@
 from app.models.product import Product, ProductIngredient, ProductCategory, IngredientStatus
 from app.models.ingredient import Ingredient, IngredientCategory, ResearchStatus
 from app.models.ingredient_evidence import IngredientEvidence, StudyType, EvidenceDirection
+from app.models.ingredient_claim import IngredientClaim, IngredientClaimEvidence  # noqa: F401
 from app.models.ingredient_biodomain_score import IngredientBioDomainScore
 from app.models.claim import Claim, ClaimSource, EvidenceStrength
 from app.models.user import UserProfile, UserStackEntry, BiologicalSex, TimeOfDay

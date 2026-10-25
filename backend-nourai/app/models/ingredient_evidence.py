@@ -3,7 +3,7 @@ import uuid
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -88,6 +88,24 @@ class IngredientEvidence(Base, UUIDMixin, TimestampMixin):
         JSONB, nullable=False, default=list,
         comment="Bio-domain slugs this study is relevant to: gut-health, skin, metabolism, sleep-recovery, cognition, exposure-load"
     )
+
+    # ── Appraisal: how the study was done (claim-based pipeline) ──────────────
+    appraisal: Mapped[dict | None] = mapped_column(
+        JSONB, nullable=True, comment="Full structured appraisal plus PubMed metadata"
+    )
+    method_summary: Mapped[str | None] = mapped_column(Text, nullable=True)  # what they did, plain words
+    caveat: Mapped[str | None] = mapped_column(Text, nullable=True)
+    quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)  # 0-1, see research.weighting
+    quality_tier: Mapped[str | None] = mapped_column(String(20), nullable=True)  # high / moderate / low / very_low
+    quality_flags: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list, comment="[{code, label}] caveat tags shown to readers"
+    )
+    intervention_form: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    dose_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dose_unit: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    dose_frequency: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    duration_weeks: Mapped[float | None] = mapped_column(Float, nullable=True)
+    outcome_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
     # ── Relationship ──────────────────────────────────────────────────────────
     ingredient: Mapped["Ingredient"] = relationship(

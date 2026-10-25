@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db.session import get_db
 from app.models.ingredient import Ingredient
+from app.models.ingredient_claim import IngredientClaim, IngredientClaimEvidence
 from app.models.ingredient_evidence import IngredientEvidence
 from app.models.ingredient_biodomain_score import IngredientBioDomainScore
 from app.models.product import Product, ProductIngredient
@@ -24,6 +25,11 @@ router = APIRouter()
 
 
 # ─── Response schemas ─────────────────────────────────────────────────────────
+
+class QualityFlag(BaseModel):
+    code: str
+    label: str               # caveat tag shown to readers, e.g. "Small study (34 people)"
+
 
 class EvidenceRecord(BaseModel):
     id: str
@@ -40,6 +46,43 @@ class EvidenceRecord(BaseModel):
     confidence: str          # high | moderate | low
     concern_tags: list[str]
     goal_tags: list[str]
+
+    # How the study was done — null for studies from the pre-claims pipeline
+    method_summary: str | None = None
+    caveat: str | None = None
+    quality_score: float | None = None   # 0-1
+    quality_tier: str | None = None      # high | moderate | low | very_low
+    quality_flags: list[QualityFlag] = []
+    intervention_form: str | None = None
+    dose_amount: float | None = None
+    dose_unit: str | None = None
+    dose_frequency: str | None = None
+    duration_weeks: float | None = None
+    outcome_type: str | None = None      # clinical | patient_reported | biomarker | mechanistic | safety
+
+
+class ClaimStudy(BaseModel):
+    evidence_id: str
+    stance: str              # supports | refutes | inconclusive
+    relevance: str           # direct | indirect
+
+
+class ClaimRecord(BaseModel):
+    id: str
+    kind: str                # benefit | safety
+    claim: str
+    why_people_believe: str | None
+    verdict: str | None      # strong | moderate | limited | mixed | unlikely | insufficient
+    certainty: str | None    # high | moderate | low | very_low
+    certainty_reasons: list[str]
+    reality: str | None
+    effect_size: str | None
+    applies_to: str | None
+    avoid_if: str | None
+    dose_note: str | None
+    key_pmids: list[str]
+    study_count: int
+    studies: list[ClaimStudy]  # strongest first
 
 
 class BioDomainScore(BaseModel):
@@ -95,7 +138,10 @@ class IngredientDetail(BaseModel):
     # 2D chemical structure image URL (from PubChem, re-hosted on Supabase)
     structure_image_url: str | None
 
-    # Evidence records — sorted high→low confidence then newest→oldest
+    # What people believe it does, each judged from its studies (empty before claim-based research)
+    claims: list[ClaimRecord] = []
+
+    # Evidence records — strongest first (see _sort_evidence)
     evidence: list[EvidenceRecord]
 
     # Biodomain impact scores — per-domain effect computed by the research agent
@@ -134,13 +180,39 @@ _CONFIDENCE_ORDER = {"high": 0, "moderate": 1, "low": 2}
 
 
 def _sort_evidence(records: list[IngredientEvidence]) -> list[IngredientEvidence]:
-    """Sort evidence high→low confidence, then newest→oldest year."""
+    """Appraised studies by weight; older, unappraised ones after, by confidence then year."""
     return sorted(
         records,
         key=lambda e: (
+            e.quality_score is None,
+            -(e.quality_score or 0),
             _CONFIDENCE_ORDER.get(e.confidence, 9),
             -(e.year or 0),
         ),
+    )
+
+
+def _claim_record(claim: IngredientClaim) -> ClaimRecord:
+    links = sorted(claim.evidence_links, key=lambda link: -(link.evidence.quality_score or 0))
+    return ClaimRecord(
+        id=str(claim.id),
+        kind=claim.kind,
+        claim=claim.claim,
+        why_people_believe=claim.why_people_believe,
+        verdict=claim.verdict,
+        certainty=claim.certainty,
+        certainty_reasons=claim.certainty_reasons or [],
+        reality=claim.reality,
+        effect_size=claim.effect_size,
+        applies_to=claim.applies_to,
+        avoid_if=claim.avoid_if,
+        dose_note=claim.dose_note,
+        key_pmids=claim.key_pmids or [],
+        study_count=claim.study_count,
+        studies=[
+            ClaimStudy(evidence_id=str(link.evidence_id), stance=link.stance, relevance=link.relevance)
+            for link in links
+        ],
     )
 
 
@@ -223,6 +295,9 @@ async def get_ingredient(
         .options(
             selectinload(Ingredient.evidence),
             selectinload(Ingredient.biodomain_scores),
+            selectinload(Ingredient.claims)
+            .selectinload(IngredientClaim.evidence_links)
+            .selectinload(IngredientClaimEvidence.evidence),
         )
     )
     result = await db.execute(stmt)
@@ -294,6 +369,7 @@ async def get_ingredient(
         mechanism_image_url=ingredient.mechanism_image_url,
         structure_image_url=ingredient.structure_image_url,
         biodomain_scores=biodomain_scores,
+        claims=[_claim_record(claim) for claim in ingredient.claims],
         evidence=[
             EvidenceRecord(
                 id=str(ev.id),
@@ -310,6 +386,17 @@ async def get_ingredient(
                 confidence=ev.confidence,
                 concern_tags=ev.concern_tags or [],
                 goal_tags=ev.goal_tags or [],
+                method_summary=ev.method_summary,
+                caveat=ev.caveat,
+                quality_score=ev.quality_score,
+                quality_tier=ev.quality_tier,
+                quality_flags=[QualityFlag(**flag) for flag in ev.quality_flags or []],
+                intervention_form=ev.intervention_form,
+                dose_amount=ev.dose_amount,
+                dose_unit=ev.dose_unit,
+                dose_frequency=ev.dose_frequency,
+                duration_weeks=ev.duration_weeks,
+                outcome_type=ev.outcome_type,
             )
             for ev in sorted_evidence
         ],

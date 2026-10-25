@@ -275,6 +275,38 @@ export interface IngredientEvidenceRecord {
   confidence: 'high' | 'moderate' | 'low';
   concern_tags: string[];
   goal_tags: string[];
+  // How the study was done — absent for studies from the pre-claims pipeline
+  method_summary?: string | null;
+  caveat?: string | null;
+  quality_score?: number | null;
+  quality_tier?: 'high' | 'moderate' | 'low' | 'very_low' | null;
+  quality_flags?: { code: string; label: string }[];
+  intervention_form?: string | null;
+  dose_amount?: number | null;
+  dose_unit?: string | null;
+  dose_frequency?: string | null;
+  duration_weeks?: number | null;
+  outcome_type?: string | null;
+}
+
+/** Something people believe about an ingredient, judged from the studies that test it. */
+export interface IngredientClaim {
+  id: string;
+  kind: 'benefit' | 'safety';
+  claim: string;
+  why_people_believe: string | null;
+  verdict: 'strong' | 'moderate' | 'limited' | 'mixed' | 'unlikely' | 'insufficient' | null;
+  certainty: 'high' | 'moderate' | 'low' | 'very_low' | null;
+  certainty_reasons: string[];
+  reality: string | null;
+  effect_size: string | null;
+  applies_to: string | null;
+  avoid_if: string | null;
+  dose_note: string | null;
+  key_pmids: string[];
+  study_count: number;
+  /** Strongest first */
+  studies: { evidence_id: string; stance: 'supports' | 'refutes' | 'inconclusive'; relevance: string }[];
 }
 
 export interface IngredientFoundInProduct {
@@ -333,6 +365,8 @@ export interface IngredientDetail {
     evidence_count: number;
     top_finding: string | null;
   }> | null;
+  /** Absent from older backends; empty before claim-based research */
+  claims?: IngredientClaim[];
   evidence: IngredientEvidenceRecord[];
   found_in: IngredientFoundInProduct[];
   // Peptide-specific fields (null for non-peptide ingredients)

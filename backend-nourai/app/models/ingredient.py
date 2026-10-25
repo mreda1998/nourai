@@ -12,6 +12,7 @@ from app.db.base import Base, TimestampMixin, UUIDMixin
 if TYPE_CHECKING:
     from app.models.product import ProductIngredient
     from app.models.ingredient_evidence import IngredientEvidence
+    from app.models.ingredient_claim import IngredientClaim
     from app.models.ingredient_biodomain_score import IngredientBioDomainScore
     from app.models.ingredient_interaction import IngredientInteraction
 
@@ -131,6 +132,12 @@ class Ingredient(Base, UUIDMixin, TimestampMixin):
         back_populates="ingredient",
         cascade="all, delete-orphan",
         order_by="IngredientEvidence.year.desc()",
+    )
+    claims: Mapped[list["IngredientClaim"]] = relationship(
+        "IngredientClaim",
+        back_populates="ingredient",
+        cascade="all, delete-orphan",
+        order_by="IngredientClaim.position",
     )
     biodomain_scores: Mapped[list["IngredientBioDomainScore"]] = relationship(
         "IngredientBioDomainScore",

@@ -7,9 +7,12 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import {
   AlertTriangle, ArrowDown, Ban, CircleSlash, Pill as PillIcon, Quote, ShieldCheck, Sparkles,
 } from 'lucide-react-native';
-import { api, IngredientDetail, IngredientEvidenceRecord } from '@/services/api';
+import { api, IngredientDetail } from '@/services/api';
 import { Palette, Radius } from '@/constants/theme';
 import { evidenceStrength, strengthLabel, strengthTone, toneColor, Tone } from '@/utils/grade';
+import { studyStrength } from '@/utils/evidence';
+import { ClaimCard } from '@/components/ClaimCard';
+import { StudyCard } from '@/components/StudyCard';
 import {
   Button, Card, ContributorBar, EmptyState, EvidenceMeter, IconButton, ListGroup, ListRow, Pill,
   ProductImage, Screen, Section, SegmentedControl, SkeletonCard, Txt,
@@ -43,9 +46,11 @@ export default function IngredientScreen() {
   const strength = evidenceStrength(data.evidence_level);
   // The API can list a product twice when the ingredient appears twice on its label.
   const foundIn = data.found_in.filter((p, i, all) => all.findIndex((q) => q.id === p.id) === i);
-  const high = data.evidence.filter((e) => e.confidence === 'high').length;
-  const moderate = data.evidence.filter((e) => e.confidence === 'moderate').length;
-  const low = data.evidence.filter((e) => e.confidence === 'low').length;
+  const claims = data.claims ?? [];
+  // Appraised studies are counted by study strength; older ones by their confidence label.
+  const appraised = data.evidence.some((e) => e.quality_tier);
+  const counts: Record<Tone, number> = { strong: 0, moderate: 0, weak: 0, neutral: 0 };
+  for (const e of data.evidence) counts[studyStrength(e).tone] += 1;
 
   return (
     <Screen back title={data.canonical_name} right={askRight}>
@@ -88,18 +93,25 @@ export default function IngredientScreen() {
 
       {tab === 'evidence' ? (
         <View style={{ marginTop: 16 }}>
+          {claims.length ? (
+            <View style={{ gap: 12 }}>
+              {claims.map((c, i) => (
+                <ClaimCard key={c.id} claim={c} index={i} onPress={() => router.push(`/research/${data.id}?claim=${c.id}` as never)} />
+              ))}
+            </View>
+          ) : null}
           {data.evidence.length ? (
-            <>
+            <Section title={claims.length ? 'Strongest studies' : undefined} style={{ marginTop: claims.length ? 32 : 0 }}>
               <Card padding={16} style={{ flexDirection: 'row' }}>
-                <Count value={high} label="High confidence" tone="strong" />
-                <Count value={moderate} label="Moderate" tone="moderate" />
-                <Count value={low} label="Low" tone="weak" />
+                <Count value={counts.strong} label={appraised ? 'Strong' : 'High confidence'} tone="strong" />
+                <Count value={counts.moderate} label={appraised ? 'Solid' : 'Moderate'} tone="moderate" />
+                <Count value={counts.weak} label={appraised ? 'Weak' : 'Low'} tone="weak" />
               </Card>
               <View style={{ gap: 12, marginTop: 12 }}>
-                {data.evidence.slice(0, 5).map((e, i) => <StudyCard key={e.id} study={e} index={i} />)}
+                {data.evidence.slice(0, claims.length ? 3 : 5).map((e, i) => <StudyCard key={e.id} study={e} index={i} />)}
               </View>
               <Button label={`See all ${data.evidence.length} studies`} variant="secondary" style={{ marginTop: 16 }} onPress={() => router.push(`/research/${data.id}` as never)} />
-            </>
+            </Section>
           ) : (
             <EmptyState title="Research in progress" message="We’re still reviewing studies on this ingredient. Check back soon." />
           )}
@@ -203,35 +215,6 @@ function BeliefReality({ data, strength }: { data: IngredientDetail; strength: n
 }
 
 // ─── Evidence ─────────────────────────────────────────────────────────────────
-
-const DIRECTION: Record<IngredientEvidenceRecord['direction'], { label: string; tone: Tone }> = {
-  benefit: { label: 'Benefit', tone: 'strong' },
-  risk: { label: 'Risk', tone: 'weak' },
-  mixed: { label: 'Mixed', tone: 'moderate' },
-  neutral: { label: 'No effect', tone: 'neutral' },
-};
-
-function StudyCard({ study, index }: { study: IngredientEvidenceRecord; index: number }) {
-  const dir = DIRECTION[study.direction] ?? DIRECTION.neutral;
-  const meta = [
-    study.study_type?.replaceAll('_', ' '),
-    study.sample_size ? `n = ${study.sample_size.toLocaleString()}` : null,
-    study.year,
-  ].filter(Boolean).join(' · ');
-  return (
-    <Animated.View entering={FadeInDown.duration(400).delay(index * 60)}>
-      <Card padding={18}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Pill label={dir.label} tone={dir.tone} />
-          <Txt variant="caption" tone="tertiary" style={{ textTransform: 'capitalize' }}>{study.confidence} confidence</Txt>
-        </View>
-        <Txt variant="callout" style={{ marginTop: 12 }}>{study.finding}</Txt>
-        {meta ? <Txt variant="footnote" tone="secondary" style={{ marginTop: 10, textTransform: 'capitalize' }}>{meta}</Txt> : null}
-        {study.journal ? <Txt variant="caption" tone="tertiary" numberOfLines={1} style={{ marginTop: 2 }}>{study.journal}</Txt> : null}
-      </Card>
-    </Animated.View>
-  );
-}
 
 function Count({ value, label, tone }: { value: number; label: string; tone: Tone }) {
   return (

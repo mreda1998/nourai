@@ -1,29 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { ExternalLink, FileSearch } from 'lucide-react-native';
+import { FileSearch } from 'lucide-react-native';
 import { api } from '@/services/api';
-import type { IngredientEvidenceRecord } from '@/services/api';
+import type { IngredientClaim, IngredientEvidenceRecord } from '@/services/api';
 import { Palette } from '@/constants/theme';
-import { Card, ChipRow, EmptyState, Pill, Screen, Txt } from '@/components/ui';
+import { certaintyLabel, studiesForClaim, verdictLabel, verdictTone } from '@/utils/evidence';
+import { StudyCard } from '@/components/StudyCard';
+import { Card, ChipRow, EmptyState, Pill, Screen, Section, Txt } from '@/components/ui';
 
-const STUDY_TYPE: Record<string, string> = {
-  rct: 'Randomised controlled trial',
-  systematic_review: 'Systematic review',
-  meta_analysis: 'Meta-analysis',
-  cohort: 'Cohort study',
-  case_control: 'Case-control study',
-  cross_sectional: 'Cross-sectional study',
-  in_vitro: 'Lab (in vitro) study',
-  animal: 'Animal study',
-  review: 'Review',
-  case_report: 'Case report',
-  other: 'Study',
-};
-
-const HUMAN = new Set(['rct', 'cohort', 'case_control', 'cross_sectional', 'case_report']);
-const REVIEWS = new Set(['review', 'systematic_review']);
+const HUMAN = new Set(['rct', 'crossover_rct', 'non_randomized_trial', 'cohort', 'case_control', 'cross_sectional', 'case_series', 'case_report']);
+const REVIEWS = new Set(['review', 'narrative_review', 'systematic_review']);
 type FilterKey = 'all' | 'human' | 'reviews' | 'meta';
 
 function matches(ev: IngredientEvidenceRecord, f: FilterKey) {
@@ -34,26 +21,38 @@ function matches(ev: IngredientEvidenceRecord, f: FilterKey) {
   return true;
 }
 
-const DIRECTION = {
-  benefit: { label: 'Benefit', tone: 'strong' },
-  risk: { label: 'Risk', tone: 'weak' },
-  mixed: { label: 'Mixed', tone: 'moderate' },
-  neutral: { label: 'No effect', tone: 'neutral' },
-} as const;
-
 export default function ResearchScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, claim: claimId } = useLocalSearchParams<{ id: string; claim?: string }>();
   const [name, setName] = useState('');
   const [evidence, setEvidence] = useState<IngredientEvidenceRecord[]>([]);
+  const [claims, setClaims] = useState<IngredientClaim[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterKey>('all');
 
   useEffect(() => {
     if (!id) return;
     api.getIngredientWithFallback(id).then((d) => {
-      if (d) { setName(d.canonical_name); setEvidence(d.evidence); }
+      if (d) { setName(d.canonical_name); setEvidence(d.evidence); setClaims(d.claims ?? []); }
     }).finally(() => setLoading(false));
   }, [id]);
+
+  const claim = claimId ? claims.find((c) => c.id === claimId) : undefined;
+  if (claim) {
+    const studies = studiesForClaim(claim, evidence);
+    return (
+      <Screen back title={claim.claim} eyebrow={name || undefined}>
+        <ClaimVerdict claim={claim} />
+        <Section title="The studies" caption={`${studies.length} ${studies.length === 1 ? 'study' : 'studies'}, strongest first`}>
+          <View style={{ gap: 12 }}>
+            {studies.length
+              ? studies.map(({ study, stance }, i) => <StudyCard key={study.id} study={study} stance={stance} index={i} />)
+              : <EmptyState icon={FileSearch} title="No studies yet" message="We found no studies that test this directly." />}
+          </View>
+        </Section>
+        <Disclaimer />
+      </Screen>
+    );
+  }
 
   const count = (f: FilterKey) => evidence.filter((e) => matches(e, f)).length;
   const list = evidence.filter((e) => matches(e, filter));
@@ -73,42 +72,59 @@ export default function ResearchScreen() {
             onChange={setFilter}
           />
           <View style={{ gap: 12, marginTop: 20 }}>
-            {list.length ? list.map((ev, i) => {
-              const dir = DIRECTION[ev.direction] ?? DIRECTION.neutral;
-              return (
-                <Animated.View key={ev.id} entering={FadeInDown.duration(350).delay(Math.min(i, 8) * 40)}>
-                  <Card
-                    padding={18}
-                    onPress={ev.pmid ? () => Linking.openURL(`https://pubmed.ncbi.nlm.nih.gov/${ev.pmid}/`) : undefined}
-                    accessibilityLabel={ev.finding}
-                  >
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Txt variant="caption" tone="secondary">{STUDY_TYPE[ev.study_type ?? 'other'] ?? ev.study_type}{ev.year ? ` · ${ev.year}` : ''}</Txt>
-                      <Pill label={dir.label} tone={dir.tone} />
-                    </View>
-                    <Txt variant="callout" style={{ marginTop: 10 }}>{ev.finding}</Txt>
-                    {ev.title ? <Txt variant="footnote" tone="secondary" numberOfLines={2} style={{ marginTop: 8 }}>{ev.title}</Txt> : null}
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-                      <Txt variant="caption" tone="tertiary" style={{ textTransform: 'capitalize' }}>
-                        {ev.confidence} confidence{ev.sample_size ? ` · n = ${ev.sample_size.toLocaleString()}` : ''}
-                      </Txt>
-                      {ev.pmid ? (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <Txt variant="caption" tone="accent">PubMed</Txt>
-                          <ExternalLink size={12} color={Palette.accent} />
-                        </View>
-                      ) : null}
-                    </View>
-                  </Card>
-                </Animated.View>
-              );
-            }) : <EmptyState icon={FileSearch} title="No studies here" message="Try a different filter." />}
+            {list.length
+              ? list.map((ev, i) => <StudyCard key={ev.id} study={ev} index={i} />)
+              : <EmptyState icon={FileSearch} title="No studies here" message="Try a different filter." />}
           </View>
-          <Txt variant="caption" tone="tertiary" align="center" style={{ marginTop: 24, paddingHorizontal: 20 }}>
-            Summaries of peer-reviewed research. Consider your personal context and consult a professional.
-          </Txt>
+          <Disclaimer />
         </>
       )}
     </Screen>
+  );
+}
+
+function ClaimVerdict({ claim }: { claim: IngredientClaim }) {
+  const details = [
+    { label: 'How much', value: claim.effect_size },
+    { label: 'Who this applies to', value: claim.applies_to },
+    { label: 'Who should be careful', value: claim.avoid_if },
+    { label: 'Dose and form', value: claim.dose_note },
+  ].filter((d) => d.value);
+  return (
+    <>
+      <Card padding={20} style={{ marginTop: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Pill label={verdictLabel(claim.kind, claim.verdict, claim.certainty)} tone={verdictTone(claim.kind, claim.verdict, claim.certainty)} />
+          <Txt variant="caption" tone="tertiary">{certaintyLabel(claim.certainty)}</Txt>
+        </View>
+        {claim.reality ? <Txt variant="callout" style={{ marginTop: 14 }}>{claim.reality}</Txt> : null}
+        {details.map((d) => (
+          <View key={d.label} style={{ marginTop: 14 }}>
+            <Txt variant="overline" tone="tertiary">{d.label}</Txt>
+            <Txt variant="subhead" tone="secondary" style={{ marginTop: 4 }}>{d.value}</Txt>
+          </View>
+        ))}
+        {claim.certainty_reasons.length ? (
+          <View style={{ marginTop: 14 }}>
+            <Txt variant="overline" tone="tertiary">Why we’re not more certain</Txt>
+            {claim.certainty_reasons.map((r) => <Txt key={r} variant="subhead" tone="secondary" style={{ marginTop: 4 }}>• {r}</Txt>)}
+          </View>
+        ) : null}
+      </Card>
+      {claim.why_people_believe ? (
+        <Card variant="sunken" padding={18} style={{ marginTop: 12 }}>
+          <Txt variant="overline" tone="secondary">Why people believe it</Txt>
+          <Txt variant="subhead" tone="secondary" style={{ marginTop: 6 }}>{claim.why_people_believe}</Txt>
+        </Card>
+      ) : null}
+    </>
+  );
+}
+
+function Disclaimer() {
+  return (
+    <Txt variant="caption" tone="tertiary" align="center" style={{ marginTop: 24, paddingHorizontal: 20 }}>
+      Summaries of peer-reviewed research. Consider your personal context and consult a professional.
+    </Txt>
   );
 }
