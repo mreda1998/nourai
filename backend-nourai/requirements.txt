@@ -10,7 +10,7 @@ alembic==1.14.0
 # Settings and validation
 pydantic-settings==2.6.0
 
-# JWT validation (Supabase uses HS256)
+# JWT validation (Supabase ES256 via JWKS, legacy HS256)
 python-jose[cryptography]==3.3.0
 
 # HTTP client for external APIs
