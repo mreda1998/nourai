@@ -101,7 +101,7 @@ async def get_scan_history(
             product_name=e.product.name,
             product_brand=e.product.brand,
             product_grade=grade_from_score(e.product.health_score),
-            product_category=e.product.category.value if e.product.category else "supplement",
+            product_category=e.product.category or "supplement",
             product_image_url=e.product.image_url,
             scanned_at=e.scanned_at,
         )
@@ -144,7 +144,7 @@ async def add_to_scan_history(
         product_name=product.name,
         product_brand=product.brand,
         product_grade=grade_from_score(product.health_score),
-        product_category=product.category.value if product.category else "supplement",
+        product_category=product.category or "supplement",
         product_image_url=product.image_url,
         scanned_at=entry.scanned_at,
     )
