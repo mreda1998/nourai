@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import Any
@@ -68,7 +69,25 @@ class PubMedUnavailable(RuntimeError):
 
 
 # Pause before each retry; NCBI rate-limits bursts with 429s.
-_RETRY_DELAYS = (1.0, 3.0)
+_RETRY_DELAYS = (2.0, 5.0, 10.0)
+
+# NCBI allows 10 requests/s with an API key and 3 without, per process, however many
+# ingredients are researched at once: every request books the next free slot.
+_next_turn = 0.0
+
+
+def _interval() -> float:
+    return 0.11 if settings.ncbi_api_key else 0.34
+
+
+async def _wait_for_turn() -> None:
+    global _next_turn
+    # No await between reading and booking the slot, so this is atomic in asyncio.
+    now = time.monotonic()
+    start = max(now, _next_turn)
+    _next_turn = start + _interval()
+    if start > now:
+        await asyncio.sleep(start - now)
 
 
 async def search(
@@ -108,6 +127,7 @@ async def _get(
         if delay:
             await asyncio.sleep(delay)
         async with sem:
+            await _wait_for_turn()
             try:
                 response = await client.get(url, params=params, timeout=timeout)
             except httpx.TransportError as exc:

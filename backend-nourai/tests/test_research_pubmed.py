@@ -1,5 +1,31 @@
 """PubMed search queries and the metadata kept from each paper."""
+import asyncio
+import time
+
+import httpx
+import pytest
+
+from app.services.research import pubmed
 from app.services.research.pubmed import build_query, parse_articles
+
+
+@pytest.mark.anyio
+async def test_parallel_searches_are_spaced_to_pubmeds_rate_limit(monkeypatch):
+    """Four ingredients searching at once sent ~15 requests/s and PubMed answered 429."""
+    monkeypatch.setattr(pubmed, "_interval", lambda: 0.05)
+    sent: list[float] = []
+
+    def api(request: httpx.Request) -> httpx.Response:
+        sent.append(time.monotonic())
+        return httpx.Response(200, json={"esearchresult": {"idlist": []}})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(api)) as http:
+        sem = asyncio.Semaphore(8)
+        await asyncio.gather(*(pubmed.search(http, f"q{i}", 3, sem) for i in range(6)))
+
+    gaps = [b - a for a, b in zip(sent, sent[1:])]
+    assert len(sent) == 6
+    assert min(gaps) >= 0.045
 
 _XML = """<?xml version="1.0" ?>
 <PubmedArticleSet>
