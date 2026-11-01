@@ -132,6 +132,17 @@ async def test_bad_product_ids_are_404(client, hydrator, path):
     assert (await client.get(f"/api/v1/products/{path}")).status_code == 404
 
 
+async def test_a_product_nobody_has_rated_gets_no_grade_instead_of_a_default_c(client, hydrator):
+    """Every unrated product used to come back as 'C', so every product showed the same score."""
+    product_id = await _product()
+
+    detail = (await client.get(f"/api/v1/products/{product_id}")).json()
+    found = (await client.get("/api/v1/products/search", params={"q": "nutella"})).json()["products"]
+
+    assert detail["grade"] is None
+    assert [item["grade"] for item in found] == [None]
+
+
 async def test_search_merges_curated_and_catalog_results_without_duplicates(client, hydrator):
     product_id = await _product(name="Nutella")
     await _entry(code=NUTELLA, product_id=product_id)  # linked to the curated product

@@ -7,8 +7,7 @@ import { APP_DOMAIN_TO_BIODOMAIN } from '@/constants/biodomains';
 import { useAppState } from '@/context/app-state';
 import { isCatalogueId } from '@/lib/insights';
 import { Palette } from '@/constants/theme';
-import { scoreQualifier } from '@/utils/grade';
-import { Button, Card, EvidenceMeter, IconButton, ListGroup, ListRow, ScoreGauge, Screen, Section, Txt } from '@/components/ui';
+import { Button, Card, EvidenceMeter, IconButton, ListGroup, ListRow, Pill, Screen, Section, Txt } from '@/components/ui';
 
 export interface HealthDomainConfig {
   key: 'skin' | 'sleep' | 'gut' | 'hormonal' | 'hair' | 'fitness';
@@ -25,8 +24,8 @@ export interface HealthDomainConfig {
 }
 
 /**
- * Health domain detail. Shows the user's real domain score from the API, or
- * an honest empty state — never placeholder numbers.
+ * Health domain detail. Shows which ingredients in the user's stack affect this
+ * area (no score — Elory doesn't give one), or an honest empty state.
  */
 export function HealthDomainScreen({ config }: { config: HealthDomainConfig }) {
   const { stack } = useAppState();
@@ -39,31 +38,40 @@ export function HealthDomainScreen({ config }: { config: HealthDomainConfig }) {
     if (!biodomain || !stackIds) { setRemote(null); setLoading(false); return; }
     setLoading(true);
     api.getStackDomain(biodomain, stackIds.split(','))
-      // Zero with no contributing ingredients means "nothing in the stack affects this yet".
-      .then((r) => setRemote(r.score || r.factors.length ? r : null))
+      .then((r) => setRemote(r.factors.length ? r : null))
       .catch(() => setRemote(null))
       .finally(() => setLoading(false));
   }, [biodomain, stackIds]);
 
   const personal = remote?.factors?.length ? remote.factors : null;
+  const helps = personal?.filter((f) => f.direction === 'benefit').length ?? 0;
+  const watch = personal?.filter((f) => f.direction === 'harm').length ?? 0;
+  const mixed = (personal?.length ?? 0) - helps - watch;
   const name = config.title.replace(/ health$/i, '').toLowerCase();
 
   return (
     <Screen back title={config.title} right={<IconButton icon={SlidersHorizontal} label="Edit health profile" onPress={() => router.push('/health/edit-profile' as never)} />}>
       <Card padding={20} style={{ alignItems: 'center' }}>
-        {loading ? <View style={{ height: 180, justifyContent: 'center' }}><ActivityIndicator color={Palette.accent} /></View> : remote ? (
-          <>
-            <ScoreGauge score={remote.score} size={220} label={`${config.title} score`} qualifier={remote.qualifier || scoreQualifier(remote.score)} />
-            <Txt variant="subhead" tone="secondary" align="center" style={{ marginTop: -6 }}>
+        {loading ? <View style={{ height: 120, justifyContent: 'center' }}><ActivityIndicator color={Palette.accent} /></View> : personal ? (
+          <View style={{ paddingVertical: 8, alignItems: 'center' }}>
+            <Txt variant="title2" align="center">
+              {personal.length} ingredient{personal.length === 1 ? '' : 's'} in your stack affect your {name}
+            </Txt>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 14 }}>
+              {helps ? <Pill label={`${helps} support${helps === 1 ? 's' : ''} it`} tone="strong" /> : null}
+              {watch ? <Pill label={`${watch} worth monitoring`} tone="weak" /> : null}
+              {mixed ? <Pill label={`${mixed} mixed`} tone="moderate" /> : null}
+            </View>
+            <Txt variant="subhead" tone="secondary" align="center" style={{ marginTop: 12 }}>
               Based on your profile, your stack and the evidence behind each ingredient.
             </Txt>
-          </>
+          </View>
         ) : (
           <View style={{ paddingVertical: 12, alignItems: 'center' }}>
-            <Txt variant="title2" align="center">{biodomain ? 'Not enough data yet' : 'Scoring coming soon'}</Txt>
+            <Txt variant="title2" align="center">{biodomain ? 'Nothing in your stack yet' : 'Coming soon'}</Txt>
             <Txt variant="subhead" tone="secondary" align="center" style={{ marginTop: 8 }}>
               {biodomain
-                ? `Add products that affect ${name} to your stack and Elory will score this area for you.`
+                ? `Add products to your stack and Elory will show which of their ingredients affect your ${name}.`
                 : `We’re still building the evidence base for ${name}. Below is what the research says in general.`}
             </Txt>
             {biodomain ? <Button label="Add products" size="md" fullWidth={false} style={{ marginTop: 16 }} onPress={() => router.push('/(tabs)/explore' as never)} /> : null}

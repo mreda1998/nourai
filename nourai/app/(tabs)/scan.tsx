@@ -12,8 +12,8 @@ import Animated, {
 import { Camera, PackagePlus, Search, X, Zap, ZapOff } from 'lucide-react-native';
 import { api, isBarcodeIngestionResponse, Product } from '@/services/api';
 import { Palette, Radius } from '@/constants/theme';
-import { categoryLabel, gradeToScore, scoreQualifier } from '@/utils/grade';
-import { Button, IconButton, ProductImage, ScoreBadge, Txt } from '@/components/ui';
+import { categoryLabel } from '@/utils/grade';
+import { Button, IconButton, ProductImage, Txt } from '@/components/ui';
 
 const RETICLE_W = 272;
 const RETICLE_H = 176;
@@ -202,8 +202,8 @@ function Reticle({ active, found }: { active: boolean; found: boolean }) {
 }
 
 function ResultCard({ product, onAgain }: { product: Product; onAgain: () => void }) {
-  const score = gradeToScore(product.grade);
-  const matched = product.ingredients.filter((i) => !i.is_nutrient).length;
+  const ingredients = product.ingredients.filter((i) => !i.is_nutrient);
+  const researched = ingredients.filter((i) => i.ingredient_id).length;
   return (
     <Animated.View entering={FadeInDown.springify().damping(18)} exiting={FadeOutDown} style={styles.result}>
       <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
@@ -212,10 +212,10 @@ function ResultCard({ product, onAgain }: { product: Product; onAgain: () => voi
           <Txt variant="caption" tone="secondary" numberOfLines={1}>{product.brand || categoryLabel(product.category)}</Txt>
           <Txt variant="headline" numberOfLines={2} style={{ marginTop: 2 }}>{product.name}</Txt>
           <Txt variant="footnote" tone="secondary" style={{ marginTop: 3 }}>
-            {scoreQualifier(score)} · {matched} ingredient{matched === 1 ? '' : 's'}
+            {ingredients.length} ingredient{ingredients.length === 1 ? '' : 's'}
+            {ingredients.length ? ` · ${researched} with research` : ''}
           </Txt>
         </View>
-        <ScoreBadge score={score} size={52} />
       </View>
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
         <Button label="Scan again" variant="secondary" size="md" style={{ flex: 1 }} onPress={onAgain} />

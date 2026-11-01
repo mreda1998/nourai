@@ -48,7 +48,7 @@ export const FeedbackSheet = forwardRef<BottomSheetModal, {
           <Txt variant="title2">{productName ? 'Something look wrong?' : 'Beta feedback'}</Txt>
           <Txt variant="subhead" tone="secondary" style={{ marginTop: 4 }}>
             {productName
-              ? `Tell us what’s off about ${productName} — the score, an ingredient, missing info.`
+              ? `Tell us what’s off about ${productName} — a verdict, an ingredient, missing info.`
               : 'What’s confusing, broken or missing? What would you use every day?'}
           </Txt>
           <BottomSheetTextInput

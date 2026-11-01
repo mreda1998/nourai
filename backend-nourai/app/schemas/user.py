@@ -74,7 +74,7 @@ class ScanHistoryItemResponse(BaseModel):
     product_id: UUID
     product_name: str
     product_brand: str | None = None
-    product_grade: str
+    product_grade: str | None
     product_category: str = "supplement"
     product_image_url: str | None = None
     scanned_at: datetime
@@ -184,5 +184,5 @@ class StackEntryWithProduct(StackEntryResponse):
     product_name: str
     product_brand: str | None = None
     product_image_url: str | None = None
-    product_grade: str
+    product_grade: str | None
     product_category: str = "supplement"

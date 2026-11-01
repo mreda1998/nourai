@@ -256,7 +256,7 @@ export function LabCard({ lab, open, onToggle }: CardProps & { lab: LabObservati
   return (
     <SummaryCard title="Lab results" verdict={verdict} tone={tone} open={open} onToggle={onToggle}>
       <View style={styles.strip}>
-        <Txt variant="footnote" tone="secondary">Measured on a tested sample, shown separately from Elory’s score.</Txt>
+        <Txt variant="footnote" tone="secondary">Measured on a tested sample, shown separately from the label.</Txt>
       </View>
       {lab.slice(0, 12).map((o) =>
         o.measure ? (

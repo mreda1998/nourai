@@ -4,8 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { History as HistoryIcon, Search } from 'lucide-react-native';
 import { api, ScanHistoryItem, SearchHistoryItem } from '@/services/api';
 import { Palette } from '@/constants/theme';
-import { gradeToScore } from '@/utils/grade';
-import { EmptyState, ListGroup, ListRow, ProductImage, ScoreBadge, Screen, SearchField, Section, SegmentedControl } from '@/components/ui';
+import { EmptyState, ListGroup, ListRow, ProductImage, Screen, SearchField, Section, SegmentedControl } from '@/components/ui';
 
 type Row =
   | { kind: 'scan'; id: string; at: string; item: ScanHistoryItem }
@@ -86,8 +85,6 @@ export default function HistoryScreen() {
                 leading={<ProductImage uri={r.item.product_image_url} category={r.item.product_category} size={44} />}
                 title={r.item.product_name}
                 subtitle={`${r.item.product_brand || r.item.product_category} · ${time(r.at)}`}
-                trailing={<ScoreBadge score={gradeToScore(r.item.product_grade)} size={34} />}
-                chevron={false}
                 onPress={() => router.push(`/product/${r.item.product_id}?via=history` as never)}
               />
             ) : (

@@ -75,7 +75,7 @@ export default function YouScreen() {
           ) : (
             <>
               <Txt variant="headline">Personalise your analysis</Txt>
-              <Txt variant="footnote" tone="secondary" style={{ marginTop: 4 }}>Tell Elory your goals and concerns so every product is scored for you.</Txt>
+              <Txt variant="footnote" tone="secondary" style={{ marginTop: 4 }}>Tell Elory your goals and concerns so every product shows what matters to you.</Txt>
               <Button label="Set up profile" size="md" variant="secondary" style={{ marginTop: 14 }} onPress={() => router.push('/health/edit-profile' as never)} />
             </>
           )}

@@ -9,10 +9,10 @@ import { deviceRegion } from '@/lib/region';
 import { track } from '@/lib/insights';
 import { Palette, Radius } from '@/constants/theme';
 import { JOURNAL } from '@/constants/journal';
-import { categoryLabel, evidenceStrength, gradeToScore } from '@/utils/grade';
+import { categoryLabel, evidenceStrength } from '@/utils/grade';
 import {
   Button, Card, Chip, EmptyState, EvidenceMeter, ListGroup, ListRow, Pill, PressableScale, ProductImage,
-  ScoreBadge, Screen, SearchField, Section, SegmentedControl, Txt,
+  Screen, SearchField, Section, SegmentedControl, Txt,
 } from '@/components/ui';
 
 type Mode = 'products' | 'ingredients';
@@ -136,8 +136,6 @@ export default function DiscoverScreen() {
                     leading={<ProductImage uri={p.image_url} category={p.category} size={48} />}
                     title={p.name}
                     subtitle={p.brand || categoryLabel(p.category)}
-                    trailing={<ScoreBadge score={gradeToScore(p.grade)} size={36} />}
-                    chevron={false}
                     onPress={() => router.push(`/product/${p.id}?via=search` as never)}
                   />
                 ))}

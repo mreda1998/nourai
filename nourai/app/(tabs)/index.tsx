@@ -5,17 +5,15 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { ArrowUpRight, Moon, ScanLine, Search, Sparkles, Sun, Sunrise, Sunset } from 'lucide-react-native';
+import { ArrowUpRight, ChevronRight, Moon, ScanLine, Search, Sparkles, Sun, Sunrise, Sunset } from 'lucide-react-native';
 import { Layout, Palette, Radius } from '@/constants/theme';
 import { greeting, Imagery, todayHero } from '@/constants/imagery';
 import { useAppState, type Product } from '@/context/app-state';
 import { useAuth } from '@/context/auth-context';
 import { isCatalogueId } from '@/lib/insights';
 import { api, DailyScoreResponse, ScanHistoryItem } from '@/services/api';
-import { gradeToScore, scoreQualifier } from '@/utils/grade';
 import {
-  Button, Card, ContributorBar, IconButton, PressableScale, ProductImage, ScoreBadge,
-  ScoreGauge, Screen, Section, Skeleton, Txt,
+  Button, Card, IconButton, PressableScale, ProductImage, Screen, Section, Skeleton, Txt,
 } from '@/components/ui';
 
 const HERO_H = 380;
@@ -23,24 +21,24 @@ const HERO_H = 380;
 export default function TodayScreen() {
   const { stack, isStackLoading, stackError, refreshStack } = useAppState();
   const { user } = useAuth();
-  const [score, setScore] = useState<DailyScoreResponse | null>(null);
-  const [scoreLoading, setScoreLoading] = useState(true);
-  const [scoreFailed, setScoreFailed] = useState(false);
+  const [areas, setAreas] = useState<DailyScoreResponse | null>(null);
+  const [areasLoading, setAreasLoading] = useState(true);
+  const [areasFailed, setAreasFailed] = useState(false);
   const [recent, setRecent] = useState<ScanHistoryItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const firstName = user?.name?.trim().split(' ')[0];
 
-  // Score whatever is in the stack right now (guests included).
+  // What the stack supports right now (guests included).
   const stackIds = stack.map((p) => p.id).filter(isCatalogueId).join(',');
   const load = useCallback(async () => {
     const [s, r] = await Promise.allSettled([
       stackIds ? api.getStackScore(stackIds.split(',')) : Promise.resolve(null),
       api.getScanHistory({ limit: 8 }),
     ]);
-    setScore(s.status === 'fulfilled' ? s.value : null);
-    setScoreFailed(s.status === 'rejected');
+    setAreas(s.status === 'fulfilled' ? s.value : null);
+    setAreasFailed(s.status === 'rejected');
     setRecent(r.status === 'fulfilled' ? r.value.items : []);
-    setScoreLoading(false);
+    setAreasLoading(false);
   }, [stackIds]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -57,7 +55,7 @@ export default function TodayScreen() {
   return (
     <Screen tabbed hero={<Hero name={firstName} />} refreshing={refreshing} onRefresh={refresh}>
       <View style={{ marginTop: -150 }}>
-        {hasStack ? <ScoreCard score={score} loading={scoreLoading} failed={scoreFailed} />
+        {hasStack ? <StackCard count={stack.length} areas={areas} loading={areasLoading} failed={areasFailed} />
           : stackUnknown ? <StackStatus failed={!!stackError} onRetry={() => refreshStack().catch(() => undefined)} />
             : <WelcomeCard />}
       </View>
@@ -112,46 +110,50 @@ function Hero({ name }: { name?: string }) {
   );
 }
 
-// ─── Score ────────────────────────────────────────────────────────────────────
+// ─── Stack ────────────────────────────────────────────────────────────────────
 
-function headline(score: number | null) {
-  if (score == null) return 'Your stack at a glance';
-  if (score >= 85) return 'Your stack is in excellent balance';
-  if (score >= 70) return 'Your stack is working well';
-  if (score >= 45) return 'A few changes would help';
-  return 'Your stack needs attention';
+/** "sleep", "sleep and gut", "sleep, gut and skin" */
+function listOf(words: string[]) {
+  return words.length < 2 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
 }
 
-function ScoreCard({ score, loading, failed }: { score: DailyScoreResponse | null; loading: boolean; failed: boolean }) {
-  // A zero across the board means none of the products have scored ingredients yet.
-  const noData = !score || score.categories.every((c) => c.value === 0);
-  const value = noData ? null : score.overall;
-  const weakest = score?.categories?.length ? [...score.categories].sort((a, b) => a.value - b.value)[0] : null;
+// No score (Elory gives none): what the research says the stack supports, in words.
+function StackCard({ count, areas, loading, failed }: {
+  count: number;
+  areas: DailyScoreResponse | null;
+  loading: boolean;
+  failed: boolean;
+}) {
+  const supported = (areas?.categories ?? []).filter((c) => c.value > 0).sort((a, b) => b.value - a.value).slice(0, 4);
+  const products = `${count} product${count === 1 ? '' : 's'} in your stack`;
   return (
     <Animated.View entering={FadeInDown.duration(700).delay(150)}>
-      <Card padding={22} style={{ alignItems: 'stretch' }}>
-        <View style={{ alignItems: 'center', marginTop: 4 }}>
-          {loading ? (
-            <View style={{ height: 200, justifyContent: 'center' }}><Skeleton width={180} height={120} radius={60} /></View>
-          ) : (
-            <ScoreGauge score={value} size={236} label="Stack score" qualifier={value != null ? score?.qualifier ?? scoreQualifier(value) : 'Not enough data'} />
-          )}
-        </View>
-        <Txt variant="title1" align="center" style={{ marginTop: -8 }}>{headline(value)}</Txt>
-        <Txt variant="subhead" tone="secondary" align="center" style={{ marginTop: 8, paddingHorizontal: 8 }}>
-          {value == null
-            ? failed
-              ? 'We couldn’t calculate your score. Pull down to try again.'
-              : 'We’re still researching the ingredients in your stack, so there’s no score yet.'
-            : weakest && weakest.value < 70
-              ? `${weakest.label} is holding your score back. Tap it below to see why.`
-              : 'Built from product quality, evidence strength and your health profile.'}
-        </Txt>
+      <Card padding={22}>
+        <Txt variant="overline" tone="accent">Your stack</Txt>
+        {loading ? (
+          <View style={{ gap: 10, marginTop: 12 }}><Skeleton width={240} height={26} /><Skeleton width={180} height={14} /></View>
+        ) : (
+          <>
+            <Txt variant="title1" style={{ marginTop: 10 }}>
+              {supported.length ? `Supports your ${listOf(supported.map((c) => c.label.toLowerCase()))}` : products}
+            </Txt>
+            <Txt variant="subhead" tone="secondary" style={{ marginTop: 8 }}>
+              {supported.length
+                ? `${products}. Based on the research behind each ingredient — tap an area to see what helps.`
+                : failed
+                  ? 'We couldn’t check your stack. Pull down to try again.'
+                  : 'We’re still researching the ingredients in your stack. What they support will show here.'}
+            </Txt>
+          </>
+        )}
 
-        {!noData && score?.categories?.length ? (
-          <View style={{ marginTop: 18, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Palette.hairline, paddingTop: 6 }}>
-            {score.categories.slice(0, 4).map((c, i) => (
-              <ContributorBar key={c.key} label={c.label} value={c.value} valueLabel={`${Math.round(c.value)}`} delay={250 + i * 90} onPress={() => router.push('/domains' as never)} />
+        {supported.length ? (
+          <View style={{ marginTop: 18, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Palette.hairline }}>
+            {supported.map((c) => (
+              <PressableScale key={c.key} onPress={() => router.push('/domains' as never)} style={styles.areaRow} accessibilityLabel={c.label}>
+                <Txt variant="subheadStrong" style={{ flex: 1 }}>{c.label}</Txt>
+                <ChevronRight size={18} color={Palette.ink4} strokeWidth={2} />
+              </PressableScale>
             ))}
           </View>
         ) : null}
@@ -209,8 +211,8 @@ function WelcomeCard() {
 function HowItWorks() {
   const steps = [
     { n: '1', title: 'Scan or search', body: 'Barcode, label, or name — we identify the exact formulation.' },
-    { n: '2', title: 'See the evidence', body: 'Every ingredient graded on what studies show, not marketing.' },
-    { n: '3', title: 'Build your stack', body: 'Add what you use and Elory scores how it all works together.' },
+    { n: '2', title: 'See the evidence', body: 'Every ingredient checked against what studies show, not marketing.' },
+    { n: '3', title: 'Build your stack', body: 'Add what you use and see what your routine supports — and what to watch.' },
   ];
   return (
     <Section title="How Elory works">
@@ -263,7 +265,6 @@ function Protocol({ stack }: { stack: Product[] }) {
                     <Txt variant="subheadStrong" numberOfLines={1}>{p.name}</Txt>
                     <Txt variant="footnote" tone="secondary" numberOfLines={1}>{[p.brand, p.quantity].filter(Boolean).join(' · ')}</Txt>
                   </View>
-                  <ScoreBadge score={gradeToScore(p.grade)} size={34} />
                 </PressableScale>
               ))}
             </View>
@@ -280,10 +281,7 @@ function RecentCard({ item, index }: { item: ScanHistoryItem; index: number }) {
   return (
     <Animated.View entering={FadeInDown.duration(500).delay(80 * index)}>
       <Card padding={14} style={{ width: 156 }} onPress={() => router.push(`/product/${item.product_id}?via=history` as never)} accessibilityLabel={item.product_name}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <ProductImage uri={item.product_image_url} category={item.product_category} size={56} />
-          <ScoreBadge score={gradeToScore(item.product_grade)} size={32} />
-        </View>
+        <ProductImage uri={item.product_image_url} category={item.product_category} size={56} />
         <Txt variant="caption" tone="secondary" numberOfLines={1} style={{ marginTop: 14 }}>{item.product_brand || item.product_category}</Txt>
         <Txt variant="subheadStrong" numberOfLines={2} style={{ marginTop: 2, minHeight: 40 }}>{item.product_name}</Txt>
       </Card>
@@ -308,6 +306,7 @@ function JournalFeature() {
 const styles = StyleSheet.create({
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(252,251,248,0.82)', alignItems: 'center', justifyContent: 'center' },
+  areaRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Palette.hairline },
   askPill: { marginTop: 18, height: 50, borderRadius: 25, backgroundColor: 'rgba(14,31,30,0.05)', flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16 },
   step: { flexDirection: 'row', gap: 14, alignItems: 'center', padding: 14 },
   stepNum: { width: 40, height: 40, borderRadius: 20, backgroundColor: Palette.accentSoft, alignItems: 'center', justifyContent: 'center' },

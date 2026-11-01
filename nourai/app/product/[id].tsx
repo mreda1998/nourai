@@ -11,13 +11,13 @@ import type { BarcodeIngestionResponse, Ingredient, LabObservation, Product, Ser
 import { useAppState } from '@/context/app-state';
 import { useAuth } from '@/context/auth-context';
 import { analyzeIngredients, buildPersonalAnalysis } from '@/utils/personalization';
-import { categoryLabel, gradeToScore, scoreQualifier, scoreTone, toneColor } from '@/utils/grade';
+import { categoryLabel } from '@/utils/grade';
 import { AddToStackSheet, type StackEntry } from '@/components/AddToStackSheet';
 import { FeedbackSheet } from '@/components/FeedbackSheet';
 import { isCatalogueId, track } from '@/lib/insights';
 import {
   Button, Card, EmptyState, IconButton, ListGroup, ListRow, Pill, ProductImage,
-  ScoreBadge, Screen, Section, SkeletonCard, Txt,
+  Screen, Section, SkeletonCard, Txt,
 } from '@/components/ui';
 import {
   DoseCard, IngredientsCard, LabCard, LegacyNutritionCard, NutritionCard, ProcessingCard, SourceCard, SupportsCard,
@@ -136,7 +136,7 @@ export default function ProductDetailScreen() {
     // Several saved entries (different times or amounts): choose which one on the stack tab.
     if (entries.length !== 1 || !entries[0].stackEntryId) { router.push('/(tabs)/stack' as never); return; }
     const entryId = entries[0].stackEntryId;
-    Alert.alert('Remove from stack?', `${product.name} will no longer count toward your stack score.`, [
+    Alert.alert('Remove from stack?', `${product.name} will be removed from your stack.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove', style: 'destructive', onPress: async () => {
@@ -206,7 +206,6 @@ export default function ProductDetailScreen() {
 
   const ingredients = product.ingredients.filter((i) => !i.is_nutrient);
   const nutrients = product.ingredients.filter((i) => i.is_nutrient);
-  const score = gradeToScore(product.grade);
   const linked = ingredients.filter((i) => i.ingredient_id).length;
   // Unmatched ingredients default to "watch" at ingestion — only library matches count as flagged.
   const isFlagged = (ing: Ingredient) => !!perIngredient?.get(ing.name)?.concernFlags.length || (ing.tag_type === 'warning' && !!ing.ingredient_id);
@@ -267,14 +266,8 @@ export default function ProductDetailScreen() {
       {/* Verdict */}
       <Animated.View entering={FadeInDown.duration(500).delay(100)}>
         <Card style={{ marginTop: 24 }} padding={20}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-            <ScoreBadge score={score} size={72} />
-            <View style={{ flex: 1 }}>
-              <Txt variant="overline" tone="secondary">Elory score</Txt>
-              <Txt variant="title2" color={toneColor(scoreTone(score))} style={{ marginTop: 2 }}>{scoreQualifier(score)}</Txt>
-              <Txt variant="footnote" tone="secondary" style={{ marginTop: 2 }}>Based on ingredient evidence and safety</Txt>
-            </View>
-          </View>
+          <Txt variant="overline" tone="secondary">At a glance</Txt>
+          <Txt variant="title2" style={{ marginTop: 6 }}>{glance(ingredients.length, linked, flagged)}</Txt>
           <Txt variant="callout" style={{ marginTop: 16 }}>
             {product.description || (product.is_ai_generated
               ? 'This analysis was generated automatically from the label. Verify anything important with a professional.'
@@ -360,6 +353,14 @@ export default function ProductDetailScreen() {
       <FeedbackSheet ref={feedback} productId={product.id} productName={product.name} />
     </Screen>
   );
+}
+
+/** The verdict line: what we know about the label, never a made-up rating. */
+function glance(count: number, researched: number, flagged: number): string {
+  if (!count) return 'No ingredient list yet';
+  if (flagged) return `${flagged} ingredient${flagged === 1 ? '' : 's'} worth a look`;
+  if (researched) return `${researched} of ${count} ingredients have research`;
+  return 'Not yet reviewed by our research team';
 }
 
 function Stat({ value, label, tone }: { value: number; label: string; tone?: 'weak' }) {

@@ -15,6 +15,22 @@ from app.schemas.measure import AdditivesSummary, Measure, NutritionPanel, Proce
 
 # ─── Kept for backwards-compat (used in repositories / __init__) ──────────────
 
+
+def grade_from_score(score: int | None) -> str | None:
+    """Letter grade for a 0-100 score; None when nothing has been rated.
+
+    Unrated products used to default to "C", so every product showed the same grade.
+    """
+    if score is None:
+        return None
+    if score >= 80:
+        return "A"
+    if score >= 60:
+        return "B"
+    if score >= 40:
+        return "C"
+    return "D"
+
 class ProductIngredientResponse(BaseModel):
     """Raw ingredient row — internal use only."""
 
@@ -211,16 +227,8 @@ class ProductResponse(BaseModel):
 
     @computed_field
     @property
-    def grade(self) -> str:
-        if self.health_score is None:
-            return "C"
-        if self.health_score >= 80:
-            return "A"
-        if self.health_score >= 60:
-            return "B"
-        if self.health_score >= 40:
-            return "C"
-        return "D"
+    def grade(self) -> str | None:
+        return grade_from_score(self.health_score)
 
     @computed_field
     @property
@@ -242,7 +250,7 @@ class ProductWithDetails(BaseModel):
     category: ProductCategory
     description: str | None = None
     image_url: str | None = None
-    grade: str = "C"
+    grade: str | None = None  # None until the product has been rated: never a made-up default
     tags: list[str] = []
     has_allergen_warning: bool = False
     allergen_warning: str | None = None
@@ -257,18 +265,6 @@ class ProductWithDetails(BaseModel):
     doses: list[Measure] = []
     additives: AdditivesSummary | None = None
     processing: ProcessingInfo | None = None
-
-    @classmethod
-    def _grade_from_score(cls, score: int | None) -> str:
-        if score is None:
-            return "C"
-        if score >= 80:
-            return "A"
-        if score >= 60:
-            return "B"
-        if score >= 40:
-            return "C"
-        return "D"
 
     @classmethod
     def from_orm_with_details(
@@ -404,7 +400,7 @@ class ProductWithDetails(BaseModel):
             category=product.category,
             description=product.summary,
             image_url=product.image_url,
-            grade=cls._grade_from_score(effective_score),
+            grade=grade_from_score(effective_score),
             is_ai_generated=False,
             has_allergen_warning=False,
             ingredients=ingredients,

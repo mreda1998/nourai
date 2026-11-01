@@ -9,7 +9,7 @@ import { APP_DOMAIN_TO_BIODOMAIN } from '@/constants/biodomains';
 import { useAppState } from '@/context/app-state';
 import { isCatalogueId } from '@/lib/insights';
 import { Palette, Radius } from '@/constants/theme';
-import { PressableScale, ScoreBadge, Screen, Txt } from '@/components/ui';
+import { PressableScale, Screen, Txt } from '@/components/ui';
 
 const DOMAINS: { key: keyof typeof APP_DOMAIN_TO_BIODOMAIN; title: string; subtitle: string; Icon: LucideIcon }[] = [
   { key: 'skin', title: 'Skin', subtitle: 'Barrier, texture, ageing', Icon: Waves },
@@ -22,17 +22,18 @@ const DOMAINS: { key: keyof typeof APP_DOMAIN_TO_BIODOMAIN; title: string; subti
 
 export default function DomainsScreen() {
   const { stack } = useAppState();
-  const [scores, setScores] = useState<Record<string, number | null>>({});
+  // How many ingredients in the stack bear on each area — counts, not scores.
+  const [counts, setCounts] = useState<Record<string, number>>({});
   const stackIds = stack.map((p) => p.id).filter(isCatalogueId).join(',');
 
   useEffect(() => {
-    if (!stackIds) { setScores({}); return; }
+    if (!stackIds) { setCounts({}); return; }
     DOMAINS.forEach((d) => {
       const biodomain = APP_DOMAIN_TO_BIODOMAIN[d.key];
       if (!biodomain) return;
       api.getStackDomain(biodomain, stackIds.split(','))
-        .then((r) => setScores((s) => ({ ...s, [d.key]: r.score || r.factors.length ? r.score : null })))
-        .catch(() => setScores((s) => ({ ...s, [d.key]: null })));
+        .then((r) => setCounts((c) => ({ ...c, [d.key]: r.factors.length })))
+        .catch(() => undefined);
     });
   }, [stackIds]);
 
@@ -44,15 +45,19 @@ export default function DomainsScreen() {
             <PressableScale onPress={() => router.push(`/health/${d.key}` as never)} style={styles.card} accessibilityLabel={d.title}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <View style={styles.icon}><d.Icon size={20} color={Palette.accent} strokeWidth={1.8} /></View>
-                <ScoreBadge score={scores[d.key] ?? null} size={36} />
               </View>
               <Txt variant="title2" style={{ marginTop: 'auto' }}>{d.title}</Txt>
               <Txt variant="footnote" tone="secondary" style={{ marginTop: 2 }}>{d.subtitle}</Txt>
+              {counts[d.key] ? (
+                <Txt variant="caption" tone="accent" style={{ marginTop: 6 }}>
+                  {counts[d.key]} ingredient{counts[d.key] === 1 ? '' : 's'} in your stack
+                </Txt>
+              ) : null}
             </PressableScale>
           </Animated.View>
         ))}
       </View>
-      <Txt variant="footnote" tone="tertiary" align="center" style={{ marginTop: 20 }}>Scores appear once your stack includes products that affect each area. Hair scoring is coming soon.</Txt>
+      <Txt variant="footnote" tone="tertiary" align="center" style={{ marginTop: 20 }}>Each area shows how many ingredients in your stack affect it. Hair is coming soon.</Txt>
     </Screen>
   );
 }

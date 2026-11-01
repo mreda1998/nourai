@@ -8,7 +8,7 @@ import { Card, ListGroup, ListRow, Screen, Section, Txt } from '@/components/ui'
 const STANDARDS = [
   ['Evidence first', 'Every ingredient is graded on peer-reviewed research, weighted by study quality.'],
   ['Belief vs. reality', 'We show what people think an ingredient does next to what the data supports.'],
-  ['No paid placement', 'Brands can’t buy scores, rankings or visibility.'],
+  ['No paid placement', 'Brands can’t buy verdicts, rankings or visibility.'],
 ];
 
 export default function AboutScreen() {
