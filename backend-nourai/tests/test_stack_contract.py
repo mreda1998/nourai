@@ -69,3 +69,84 @@ async def test_verification_cannot_grant_a_client_requested_entitlement_or_targe
     finally:
         app.dependency_overrides.clear()
         app.dependency_overrides.update(overrides)
+
+
+def _product_as_loaded_from_postgres(**overrides):
+    # products.category is a String(20) column: rows come back with a plain str, never a ProductCategory.
+    fields = dict(id=uuid4(), name='Greek Yogurt', brand='Fage', image_url=None, health_score=72, category='food')
+    return SimpleNamespace(**{**fields, **overrides})
+
+
+def _stack_entry(product):
+    return SimpleNamespace(
+        id=uuid4(), product_id=product.id, logged_at=datetime.now(timezone.utc), time_of_day='morning',
+        quantity=1.0, unit=None, notes=None, created_at=datetime.now(timezone.utc), product=product,
+    )
+
+
+class _FakeDB:
+    """Answers the history endpoints' queries in order, the way an AsyncSession would."""
+
+    def __init__(self, *results):
+        self._results = list(results)
+
+    async def execute(self, _stmt):
+        value = self._results.pop(0)
+        return SimpleNamespace(
+            scalar_one=lambda: value,
+            scalar_one_or_none=lambda: value,
+            scalars=lambda: SimpleNamespace(all=lambda: value),
+        )
+
+    def add(self, obj):
+        obj.id, obj.scanned_at = uuid4(), datetime.now(timezone.utc)
+
+    async def commit(self):
+        pass
+
+    async def refresh(self, _obj):
+        pass
+
+
+@pytest.mark.anyio
+async def test_stack_responses_carry_the_category_stored_on_the_product_row():
+    user, product = SimpleNamespace(id=uuid4()), _product_as_loaded_from_postgres()
+    entry = _stack_entry(product)
+    service = SimpleNamespace(
+        get_daily_stack=AsyncMock(return_value=[entry]), add_to_stack=AsyncMock(return_value=entry)
+    )
+    overrides = dict(app.dependency_overrides)
+    app.dependency_overrides.update({get_current_user: lambda: user, get_stack_service: lambda: service})
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as client:
+            response = await client.get('/api/v1/users/me/stack')
+            assert response.status_code == 200
+            assert response.json()[0]['product_category'] == 'food'
+            response = await client.post('/api/v1/users/me/stack', json={'product_id': str(product.id)})
+            assert response.status_code == 201
+            assert response.json()['product_category'] == 'food'
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(overrides)
+
+
+@pytest.mark.anyio
+async def test_scan_history_responses_carry_the_category_stored_on_the_product_row():
+    from app.db.session import get_db
+
+    user, product = SimpleNamespace(id=uuid4()), _product_as_loaded_from_postgres()
+    scanned = SimpleNamespace(id=uuid4(), product_id=product.id, product=product, scanned_at=datetime.now(timezone.utc))
+    db = _FakeDB(1, [scanned], product)
+    overrides = dict(app.dependency_overrides)
+    app.dependency_overrides.update({get_current_user: lambda: user, get_db: lambda: db})
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url='http://test') as client:
+            response = await client.get('/api/v1/users/me/history')
+            assert response.status_code == 200
+            assert response.json()['items'][0]['product_category'] == 'food'
+            response = await client.post('/api/v1/users/me/history', json={'product_id': str(product.id)})
+            assert response.status_code == 201
+            assert response.json()['product_category'] == 'food'
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(overrides)

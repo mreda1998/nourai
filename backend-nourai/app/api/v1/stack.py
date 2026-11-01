@@ -39,7 +39,7 @@ def _entry_with_product(entry) -> StackEntryWithProduct:
         product_brand=product.brand,
         product_image_url=product.image_url,
         product_grade=_grade(product.health_score),
-        product_category=product.category.value if product.category else "supplement",
+        product_category=product.category or "supplement",
     )
 
 

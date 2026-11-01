@@ -42,8 +42,9 @@ class Product(Base, UUIDMixin, TimestampMixin):
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     brand: Mapped[str | None] = mapped_column(Text, nullable=True)
-    category: Mapped[ProductCategory] = mapped_column(
-        String(20), nullable=False, default=ProductCategory.SUPPLEMENT
+    # A ProductCategory value stored as plain text: rows load back as str.
+    category: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=ProductCategory.SUPPLEMENT.value
     )
     subcategory: Mapped[str | None] = mapped_column(String(100), nullable=True)
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
