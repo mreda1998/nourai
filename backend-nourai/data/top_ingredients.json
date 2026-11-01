@@ -1,0 +1,799 @@
+[
+  {
+    "canonical_name": "Salt",
+    "category": "mineral",
+    "aliases": [
+      "sodium chloride",
+      "sea salt",
+      "table salt",
+      "iodised salt"
+    ]
+  },
+  {
+    "canonical_name": "Sugar",
+    "category": "sweetener",
+    "aliases": [
+      "cane sugar",
+      "unrefined cane sugar",
+      "sucrose",
+      "brown sugar",
+      "raw cane sugar"
+    ]
+  },
+  {
+    "canonical_name": "Wheat flour",
+    "category": "other",
+    "aliases": [
+      "white flour",
+      "refined wheat flour"
+    ]
+  },
+  {
+    "canonical_name": "Whole wheat flour",
+    "category": "other",
+    "aliases": [
+      "wholemeal flour",
+      "whole grain wheat flour"
+    ]
+  },
+  {
+    "canonical_name": "Lecithin",
+    "category": "additive",
+    "aliases": [
+      "E322",
+      "soya lecithin",
+      "sunflower lecithin",
+      "lecithins",
+      "soy lecithin",
+      "E322i"
+    ]
+  },
+  {
+    "canonical_name": "Rapeseed oil",
+    "category": "fatty_acid",
+    "aliases": [
+      "colza oil",
+      "canola oil"
+    ]
+  },
+  {
+    "canonical_name": "Sunflower oil",
+    "category": "fatty_acid",
+    "aliases": [
+      "helianthus annuus seed oil",
+      "high oleic sunflower oil"
+    ]
+  },
+  {
+    "canonical_name": "Palm oil",
+    "category": "fatty_acid",
+    "aliases": [
+      "palm fat",
+      "palm kernel oil",
+      "elaeis guineensis oil"
+    ]
+  },
+  {
+    "canonical_name": "Natural flavourings",
+    "category": "additive",
+    "aliases": [
+      "natural flavouring",
+      "natural flavors",
+      "natural flavor"
+    ]
+  },
+  {
+    "canonical_name": "Sodium bicarbonate",
+    "category": "additive",
+    "aliases": [
+      "E500",
+      "E500ii",
+      "baking soda",
+      "sodium hydrogen carbonate",
+      "sodium carbonates"
+    ]
+  },
+  {
+    "canonical_name": "Ammonium bicarbonate",
+    "category": "additive",
+    "aliases": [
+      "E503",
+      "E503ii",
+      "ammonium carbonates",
+      "ammonium hydrogen carbonate"
+    ]
+  },
+  {
+    "canonical_name": "Yeast",
+    "category": "other",
+    "aliases": [
+      "baker's yeast"
+    ]
+  },
+  {
+    "canonical_name": "Wheat gluten",
+    "category": "other",
+    "aliases": [
+      "vital wheat gluten",
+      "gluten"
+    ]
+  },
+  {
+    "canonical_name": "Milk",
+    "category": "other",
+    "aliases": [
+      "whole milk",
+      "cow's milk"
+    ]
+  },
+  {
+    "canonical_name": "Skimmed milk powder",
+    "category": "other",
+    "aliases": [
+      "skim milk powder",
+      "nonfat dry milk"
+    ]
+  },
+  {
+    "canonical_name": "Cocoa",
+    "category": "other",
+    "aliases": [
+      "cocoa paste",
+      "fat reduced cocoa powder",
+      "cocoa powder",
+      "cocoa mass",
+      "cocoa solids",
+      "cacao"
+    ]
+  },
+  {
+    "canonical_name": "Cocoa butter",
+    "category": "fatty_acid",
+    "aliases": [
+      "theobroma cacao seed butter"
+    ]
+  },
+  {
+    "canonical_name": "Glucose syrup",
+    "category": "sweetener",
+    "aliases": [
+      "corn syrup",
+      "dried glucose syrup"
+    ]
+  },
+  {
+    "canonical_name": "Glucose-fructose syrup",
+    "category": "sweetener",
+    "aliases": [
+      "high fructose corn syrup",
+      "HFCS",
+      "fructose-glucose syrup"
+    ]
+  },
+  {
+    "canonical_name": "Oats",
+    "category": "other",
+    "aliases": [
+      "oat",
+      "oat flakes",
+      "rolled oats",
+      "whole grain oats"
+    ]
+  },
+  {
+    "canonical_name": "Honey",
+    "category": "sweetener",
+    "aliases": []
+  },
+  {
+    "canonical_name": "Vinegar",
+    "category": "other",
+    "aliases": [
+      "spirit vinegar",
+      "white vinegar"
+    ]
+  },
+  {
+    "canonical_name": "Garlic",
+    "category": "herb",
+    "aliases": [
+      "garlic powder"
+    ]
+  },
+  {
+    "canonical_name": "Vanillin",
+    "category": "additive",
+    "aliases": [
+      "artificial vanilla flavour",
+      "vanilla flavouring"
+    ]
+  },
+  {
+    "canonical_name": "Inulin",
+    "category": "other",
+    "aliases": [
+      "chicory fibre",
+      "oligofructose",
+      "chicory root fiber",
+      "fructooligosaccharides",
+      "FOS"
+    ]
+  },
+  {
+    "canonical_name": "Maltodextrin",
+    "category": "additive",
+    "aliases": []
+  },
+  {
+    "canonical_name": "Modified starch",
+    "category": "additive",
+    "aliases": [
+      "modified corn starch",
+      "modified maize starch"
+    ]
+  },
+  {
+    "canonical_name": "Phosphoric acid",
+    "category": "additive",
+    "aliases": [
+      "E338",
+      "orthophosphoric acid"
+    ]
+  },
+  {
+    "canonical_name": "Caramel colour",
+    "category": "additive",
+    "aliases": [
+      "E150d",
+      "E150a",
+      "caramel color",
+      "sulphite ammonia caramel"
+    ]
+  },
+  {
+    "canonical_name": "Monosodium glutamate",
+    "category": "additive",
+    "aliases": [
+      "E621",
+      "MSG",
+      "sodium glutamate"
+    ]
+  },
+  {
+    "canonical_name": "Thiamin",
+    "category": "vitamin",
+    "aliases": [
+      "vitamin B1",
+      "thiamine",
+      "thiamine mononitrate",
+      "thiamine hydrochloride"
+    ]
+  },
+  {
+    "canonical_name": "Vitamin B6",
+    "category": "vitamin",
+    "aliases": [
+      "pyridoxine",
+      "pyridoxine hydrochloride"
+    ]
+  },
+  {
+    "canonical_name": "Carrageenan",
+    "category": "additive",
+    "aliases": [
+      "E407",
+      "carrageenans"
+    ]
+  },
+  {
+    "canonical_name": "Guar gum",
+    "category": "additive",
+    "aliases": [
+      "E412",
+      "cyamopsis tetragonoloba gum"
+    ]
+  },
+  {
+    "canonical_name": "Aspartame",
+    "category": "sweetener",
+    "aliases": [
+      "E951"
+    ]
+  },
+  {
+    "canonical_name": "Acesulfame K",
+    "category": "sweetener",
+    "aliases": [
+      "E950",
+      "acesulfame potassium"
+    ]
+  },
+  {
+    "canonical_name": "Sucralose",
+    "category": "sweetener",
+    "aliases": [
+      "E955",
+      "splenda"
+    ]
+  },
+  {
+    "canonical_name": "Fragrance",
+    "category": "other",
+    "aliases": [
+      "parfum",
+      "perfume",
+      "aroma",
+      "fragrance (parfum)"
+    ]
+  },
+  {
+    "canonical_name": "Glycerin",
+    "category": "other",
+    "aliases": [
+      "E422",
+      "glycerine",
+      "glycerol",
+      "vegetable glycerin"
+    ]
+  },
+  {
+    "canonical_name": "Linalool",
+    "category": "other",
+    "aliases": []
+  },
+  {
+    "canonical_name": "Limonene",
+    "category": "other",
+    "aliases": [
+      "d-limonene"
+    ]
+  },
+  {
+    "canonical_name": "Citronellol",
+    "category": "other",
+    "aliases": []
+  },
+  {
+    "canonical_name": "Geraniol",
+    "category": "other",
+    "aliases": []
+  },
+  {
+    "canonical_name": "Hexyl cinnamal",
+    "category": "other",
+    "aliases": [
+      "hexyl cinnamaldehyde"
+    ]
+  },
+  {
+    "canonical_name": "Coumarin",
+    "category": "other",
+    "aliases": []
+  },
+  {
+    "canonical_name": "Benzyl salicylate",
+    "category": "other",
+    "aliases": []
+  },
+  {
+    "canonical_name": "Alpha-isomethyl ionone",
+    "category": "other",
+    "aliases": [
+      "alpha isomethyl ionone"
+    ]
+  },
+  {
+    "canonical_name": "Phenoxyethanol",
+    "category": "preservative",
+    "aliases": []
+  },
+  {
+    "canonical_name": "Benzyl alcohol",
+    "category": "preservative",
+    "aliases": [
+      "E1519"
+    ]
+  },
+  {
+    "canonical_name": "Ethylhexylglycerin",
+    "category": "preservative",
+    "aliases": []
+  },
+  {
+    "canonical_name": "Caprylyl glycol",
+    "category": "other",
+    "aliases": []
+  },
+  {
+    "canonical_name": "Disodium EDTA",
+    "category": "additive",
+    "aliases": [
+      "EDTA",
+      "tetrasodium EDTA",
+      "disodium edetate"
+    ]
+  },
+  {
+    "canonical_name": "Sodium hydroxide",
+    "category": "additive",
+    "aliases": [
+      "E524",
+      "lye",
+      "caustic soda"
+    ]
+  },
+  {
+    "canonical_name": "Sodium laureth sulfate",
+    "category": "other",
+    "aliases": [
+      "SLES",
+      "sodium lauryl ether sulfate"
+    ]
+  },
+  {
+    "canonical_name": "Sodium lauryl sulfate",
+    "category": "other",
+    "aliases": [
+      "SLS",
+      "sodium dodecyl sulfate"
+    ]
+  },
+  {
+    "canonical_name": "Cocamidopropyl betaine",
+    "category": "other",
+    "aliases": []
+  },
+  {
+    "canonical_name": "Cetearyl alcohol",
+    "category": "other",
+    "aliases": [
+      "cetostearyl alcohol"
+    ]
+  },
+  {
+    "canonical_name": "Cetyl alcohol",
+    "category": "other",
+    "aliases": []
+  },
+  {
+    "canonical_name": "Glyceryl stearate",
+    "category": "other",
+    "aliases": [
+      "glyceryl monostearate",
+      "glyceryl stearate SE"
+    ]
+  },
+  {
+    "canonical_name": "Stearic acid",
+    "category": "fatty_acid",
+    "aliases": [
+      "E570"
+    ]
+  },
+  {
+    "canonical_name": "Propylene glycol",
+    "category": "additive",
+    "aliases": [
+      "E1520"
+    ]
+  },
+  {
+    "canonical_name": "Propanediol",
+    "category": "other",
+    "aliases": [
+      "1,3-propanediol"
+    ]
+  },
+  {
+    "canonical_name": "Dimethicone",
+    "category": "other",
+    "aliases": [
+      "silicone",
+      "polydimethylsiloxane"
+    ]
+  },
+  {
+    "canonical_name": "Carbomer",
+    "category": "other",
+    "aliases": []
+  },
+  {
+    "canonical_name": "Caprylic/capric triglyceride",
+    "category": "fatty_acid",
+    "aliases": [
+      "caprylic capric triglyceride",
+      "MCT oil"
+    ]
+  },
+  {
+    "canonical_name": "Mineral oil",
+    "category": "other",
+    "aliases": [
+      "paraffinum liquidum",
+      "liquid paraffin",
+      "paraffin oil"
+    ]
+  },
+  {
+    "canonical_name": "Shea butter",
+    "category": "fatty_acid",
+    "aliases": [
+      "butyrospermum parkii butter"
+    ]
+  },
+  {
+    "canonical_name": "Panthenol",
+    "category": "vitamin",
+    "aliases": [
+      "provitamin B5",
+      "dexpanthenol",
+      "D-panthenol"
+    ]
+  },
+  {
+    "canonical_name": "Denatured alcohol",
+    "category": "other",
+    "aliases": [
+      "alcohol denat",
+      "SD alcohol"
+    ]
+  },
+  {
+    "canonical_name": "Titanium dioxide",
+    "category": "additive",
+    "aliases": [
+      "E171",
+      "CI 77891"
+    ]
+  },
+  {
+    "canonical_name": "BHT",
+    "category": "preservative",
+    "aliases": [
+      "E321",
+      "butylated hydroxytoluene"
+    ]
+  },
+  {
+    "canonical_name": "Niacinamide",
+    "category": "vitamin",
+    "aliases": [
+      "nicotinamide",
+      "vitamin B3"
+    ]
+  },
+  {
+    "canonical_name": "Hyaluronic acid",
+    "category": "other",
+    "aliases": [
+      "sodium hyaluronate",
+      "hyaluronan"
+    ]
+  },
+  {
+    "canonical_name": "Retinol",
+    "category": "vitamin",
+    "aliases": [
+      "vitamin A",
+      "retinyl palmitate"
+    ]
+  },
+  {
+    "canonical_name": "Salicylic acid",
+    "category": "other",
+    "aliases": [
+      "beta hydroxy acid"
+    ]
+  },
+  {
+    "canonical_name": "Citric acid",
+    "category": "additive",
+    "aliases": [
+      "E330"
+    ]
+  },
+  {
+    "canonical_name": "Sodium benzoate",
+    "category": "preservative",
+    "aliases": [
+      "E211"
+    ]
+  },
+  {
+    "canonical_name": "Potassium sorbate",
+    "category": "preservative",
+    "aliases": [
+      "E202"
+    ]
+  },
+  {
+    "canonical_name": "Xanthan gum",
+    "category": "additive",
+    "aliases": [
+      "E415"
+    ]
+  },
+  {
+    "canonical_name": "Sorbitol",
+    "category": "sweetener",
+    "aliases": [
+      "E420"
+    ]
+  },
+  {
+    "canonical_name": "Vitamin D",
+    "category": "vitamin",
+    "aliases": [
+      "Cholecalciferol",
+      "Ergocalciferol",
+      "vitamin D3",
+      "vitamin D2"
+    ]
+  },
+  {
+    "canonical_name": "Vitamin C",
+    "category": "vitamin",
+    "aliases": [
+      "E300",
+      "ascorbic acid",
+      "sodium ascorbate",
+      "L-ascorbic acid"
+    ]
+  },
+  {
+    "canonical_name": "Vitamin E",
+    "category": "vitamin",
+    "aliases": [
+      "E306",
+      "E307",
+      "tocopherol",
+      "tocopheryl acetate",
+      "mixed tocopherols",
+      "alpha-tocopherol"
+    ]
+  },
+  {
+    "canonical_name": "Vitamin B12",
+    "category": "vitamin",
+    "aliases": [
+      "cyanocobalamin",
+      "methylcobalamin",
+      "cobalamin"
+    ]
+  },
+  {
+    "canonical_name": "Folate",
+    "category": "vitamin",
+    "aliases": [
+      "folic acid",
+      "methylfolate",
+      "vitamin B9"
+    ]
+  },
+  {
+    "canonical_name": "Biotin",
+    "category": "vitamin",
+    "aliases": [
+      "vitamin B7",
+      "vitamin H"
+    ]
+  },
+  {
+    "canonical_name": "Magnesium",
+    "category": "mineral",
+    "aliases": [
+      "magnesium glycinate",
+      "magnesium citrate",
+      "magnesium oxide",
+      "magnesium bisglycinate"
+    ]
+  },
+  {
+    "canonical_name": "Zinc",
+    "category": "mineral",
+    "aliases": [
+      "zinc gluconate",
+      "zinc citrate",
+      "zinc picolinate",
+      "zinc oxide"
+    ]
+  },
+  {
+    "canonical_name": "Iron",
+    "category": "mineral",
+    "aliases": [
+      "ferrous sulfate",
+      "ferrous fumarate",
+      "iron bisglycinate"
+    ]
+  },
+  {
+    "canonical_name": "Calcium",
+    "category": "mineral",
+    "aliases": [
+      "calcium carbonate",
+      "calcium citrate"
+    ]
+  },
+  {
+    "canonical_name": "Omega-3 fatty acids",
+    "category": "fatty_acid",
+    "aliases": [
+      "fish oil",
+      "EPA",
+      "DHA",
+      "omega 3"
+    ]
+  },
+  {
+    "canonical_name": "Creatine",
+    "category": "amino_acid",
+    "aliases": [
+      "creatine monohydrate"
+    ]
+  },
+  {
+    "canonical_name": "Whey protein",
+    "category": "other",
+    "aliases": [
+      "whey protein isolate",
+      "whey protein concentrate"
+    ]
+  },
+  {
+    "canonical_name": "Collagen peptides",
+    "category": "other",
+    "aliases": [
+      "collagen",
+      "hydrolyzed collagen",
+      "collagen hydrolysate"
+    ]
+  },
+  {
+    "canonical_name": "Probiotics",
+    "category": "probiotic",
+    "aliases": [
+      "lactic ferments",
+      "live cultures",
+      "lactobacillus",
+      "bifidobacterium"
+    ]
+  },
+  {
+    "canonical_name": "Melatonin",
+    "category": "other",
+    "aliases": []
+  },
+  {
+    "canonical_name": "Caffeine",
+    "category": "other",
+    "aliases": []
+  },
+  {
+    "canonical_name": "Ashwagandha",
+    "category": "herb",
+    "aliases": [
+      "withania somnifera",
+      "KSM-66"
+    ]
+  },
+  {
+    "canonical_name": "Curcumin",
+    "category": "herb",
+    "aliases": [
+      "turmeric",
+      "E100",
+      "turmeric extract",
+      "curcuma longa"
+    ]
+  },
+  {
+    "canonical_name": "Coenzyme Q10",
+    "category": "antioxidant",
+    "aliases": [
+      "CoQ10",
+      "ubiquinone",
+      "ubiquinol"
+    ]
+  }
+]

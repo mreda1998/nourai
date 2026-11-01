@@ -924,18 +924,24 @@ async def main(args: argparse.Namespace) -> None:
         headers={"User-Agent": "Elory-ResearchAgent/2.0 (hello@elory.app)"},
         follow_redirects=True,
     ) as http:
-        for ingredient in ingredients:
-            await research_one_ingredient(
-                ingredient=ingredient,
-                llm=llm,
-                claude=claude,
-                openai_client=openai_client,
-                http=http,
-                session_factory=session_factory,
-                pubmed_sem=pubmed_sem,
-                dry_run=args.dry_run,
-                skip_images=args.skip_images,
-            )
+        # Ingredients overlap; Claude and PubMed calls stay capped by their own semaphores.
+        slots = asyncio.Semaphore(max(1, args.parallel))
+
+        async def research(ingredient: Ingredient) -> None:
+            async with slots:
+                await research_one_ingredient(
+                    ingredient=ingredient,
+                    llm=llm,
+                    claude=claude,
+                    openai_client=openai_client,
+                    http=http,
+                    session_factory=session_factory,
+                    pubmed_sem=pubmed_sem,
+                    dry_run=args.dry_run,
+                    skip_images=args.skip_images,
+                )
+
+        await asyncio.gather(*(research(ingredient) for ingredient in ingredients))
 
     await engine.dispose()
     print(f"\n{'='*60}")
@@ -972,6 +978,13 @@ def parse_args() -> argparse.Namespace:
         "--dry-run",
         action="store_true",
         help="Show what would be researched without making API calls",
+    )
+    parser.add_argument(
+        "--parallel",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Research up to N ingredients at once (default 1)",
     )
     parser.add_argument(
         "--skip-images",
