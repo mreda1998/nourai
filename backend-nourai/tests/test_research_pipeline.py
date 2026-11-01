@@ -7,6 +7,7 @@ import pytest
 
 from app.services.research.pipeline import (
     ClaimHits,
+    ResearchIncomplete,
     plan_studies,
     reconcile_design,
     research_ingredient,
@@ -15,8 +16,8 @@ from app.services.research.pipeline import (
 )
 from app.services.research import pubmed
 from app.services.research.pubmed import PubMedUnavailable
-from app.services.research.schemas import ClaimSet
-from tests.research_factories import make_appraisal, make_article, make_claim
+from app.services.research.schemas import ClaimSet, ClaimVerdict
+from tests.research_factories import link, make_appraisal, make_article, make_claim
 
 
 class _ClaimsOnlyLLM:
@@ -39,6 +40,66 @@ async def test_an_unreachable_pubmed_fails_the_research_instead_of_judging_claim
         with pytest.raises(PubMedUnavailable):
             await research_ingredient(ingredient, _ClaimsOnlyLLM(), http, asyncio.Semaphore(3))
     assert len(attempts) >= 3  # retried before giving up
+
+
+class _FlakyLLM:
+    """Claims and papers come back; verdicts or appraisals can fail transiently (None)."""
+
+    def __init__(self, *, verdicts_fail=False, appraisals_fail=0):
+        self.verdicts_fail, self.appraisals_fail = verdicts_fail, appraisals_fail
+        self.appraised = 0
+
+    async def draft_claims(self, *args):
+        return ClaimSet(search_names=["curcumin"], claims=[make_claim("Eases joint pain", terms=["joint pain"])])
+
+    async def appraise(self, name, claims, article):
+        self.appraised += 1
+        if self.appraised <= self.appraisals_fail:
+            return None
+        return make_appraisal(claim_links=[link(1)])
+
+    async def judge_claim(self, *args):
+        return None if self.verdicts_fail else ClaimVerdict(
+            verdict="moderate", certainty="moderate", certainty_reasons=[], reality="ok", effect_size=None,
+            applies_to=None, avoid_if=None, dose_note=None, key_pmids=[],
+        )
+
+    async def summarize(self, *args):
+        return None
+
+
+def _four_papers(request: httpx.Request) -> httpx.Response:
+    if request.url.path.endswith("esearch.fcgi"):
+        return httpx.Response(200, json={"esearchresult": {"idlist": ["1", "2", "3", "4"]}})
+    papers = "".join(
+        f"<PubmedArticle><MedlineCitation><PMID>{p}</PMID><Article><ArticleTitle>t</ArticleTitle>"
+        f"<Abstract><AbstractText>{'x' * 150}</AbstractText></Abstract></Article></MedlineCitation></PubmedArticle>"
+        for p in request.url.params["id"].split(",")
+    )
+    return httpx.Response(200, text=f"<PubmedArticleSet>{papers}</PubmedArticleSet>")
+
+
+async def _research(llm):
+    ingredient = SimpleNamespace(canonical_name="Curcumin", category="herb", synonyms=[], mechanism_summary=None)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(_four_papers)) as http:
+        return await research_ingredient(ingredient, llm, http, asyncio.Semaphore(3))
+
+
+@pytest.mark.anyio
+async def test_a_verdict_that_failed_to_come_back_fails_the_research(monkeypatch):
+    """A transient error must not be stored as 'not enough research' for a claim that has studies."""
+    monkeypatch.setattr(pubmed, "_interval", lambda: 0)
+    with pytest.raises(ResearchIncomplete, match="verdict"):
+        await _research(_FlakyLLM(verdicts_fail=True))
+
+
+@pytest.mark.anyio
+async def test_losing_too_many_paper_reads_fails_the_research(monkeypatch):
+    monkeypatch.setattr(pubmed, "_interval", lambda: 0)
+    with pytest.raises(ResearchIncomplete, match="appraisals"):
+        await _research(_FlakyLLM(appraisals_fail=2))  # 2 of 4 papers lost
+    result = await _research(_FlakyLLM(appraisals_fail=0))
+    assert len(result.studies) == 4
 
 
 async def _searched_tiers(claim) -> list[str]:

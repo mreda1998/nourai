@@ -63,7 +63,9 @@ from app.services.research.weighting import legacy_confidence, legacy_direction
 
 # Without NCBI_API_KEY: 3 req/s. With: 10 req/s.
 PUBMED_CONCURRENCY = 3
-CLAUDE_CONCURRENCY = 5
+# Claude calls in flight across all ingredients; the SDK backs off and retries on 429s.
+CLAUDE_CONCURRENCY = 16
+CLAUDE_MAX_RETRIES = 8
 
 # ─── Biodomain scoring tool ───────────────────────────────────────────────────
 # Called ONCE per ingredient after all individual study syntheses are done.
@@ -451,9 +453,7 @@ async def research_one_ingredient(
     name = ingredient.canonical_name
     iid = ingredient.id
 
-    print(f"\n{'─'*60}")
-    print(f"  Researching: {name}")
-    print(f"{'─'*60}")
+    print(f"  ▶ {name}")
 
     if dry_run:
         print(f"  [dry-run] Would draft claims, search PubMed per claim and appraise up to {MAX_STUDIES} papers")
@@ -473,7 +473,7 @@ async def research_one_ingredient(
         for judged in result.claims:
             verdict = judged.verdict
             print(
-                f"  [{judged.draft.kind}] {judged.draft.claim} → {verdict.verdict} "
+                f"    [{name}] ({judged.draft.kind}) {judged.draft.claim} → {verdict.verdict} "
                 f"({verdict.certainty}, {len(judged.studies)} studies)"
             )
 
@@ -493,7 +493,7 @@ async def research_one_ingredient(
             for s in ranked
         ]
         impacts = await generate_biodomain_scores(claude, name, findings, records, ingredient.mechanism_summary)
-        print(f"  {len(impacts)} biodomains scored")
+        print(f"    [{name}] {len(impacts)} biodomains scored")
 
         async with session_factory() as session:
             await store_research(session, iid, result)
@@ -512,10 +512,10 @@ async def research_one_ingredient(
                         update(Ingredient).where(Ingredient.id == iid).values(mechanism_image_url=image_url)
                     )
                     await session.commit()
-                print("  Illustration uploaded")
+                print(f"    [{name}] illustration uploaded")
 
         print(
-            f"  Done — {len(result.claims)} claims | {len(result.studies)} studies "
+            f"  ✓ {name} — {len(result.claims)} claims | {len(result.studies)} studies "
             f"({result.skipped_off_target} off-target) | evidence: {result.evidence_level}"
         )
 
@@ -915,7 +915,7 @@ async def main(args: argparse.Namespace) -> None:
     print(f"  Images:      {'yes (gpt-image-1)' if has_images else 'skipped'}")
     print(f"{'='*60}")
 
-    claude = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    claude = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=CLAUDE_MAX_RETRIES)
     llm = ResearchLLM(claude, concurrency=CLAUDE_CONCURRENCY)
     openai_client = AsyncOpenAI(api_key=settings.openai_api_key or "no-key")
     pubmed_sem = asyncio.Semaphore(PUBMED_CONCURRENCY)
@@ -926,6 +926,7 @@ async def main(args: argparse.Namespace) -> None:
     ) as http:
         # Ingredients overlap; Claude and PubMed calls stay capped by their own semaphores.
         slots = asyncio.Semaphore(max(1, args.parallel))
+        finished = 0
 
         async def research(ingredient: Ingredient) -> None:
             async with slots:
@@ -940,6 +941,9 @@ async def main(args: argparse.Namespace) -> None:
                     dry_run=args.dry_run,
                     skip_images=args.skip_images,
                 )
+                nonlocal finished
+                finished += 1
+                print(f"  — {finished}/{len(ingredients)} finished", flush=True)
 
         await asyncio.gather(*(research(ingredient) for ingredient in ingredients))
 

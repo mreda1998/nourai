@@ -37,6 +37,12 @@ MAX_STUDIES = 36
 PER_CLAIM_FLOOR = 4
 MAX_STUDIES_PER_VERDICT = 15
 NO_STUDIES_REALITY = "We found no studies that test this directly, so there is nothing to go on yet."
+# More lost paper reads than this and the evidence is too thin to judge: retry later instead.
+MAX_FAILED_APPRAISAL_SHARE = 0.25
+
+
+class ResearchIncomplete(RuntimeError):
+    """A stage failed transiently; storing what we have would misstate the evidence."""
 
 
 @dataclass(slots=True)
@@ -139,20 +145,23 @@ async def research_ingredient(
         list(ingredient.synonyms or []), ingredient.mechanism_summary,
     )
     if claim_set is None or not claim_set.claims:
-        print("    No claims drafted")
+        print(f"    [{name}] no claims drafted")
         return None
     claims = sorted(claim_set.claims, key=lambda c: c.priority)
     names = _unique_names([*claim_set.search_names, name])
-    print(f"    {len(claims)} claims; searching as {', '.join(names)}")
+    print(f"    [{name}] {len(claims)} claims; searching as {', '.join(names)}")
 
     hits = await asyncio.gather(*(
         search_claim(http, pubmed_sem, names, claim, index) for index, claim in enumerate(claims)
     ))
     pmids = plan_studies(list(hits), max_studies=max_studies, per_claim_floor=PER_CLAIM_FLOOR)
     articles = [a for a in await pubmed.fetch_articles(http, pmids, pubmed_sem) if not a.retracted]
-    print(f"    {len(pmids)} papers planned, {len(articles)} with abstracts")
+    print(f"    [{name}] {len(pmids)} papers planned, {len(articles)} with abstracts")
 
     appraisals = await asyncio.gather(*(llm.appraise(name, claims, article) for article in articles))
+    failed = sum(1 for appraisal in appraisals if appraisal is None)
+    if articles and failed / len(articles) > MAX_FAILED_APPRAISAL_SHARE:
+        raise ResearchIncomplete(f"{failed} of {len(articles)} appraisals failed")
     studies: list[AppraisedStudy] = []
     off_target = 0
     for article, appraisal in zip(articles, appraisals):
@@ -163,7 +172,7 @@ async def research_ingredient(
             continue
         appraisal = reconcile_design(appraisal, article)
         studies.append(AppraisedStudy(article, appraisal, weigh_study(appraisal)))
-    print(f"    {len(studies)} studies appraised ({off_target} did not test {name})")
+    print(f"    [{name}] {len(studies)} studies appraised ({off_target} did not test it)")
 
     judged = await asyncio.gather(*(
         _judge(llm, name, claim, index, studies, len(claims)) for index, claim in enumerate(claims)
@@ -249,6 +258,8 @@ async def _judge(
     linked.sort(key=lambda s: s.weighting.score, reverse=True)
 
     verdict = await llm.judge_claim(name, claim, linked[:MAX_STUDIES_PER_VERDICT]) if linked else None
+    if verdict is None and linked:
+        raise ResearchIncomplete(f"verdict for {claim.claim!r} failed")
     if verdict is None:
         verdict = ClaimVerdict(
             verdict="insufficient", certainty="very_low", certainty_reasons=["No usable studies"],
