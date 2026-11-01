@@ -60,8 +60,8 @@ class Settings(BaseSettings):
 
     # Research agent
     anthropic_api_key: str = ""
-    research_model: str = "claude-opus-5-5"  # claims, verdicts, summaries
-    research_appraisal_model: str = "claude-opus-5-5"  # one call per paper — the bulk of the cost
+    research_model: str = "claude-sonnet-5-5"  # claims, verdicts, summaries, biodomains, timing
+    research_appraisal_model: str = "claude-haiku-5-5"  # one call per paper — the bulk of the cost
     ncbi_api_key: str = ""  # Optional — raises PubMed rate limit from 3 to 10 req/s
     openai_api_key: str = ""  # For mechanism illustration generation (gpt-image-1.5)
 

@@ -33,11 +33,12 @@ import json
 import re
 import sys
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 import anthropic
 import httpx
 from openai import AsyncOpenAI
+from pydantic import BaseModel, Field
 from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -67,97 +68,53 @@ PUBMED_CONCURRENCY = 3
 CLAUDE_CONCURRENCY = 16
 CLAUDE_MAX_RETRIES = 8
 
-# ─── Biodomain scoring tool ───────────────────────────────────────────────────
-# Called ONCE per ingredient after all individual study syntheses are done.
+# ─── Biodomain scoring output ─────────────────────────────────────────────────
+# Asked for ONCE per ingredient after all studies are appraised.
 # Produces a structured per-biodomain impact score for each relevant domain.
 
-_BIODOMAIN_ENUM = BIODOMAIN_KEYS  # drives the JSON schema below
+BiodomainKey = Literal[tuple(BIODOMAIN_KEYS)]  # type: ignore[valid-type]
 
-BIODOMAIN_TOOL: dict[str, Any] = {
-    "name": "record_biodomain_impacts",
-    "description": (
-        "Record the ingredient's impact on each relevant health domain, "
-        "based on the synthesized research findings. "
-        "Only include domains where the evidence shows a meaningful effect. "
-        "Called once per ingredient after all studies are synthesized."
-    ),
-    "input_schema": {
-        "type": "object",
-        "required": ["impacts"],
-        "properties": {
-            "impacts": {
-                "type": "array",
-                "description": "One entry per biodomain that has meaningful evidence.",
-                "items": {
-                    "type": "object",
-                    "required": ["biodomain", "direction", "magnitude", "confidence"],
-                    "properties": {
-                        "biodomain": {
-                            "type": "string",
-                            "enum": _BIODOMAIN_ENUM,
-                            "description": "The health domain being scored.",
-                        },
-                        "direction": {
-                            "type": "string",
-                            "enum": ["benefit", "harm", "neutral", "mixed"],
-                            "description": (
-                                "'benefit' = net positive effect on this domain, "
-                                "'harm' = net negative effect, "
-                                "'neutral' = no significant effect, "
-                                "'mixed' = evidence in both directions."
-                            ),
-                        },
-                        "magnitude": {
-                            "type": "number",
-                            "description": (
-                                "Strength of the effect from 0.0 (no effect) to 1.0 (very strong). "
-                                "Base this on the effect sizes and study quality in the evidence. "
-                                "A single weak observational study = 0.2. "
-                                "Multiple high-quality RCTs showing large effects = 0.9+."
-                            ),
-                        },
-                        "confidence": {
-                            "type": "string",
-                            "enum": ["high", "moderate", "low"],
-                            "description": (
-                                "Overall confidence in this domain score. "
-                                "'high' requires multiple RCTs or a meta-analysis. "
-                                "'moderate' requires at least one RCT or multiple observational studies. "
-                                "'low' for in-vitro, animal, or single case studies."
-                            ),
-                        },
-                        "dose_dependent": {
-                            "type": "boolean",
-                            "description": (
-                                "True if the evidence shows the effect only occurs above "
-                                "a certain dose threshold. False if any amount has an effect."
-                            ),
-                        },
-                        "effective_dose_low": {
-                            "type": "number",
-                            "description": "Lowest dose where meaningful effect was observed across studies.",
-                        },
-                        "effective_dose_high": {
-                            "type": "number",
-                            "description": "Highest dose in the effective range (or same as low for single dose).",
-                        },
-                        "dose_unit": {
-                            "type": "string",
-                            "description": "Unit for the effective dose (e.g. 'mg', 'g', 'IU', 'CFU').",
-                        },
-                        "notes": {
-                            "type": "string",
-                            "description": (
-                                "1–2 sentences explaining the score. Include key caveats "
-                                "(population specificity, form differences, etc.)."
-                            ),
-                        },
-                    },
-                },
-            },
-        },
-    },
-}
+
+class BiodomainImpact(BaseModel):
+    biodomain: BiodomainKey = Field(description="The health domain being scored.")
+    direction: Literal["benefit", "harm", "neutral", "mixed"] = Field(description=(
+        "'benefit' = net positive effect on this domain, "
+        "'harm' = net negative effect, "
+        "'neutral' = no significant effect, "
+        "'mixed' = evidence in both directions."
+    ))
+    magnitude: float = Field(description=(
+        "Strength of the effect from 0.0 (no effect) to 1.0 (very strong). "
+        "Base this on the effect sizes and study quality in the evidence. "
+        "A single weak observational study = 0.2. "
+        "Multiple high-quality RCTs showing large effects = 0.9+."
+    ))
+    confidence: Literal["high", "moderate", "low"] = Field(description=(
+        "Overall confidence in this domain score. "
+        "'high' requires multiple RCTs or a meta-analysis. "
+        "'moderate' requires at least one RCT or multiple observational studies. "
+        "'low' for in-vitro, animal, or single case studies."
+    ))
+    dose_dependent: bool = Field(description=(
+        "True if the evidence shows the effect only occurs above "
+        "a certain dose threshold. False if any amount has an effect."
+    ))
+    effective_dose_low: float | None = Field(
+        description="Lowest dose where meaningful effect was observed across studies; null if not reported.")
+    effective_dose_high: float | None = Field(
+        description="Highest dose in the effective range (or same as low for single dose); null if not reported.")
+    dose_unit: str | None = Field(description="Unit for the effective dose (e.g. 'mg', 'g', 'IU', 'CFU').")
+    notes: str | None = Field(description=(
+        "1–2 sentences explaining the score. Include key caveats "
+        "(population specificity, form differences, etc.)."
+    ))
+
+
+class BiodomainImpacts(BaseModel):
+    impacts: list[BiodomainImpact] = Field(description=(
+        "One entry per biodomain where the evidence shows a meaningful effect; empty when none does."
+    ))
+
 
 BIODOMAIN_SYSTEM = (
     "You are a clinical pharmacologist scoring an ingredient's impact on specific "
@@ -189,21 +146,21 @@ async def get_pending_ingredients(
 # ─── Biodomain impact scoring ─────────────────────────────────────────────────
 
 async def generate_biodomain_scores(
-    claude: anthropic.AsyncAnthropic,
+    llm: ResearchLLM,
     ingredient_name: str,
     findings: list[str],
     synthesized_records: list[dict[str, Any]],
     mechanism_summary: str | None,
 ) -> list[dict[str, Any]]:
     """
-    After all study syntheses are done, ask Sonnet to score the ingredient
+    After all studies are appraised, ask Claude to score the ingredient
     against each of the 10 biodomains.
 
     `synthesized_records` includes study_type, confidence, direction, dose
     fields from each abstract — Claude uses this structured data (not just
     the free-text findings) to produce calibrated scores.
 
-    Returns a list of biodomain impact dicts (matching BIODOMAIN_TOOL schema).
+    Returns a list of biodomain impact dicts (BiodomainImpact fields).
     """
     if not findings:
         return []
@@ -234,26 +191,14 @@ async def generate_biodomain_scores(
         + "Available biodomains to score:\n"
         + "\n".join(f"  • {k}" for k in BIODOMAIN_KEYS)
         + "\n\nFor each biodomain where this ingredient has meaningful clinical evidence, "
-          "record the impact using the record_biodomain_impacts tool. "
-          "Only include domains with real effect. Skip domains with no evidence."
+          "record its impact. Only include domains with real effect. Skip domains with no evidence."
     )
 
-    try:
-        message = await claude.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=2048,
-            system=BIODOMAIN_SYSTEM,
-            tools=[BIODOMAIN_TOOL],
-            tool_choice={"type": "any"},
-            messages=[{"role": "user", "content": prompt}],
-        )
-        for block in message.content:
-            if block.type == "tool_use" and block.name == "record_biodomain_impacts":
-                return block.input.get("impacts", [])
+    scored = await llm.extract("biodomains", BIODOMAIN_SYSTEM, prompt, BiodomainImpacts)
+    if scored is None:
+        print(f"    [{ingredient_name}] biodomain scoring returned nothing")
         return []
-    except anthropic.APIError as exc:
-        print(f"    [Claude/Sonnet] Biodomain scoring error for '{ingredient_name}': {exc}")
-        return []
+    return [impact.model_dump() for impact in scored.impacts]
 
 
 async def store_biodomain_scores(
@@ -441,7 +386,6 @@ async def generate_and_upload_mechanism_image(
 async def research_one_ingredient(
     ingredient: Ingredient,
     llm: ResearchLLM,
-    claude: anthropic.AsyncAnthropic,
     openai_client: AsyncOpenAI,
     http: httpx.AsyncClient,
     session_factory: async_sessionmaker[AsyncSession],
@@ -492,7 +436,7 @@ async def research_one_ingredient(
             }
             for s in ranked
         ]
-        impacts = await generate_biodomain_scores(claude, name, findings, records, ingredient.mechanism_summary)
+        impacts = await generate_biodomain_scores(llm, name, findings, records, ingredient.mechanism_summary)
         print(f"    [{name}] {len(impacts)} biodomains scored")
 
         async with session_factory() as session:
@@ -561,79 +505,37 @@ def print_usage(llm: ResearchLLM) -> None:
 
 # ─── Atelier pipeline (--atelier flag) ───────────────────────────────────────
 
-ATELIER_TOOL: dict[str, Any] = {
-    "name": "record_atelier_data",
-    "description": (
-        "Record circadian timing and ingredient interaction data for an ingredient. "
-        "Called once per ingredient using existing synthesized evidence findings."
-    ),
-    "input_schema": {
-        "type": "object",
-        "required": ["optimal_times", "avoid_near_sleep"],
-        "properties": {
-            "optimal_times": {
-                "type": "array",
-                "description": "Best windows to take this ingredient. Include only windows with meaningful rationale.",
-                "items": {
-                    "type": "object",
-                    "required": ["window", "reason"],
-                    "properties": {
-                        "window": {
-                            "type": "string",
-                            "enum": ["morning", "afternoon", "evening", "night"],
-                        },
-                        "reason": {
-                            "type": "string",
-                            "description": "One sentence: why this window is optimal (absorption, circadian alignment, etc.)",
-                        },
-                        "with_food": {
-                            "type": "boolean",
-                            "description": "True if absorption or tolerability requires food co-ingestion.",
-                        },
-                    },
-                },
-            },
-            "avoid_near_sleep": {
-                "type": "boolean",
-                "description": "True if taking within 3–4 hours of sleep would disrupt sleep quality.",
-            },
-            "circadian_notes": {
-                "type": "string",
-                "description": "Optional: 1–2 sentences on nuanced timing considerations not captured by optimal_times.",
-            },
-            "interactions": {
-                "type": "array",
-                "description": (
-                    "Pairwise interactions with OTHER well-known ingredients. "
-                    "Only include interactions with meaningful clinical or mechanistic evidence."
-                ),
-                "items": {
-                    "type": "object",
-                    "required": ["partner_name", "type", "mechanism", "confidence"],
-                    "properties": {
-                        "partner_name": {
-                            "type": "string",
-                            "description": "Canonical name of the interacting ingredient (e.g. 'Magnesium glycinate', 'Caffeine').",
-                        },
-                        "type": {
-                            "type": "string",
-                            "enum": ["synergy", "compete", "caution"],
-                            "description": "'synergy' = enhance each other, 'compete' = interfere with absorption/effect, 'caution' = combined use needs monitoring.",
-                        },
-                        "mechanism": {
-                            "type": "string",
-                            "description": "1–2 sentences on the biochemical mechanism.",
-                        },
-                        "confidence": {
-                            "type": "string",
-                            "enum": ["high", "moderate", "low"],
-                        },
-                    },
-                },
-            },
-        },
-    },
-}
+class TimingWindow(BaseModel):
+    window: Literal["morning", "afternoon", "evening", "night"]
+    reason: str = Field(description="One sentence: why this window is optimal (absorption, circadian alignment, etc.)")
+    with_food: bool = Field(description="True if absorption or tolerability requires food co-ingestion.")
+
+
+class IngredientPairing(BaseModel):
+    partner_name: str = Field(
+        description="Canonical name of the interacting ingredient (e.g. 'Magnesium glycinate', 'Caffeine').")
+    type: Literal["synergy", "compete", "caution"] = Field(description=(
+        "'synergy' = enhance each other, 'compete' = interfere with absorption/effect, "
+        "'caution' = combined use needs monitoring."
+    ))
+    mechanism: str = Field(description="1–2 sentences on the biochemical mechanism.")
+    confidence: Literal["high", "moderate", "low"]
+
+
+class AtelierData(BaseModel):
+    """Circadian timing and ingredient interaction data for one ingredient."""
+
+    optimal_times: list[TimingWindow] = Field(
+        description="Best windows to take this ingredient. Include only windows with meaningful rationale.")
+    avoid_near_sleep: bool = Field(
+        description="True if taking within 3–4 hours of sleep would disrupt sleep quality.")
+    circadian_notes: str | None = Field(
+        description="1–2 sentences on nuanced timing considerations not captured by optimal_times, or null.")
+    interactions: list[IngredientPairing] = Field(description=(
+        "Pairwise interactions with OTHER well-known ingredients. "
+        "Only include interactions with meaningful clinical or mechanistic evidence."
+    ))
+
 
 ATELIER_SYSTEM = (
     "You are a clinical pharmacologist specializing in chronobiology and ingredient interactions. "
@@ -646,7 +548,7 @@ ATELIER_SYSTEM = (
 
 
 async def generate_atelier_data(
-    claude: anthropic.AsyncAnthropic,
+    llm: ResearchLLM,
     ingredient_name: str,
     category: str,
     findings: list[str],
@@ -660,29 +562,15 @@ async def generate_atelier_data(
         f"Ingredient: {ingredient_name} (category: {category})\n\n"
         + (f"Mechanism of action: {mechanism_summary}\n\n" if mechanism_summary else "")
         + f"Synthesized clinical findings:\n{findings_block}\n\n"
-        "Using the record_atelier_data tool, provide:\n"
+        "Provide:\n"
         "1. Optimal timing windows (morning/afternoon/evening/night) with reasoning\n"
         "2. Whether it should be avoided near sleep\n"
         "3. Any important interactions with other common supplements/ingredients\n"
         "Only include interactions that have real mechanistic or clinical backing."
     )
 
-    try:
-        message = await claude.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1500,
-            system=ATELIER_SYSTEM,
-            tools=[ATELIER_TOOL],
-            tool_choice={"type": "any"},
-            messages=[{"role": "user", "content": prompt}],
-        )
-        for block in message.content:
-            if block.type == "tool_use" and block.name == "record_atelier_data":
-                return block.input
-        return None
-    except anthropic.APIError as exc:
-        print(f"    [Claude/Sonnet/Atelier] Error for '{ingredient_name}': {exc}")
-        return None
+    data = await llm.extract("atelier", ATELIER_SYSTEM, prompt, AtelierData)
+    return data.model_dump() if data else None
 
 
 async def store_atelier_data(
@@ -760,7 +648,7 @@ async def store_atelier_data(
 
 async def research_atelier_one_ingredient(
     ingredient: Ingredient,
-    claude: anthropic.AsyncAnthropic,
+    llm: ResearchLLM,
     session_factory: async_sessionmaker[AsyncSession],
     name_to_id: dict[str, uuid.UUID],
     dry_run: bool = False,
@@ -786,7 +674,7 @@ async def research_atelier_one_ingredient(
         return
 
     data = await generate_atelier_data(
-        claude,
+        llm,
         name,
         str(ingredient.category),
         findings,
@@ -794,7 +682,7 @@ async def research_atelier_one_ingredient(
     )
 
     if data is None:
-        print(f"  Sonnet returned nothing — skipping")
+        print(f"  Claude returned nothing — skipping")
         return
 
     windows = [t.get("window") for t in (data.get("optimal_times") or [])]
@@ -852,15 +740,16 @@ async def main(args: argparse.Namespace) -> None:
         print(f"{'='*60}")
         print(f"  Mode:        {'DRY RUN' if args.dry_run else 'LIVE'}")
         print(f"  Ingredients: {len(ingredients)} (research_status=complete)")
-        print(f"  Model:       Sonnet (timing + interactions)")
+        print(f"  Model:       {settings.research_model} (timing + interactions)")
         print(f"{'='*60}")
 
-        claude = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        claude = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=CLAUDE_MAX_RETRIES)
+        llm = ResearchLLM(claude, concurrency=CLAUDE_CONCURRENCY)
 
         for ingredient in ingredients:
             await research_atelier_one_ingredient(
                 ingredient=ingredient,
-                claude=claude,
+                llm=llm,
                 session_factory=session_factory,
                 name_to_id=name_to_id,
                 dry_run=args.dry_run,
@@ -869,6 +758,7 @@ async def main(args: argparse.Namespace) -> None:
         await engine.dispose()
         print(f"\n{'='*60}")
         print(f"  Atelier enrichment complete.")
+        print_usage(llm)
         print(f"{'='*60}\n")
         return
 
@@ -909,8 +799,8 @@ async def main(args: argparse.Namespace) -> None:
     print(f"  Mode:        {'DRY RUN' if args.dry_run else 'LIVE'}")
     print(f"  Ingredients: {len(ingredients)}")
     print(f"  Papers:      up to {MAX_STUDIES} per ingredient, chosen per claim")
-    print(f"  Models:      {settings.research_model} (claims, verdicts) + "
-          f"{settings.research_appraisal_model} (appraisals) + Sonnet 4.6 (biodomains)")
+    print(f"  Models:      {settings.research_model} (claims, verdicts, biodomains) + "
+          f"{settings.research_appraisal_model} (appraisals)")
     print(f"  NCBI key:    {'yes' if settings.ncbi_api_key else 'no (3 req/s limit)'}")
     print(f"  Images:      {'yes (gpt-image-1)' if has_images else 'skipped'}")
     print(f"{'='*60}")
@@ -933,7 +823,6 @@ async def main(args: argparse.Namespace) -> None:
                 await research_one_ingredient(
                     ingredient=ingredient,
                     llm=llm,
-                    claude=claude,
                     openai_client=openai_client,
                     http=http,
                     session_factory=session_factory,

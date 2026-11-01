@@ -426,8 +426,8 @@ async def generate_profile(
         for attempt in range(4):
             try:
                 response = await client.messages.create(
-                    model="claude-haiku-4-5-20251001",
-                    max_tokens=600,
+                    model="claude-haiku-5-5",
+                    max_tokens=1024,  # Haiku 5.5 counts ~30% more tokens for the same text
                     tools=[PROFILE_TOOL],
                     tool_choice={"type": "tool", "name": "food_bioactive_profile"},
                     messages=[{
@@ -617,7 +617,7 @@ async def run(
     print("=" * 55)
     print(f"  Foods to process : {len(foods)}")
     print(f"  Dry run          : {dry_run}")
-    print(f"  Model            : claude-haiku-4-5-20251001")
+    print(f"  Model            : claude-haiku-5-5")
     print("=" * 55)
 
     # ── Step 1: Generate all profiles concurrently ────────────────────────────

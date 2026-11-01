@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.services.research.llm import ResearchLLM
+from app.services.research.schemas import ClaimSet
 from tests.research_factories import make_appraisal, make_article, make_claim
 
 pytestmark = pytest.mark.anyio
@@ -35,3 +36,17 @@ async def test_haiku_appraisals_send_no_server_side_fallback_while_opus_stages_d
     assert opus["model"] == "claude-opus-5-5"
     assert opus["fallbacks"] == "default" and opus["betas"] == ["server-side-fallback-2026-07-01"]
     assert llm.usage["appraisal"]["calls"] == 1
+
+
+async def test_biodomain_and_timing_stages_use_the_main_model_with_fallback():
+    client = RecordingClient()
+    llm = ResearchLLM(client, model="claude-sonnet-5-5", appraisal_model="claude-haiku-5-5")
+
+    await llm.extract("biodomains", "system", "prompt", ClaimSet)
+
+    (request,) = client.requests
+    assert request["model"] == "claude-sonnet-5-5"
+    assert request["fallbacks"] == "default"
+    assert "tool_choice" not in request and "tools" not in request
+    assert llm.usage["biodomains"]["calls"] == 1
+    assert llm.model_for("biodomains") == "claude-sonnet-5-5"

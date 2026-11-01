@@ -14,13 +14,13 @@ class StackProduct(BaseModel):
     name: str
     brand: str | None = None
     category: str
-    grade: str
+    grade: str | None = None  # no longer used; older app builds still send it
     ingredients: list[str] = []
 
 
 class StackContext(BaseModel):
     products: list[StackProduct] = []
-    domain_scores: dict[str, float] = {}
+    domain_scores: dict[str, float] = {}  # no longer used; older app builds still send it
     goals: list[str] = []
 
 

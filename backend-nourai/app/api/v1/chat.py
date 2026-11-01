@@ -23,6 +23,11 @@ from app.schemas.chat import (
 
 router = APIRouter()
 
+CHAT_MODEL = "claude-sonnet-5-5"
+# Declines in the cyber and frontier_llm categories are retried on another model inside the call.
+_FALLBACK = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
+_DECLINED_REPLY = "Sorry, I can't help with that one. Try asking about the ingredients in your stack."
+
 _GOAL_LABELS: dict[str, str] = {
     "clear_skin": "Clear Skin",
     "anti_aging": "Anti-Aging",
@@ -51,22 +56,10 @@ def _build_system_prompt(ctx: "ChatRequest.stack_context") -> str:  # type: igno
         for p in ctx_.products:
             ings = ", ".join(p.ingredients[:8]) if p.ingredients else "unknown ingredients"
             brand = f" by {p.brand}" if p.brand else ""
-            product_lines.append(
-                f"  • {p.name}{brand} [{p.category}, grade {p.grade}] — key ingredients: {ings}"
-            )
+            product_lines.append(f"  • {p.name}{brand} [{p.category}] — key ingredients: {ings}")
         products_block = "Current stack:\n" + "\n".join(product_lines)
     else:
         products_block = "Current stack: empty"
-
-    # Domain scores block
-    if ctx_.domain_scores:
-        score_lines = [
-            f"  • {domain}: {int(score)}/100"
-            for domain, score in ctx_.domain_scores.items()
-        ]
-        scores_block = "Bio-domain evidence scores (0 = no supporting evidence, 100 = strong):\n" + "\n".join(score_lines)
-    else:
-        scores_block = "Bio-domain scores: not available"
 
     # Goals block
     goal_labels = [_GOAL_LABELS.get(g, g) for g in ctx_.goals]
@@ -79,8 +72,6 @@ def _build_system_prompt(ctx: "ChatRequest.stack_context") -> str:  # type: igno
 
 {products_block}
 
-{scores_block}
-
 {goals_block}
 
 Your role:
@@ -89,6 +80,7 @@ Your role:
 - Distinguish strong evidence (RCTs, meta-analyses) from emerging or anecdotal
 - Flag ingredient overlaps, dosage considerations, or potential interactions
 - Be direct and concise: 2–4 sentences per point, no fluff
+- Write plain text: the app shows replies as-is, so markdown (asterisks, # headings, bullet symbols) appears literally. Separate points with blank lines instead
 - If something is outside your certainty, say "evidence is limited" — never overstate
 - Do NOT recommend buying new products; focus on optimising what the user already has
 - Never provide medical diagnoses or replace professional medical advice"""
@@ -158,7 +150,7 @@ async def chat_message(
     if not request.messages:
         raise HTTPException(status_code=400, detail="messages array is required")
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     system_prompt = _build_system_prompt(request.stack_context)
 
     # Convert to Anthropic message format
@@ -169,15 +161,19 @@ async def chat_message(
     ]
 
     try:
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=512,
+        response = await client.beta.messages.create(
+            model=CHAT_MODEL,
+            max_tokens=4096,  # room for brief thinking plus the reply
+            **_FALLBACK,
+            output_config={"effort": "low"},
             system=system_prompt,
             messages=anthropic_messages,
         )
-        reply = response.content[0].text
     except anthropic.APIError as exc:
         raise HTTPException(status_code=502, detail=f"AI service error: {exc}") from exc
+    reply = _reply_text(response)
+    if reply is None:
+        raise HTTPException(status_code=502, detail="AI service returned no reply")
 
     # Persist both turns — best-effort, never blocks the user
     if current_user is not None:
@@ -190,3 +186,11 @@ async def chat_message(
             await db.rollback()
 
     return ChatResponse(message=reply)
+
+
+def _reply_text(response) -> str | None:
+    """The visible reply. A response can open with thinking blocks, so read text blocks by type."""
+    if response.stop_reason == "refusal":
+        return _DECLINED_REPLY
+    text = "".join(block.text for block in response.content if block.type == "text").strip()
+    return text or None

@@ -153,6 +153,10 @@ class ResearchLLM:
             )
         return await self._parse("summary", self._model, "medium", SUMMARY_SYSTEM, None, "\n".join(lines), IngredientSummary)
 
+    async def extract(self, stage: str, system: str, prompt: str, output: type[T], effort: str = "medium") -> T | None:
+        """One structured output on the main research model, for stages outside the claim pipeline."""
+        return await self._parse(stage, self._model, effort, system, None, prompt, output)
+
     async def _parse(
         self, stage: str, model: str, effort: str, system: str, shared_context: str | None,
         prompt: str, output: type[T],
