@@ -33,6 +33,13 @@ from app.models.laboratory import (  # noqa: F401
     LabObservation,
     LabInterpretation,
 )
+from app.models.regulation import (  # noqa: F401
+    RegulatedSubstance,
+    SubstanceAlias,
+    IngredientSubstance,
+    RegulatoryRule,
+    RuleCheck,
+)
 
 __all__ = [
     # Product
@@ -87,4 +94,10 @@ __all__ = [
     "LabAnalysis",
     "LabObservation",
     "LabInterpretation",
+    # Regulation
+    "RegulatedSubstance",
+    "SubstanceAlias",
+    "IngredientSubstance",
+    "RegulatoryRule",
+    "RuleCheck",
 ]

@@ -25,6 +25,7 @@ if not TEST_URL or TEST_URL != settings.database_url:
     )
 
 _TABLES = (
+    "regulatory_rules, rule_checks, ingredient_substances, regulated_substance_aliases, regulated_substances, "
     "catalog_entries, tester_events, product_submissions, ingestion_jobs, product_ingredients, "
     "product_identifiers, products, ingredients"
 )

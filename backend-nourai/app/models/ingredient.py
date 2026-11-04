@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from app.models.ingredient_claim import IngredientClaim
     from app.models.ingredient_biodomain_score import IngredientBioDomainScore
     from app.models.ingredient_interaction import IngredientInteraction
+    from app.models.regulation import RegulatedSubstance
 
 
 class IngredientCategory(str, Enum):
@@ -156,6 +157,13 @@ class Ingredient(Base, UUIDMixin, TimestampMixin):
         foreign_keys="IngredientInteraction.ingredient_id_b",
         back_populates="ingredient_b",
         cascade="all, delete-orphan",
+    )
+    # The legal substances this ingredient covers (titanium dioxide: E171 and CI 77891).
+    substances: Mapped[list["RegulatedSubstance"]] = relationship(
+        "RegulatedSubstance",
+        secondary="ingredient_substances",
+        viewonly=True,
+        order_by="RegulatedSubstance.name",
     )
 
     def __repr__(self) -> str:
