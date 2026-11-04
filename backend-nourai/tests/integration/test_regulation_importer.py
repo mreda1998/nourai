@@ -175,3 +175,22 @@ def _changed(parsed):
     for rule in parsed.rules:
         rule.condition = "Parser now reads it differently"
     return parsed
+
+
+async def test_reimport_after_rules_lost_reparses():
+    source = FakePositiveList()
+    raw = _raw({"E171": "a"})
+    async with async_session_factory() as session:
+        await import_list(session, source, raw, source.default_url, NOW)
+        await session.execute(RegulatoryRule.__table__.delete())
+        again = await import_list(session, source, raw, source.default_url, NOW)
+    assert again.created == 1
+
+
+async def test_derive_refuses_without_the_list():
+    source = FakePositiveList()
+    async with async_session_factory() as session:
+        session.add(RegulatedSubstance(name="FD&C Red No. 3", e_number="E127"))
+        await import_list(session, source, _raw({}), source.default_url, NOW)
+        assert await derive_not_authorised(session, "EU", source.slug, NOW) == 0
+        assert await _rules(session, origin="derived") == []

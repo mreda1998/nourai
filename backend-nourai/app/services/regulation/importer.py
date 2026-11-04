@@ -193,7 +193,9 @@ async def import_list(
             .values(last_checked_at=now)
         )
         result.unchanged = bumped.rowcount or 0
-        return result
+        if result.unchanged:
+            return result
+        # Same bytes but no live rules (lost or never written): parse again rather than trust the hash.
 
     parsed = source.parse(raw)
     data_source = await _data_source(session, source, fetched_url, parsed)
@@ -291,6 +293,9 @@ async def derive_not_authorised(session: AsyncSession, place: str, source_slug: 
             RegulatoryRule.origin == "bulk",
         )
     )).scalars())
+    if not covered:
+        # Without the list itself, every additive would look "not authorised".
+        return 0
     derived = (await session.execute(
         select(RegulatoryRule).where(
             RegulatoryRule.source_id == data_source.id, RegulatoryRule.place == place,

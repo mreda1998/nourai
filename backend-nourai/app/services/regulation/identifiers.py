@@ -24,7 +24,9 @@ def normalize_e_number(raw: str) -> str | None:
     value = raw.strip()
     if value.lower().startswith("en:"):
         value = value[3:]
-    value = re.sub(r"[\s.()\-]", "", value).upper()
+    if re.search(r"[-/,]", value):  # a range or list ("E150a-d") is not one E-number
+        return None
+    value = re.sub(r"[\s.()]", "", value).upper()
     match = _E_NUMBER.match(value)
     return f"E{match.group(1)}" if match else None
 

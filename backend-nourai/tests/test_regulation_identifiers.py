@@ -19,3 +19,8 @@ def test_function_prefix_stripped():
 
 def test_e_number_alias_key():
     assert alias_key("E 171", "e_number") == "E171"
+
+
+def test_e_number_ranges_are_not_e_numbers():
+    assert normalize_e_number("E150a-d") is None
+    assert normalize_e_number("E 160a / E 160b") is None
