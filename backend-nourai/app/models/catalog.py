@@ -52,14 +52,15 @@ class CatalogEntry(Base):
             postgresql_using="gin",
             postgresql_ops={"search_text": "gin_trgm_ops"},
         ),
-        # Covering: search walks popularity order index-only (migration 019_catalog_search).
+        # Covering: search walks popularity order index-only, globally or for one
+        # country (migrations 019_catalog_search, 021_catalog_region).
         Index(
-            "ix_catalog_entries_category_popularity_cover", "category", text("popularity DESC"),
-            postgresql_include=["search_text", "source_id", "id"],
+            "ix_catalog_entries_category_popularity_region", "category", text("popularity DESC"),
+            postgresql_include=["search_text", "source_id", "id", "countries"],
         ),
         Index("ix_catalog_entries_product_id", "product_id"),
         Index(
-            "ix_catalog_entries_popularity_cover", text("popularity DESC"),
-            postgresql_include=["search_text", "source_id", "id"],
+            "ix_catalog_entries_popularity_region", text("popularity DESC"),
+            postgresql_include=["search_text", "source_id", "id", "countries"],
         ),
     )

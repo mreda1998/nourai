@@ -12,7 +12,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.ingestion import IngestionJob
-from app.services.ingestion.connectors.openfoodfacts import OpenFoodFactsNotFound
+from app.services.ingestion.connectors.base import SourceNotFound
 from app.services.ingestion.product_pipeline import ProductIngestionPipeline
 from app.services.ingestion.queue import IngestionQueue
 
@@ -34,7 +34,7 @@ async def run_product_job(
     try:
         async with session_factory() as session:
             result = await pipeline.ingest_barcode(session, barcode=barcode, gtin14=gtin14, job=job)
-    except OpenFoodFactsNotFound:
+    except SourceNotFound:
         await queue.needs_review(
             job.id,
             result={

@@ -164,7 +164,7 @@ async def search_products(
     if include_catalog and catalog_query_ok(q):
         try:
             entries = await catalog.search(
-                q, category=category_enum.value if category_enum else None, limit=_SEARCH_WINDOW
+                q, category=category_enum.value if category_enum else None, country=country, limit=_SEARCH_WINDOW
             )
         except CatalogSearchTimeout:
             entries = []

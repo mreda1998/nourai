@@ -9,6 +9,7 @@ import asyncio
 import logging
 import re
 import uuid
+from functools import partial
 
 from sqlalchemy import select, text, update
 from sqlalchemy.exc import DBAPIError
@@ -48,6 +49,16 @@ def _like_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+def _region(country: str | None) -> str | None:
+    """An ISO 3166-1 alpha-2 code as the index stores it ("US"), or None."""
+    code = (country or "").strip().upper()
+    return code if len(code) == 2 and code.isascii() and code.isalpha() else None
+
+
+async def _no_rows() -> list[CatalogEntry]:
+    return []
+
+
 class CatalogRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._sessions = session_factory
@@ -73,6 +84,7 @@ class CatalogRepository:
         query: str,
         *,
         category: str | None,
+        country: str | None = None,
         limit: int = 60,
         # Warm searches take ~20 ms; the budget covers a cold cache, where a common
         # word's first search can take ~0.5 s. Timing out returns no catalog results.
@@ -107,10 +119,25 @@ class CatalogRepository:
         # met by walking the whole table in popularity order.
         window = base.with_only_columns(CatalogEntry.id).order_by(CatalogEntry.popularity.desc()).limit(limit)
         popular = select(CatalogEntry).where(CatalogEntry.id.in_(window.scalar_subquery()))
+        # Popularity is mostly French scans, so the global window rarely holds products
+        # sold elsewhere ("shampoo": 60 French matches for a US device). A third walk
+        # fills half a window from the user's country; like the prefix query, it only
+        # improves the window, so if both its plans time out it's skipped.
+        region = _region(country)
+        regional = None
+        if region:
+            regional_window = (
+                base.where(CatalogEntry.countries.any(region))
+                .with_only_columns(CatalogEntry.id)
+                .order_by(CatalogEntry.popularity.desc())
+                .limit(max(limit // 2, 1))
+            )
+            regional = select(CatalogEntry).where(CatalogEntry.id.in_(regional_window.scalar_subquery()))
 
-        popular_rows, prefix_rows = await asyncio.gather(
+        popular_rows, prefix_rows, regional_rows = await asyncio.gather(
             self._race(popular, timeout_ms, query),
             self._run_prefix(prefix, prefix_timeout_ms, query),
+            self._race(regional, timeout_ms, query) if regional is not None else _no_rows(),
             return_exceptions=True,
         )
         if isinstance(popular_rows, BaseException):
@@ -119,8 +146,14 @@ class CatalogRepository:
             prefix_rows = []
         elif isinstance(prefix_rows, BaseException):
             raise prefix_rows
-        popular_rows = sorted(popular_rows, key=lambda entry: entry.popularity, reverse=True)
-        unique = {entry.id: entry for entry in [*prefix_rows, *popular_rows]}
+        if isinstance(regional_rows, CatalogSearchTimeout):
+            regional_rows = []
+        elif isinstance(regional_rows, BaseException):
+            raise regional_rows
+        by_popularity = partial(sorted, key=lambda entry: entry.popularity, reverse=True)
+        unique = {
+            entry.id: entry for entry in [*prefix_rows, *by_popularity(regional_rows), *by_popularity(popular_rows)]
+        }
         return list(unique.values())[:limit]
 
     async def _run_prefix(self, stmt, timeout_ms: int, query: str) -> list[CatalogEntry]:

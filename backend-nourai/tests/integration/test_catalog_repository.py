@@ -17,12 +17,12 @@ async def _source(slug: str) -> DataSource:
         return (await session.execute(select(DataSource).where(DataSource.slug == slug))).scalar_one()
 
 
-async def _add(slug, code, name, *, brand=None, category="food", popularity=0, gtin14=None):
+async def _add(slug, code, name, *, brand=None, category="food", popularity=0, gtin14=None, countries=()):
     source = await _source(slug)
     async with async_session_factory() as session:
         entry = CatalogEntry(
             source_id=source.id, external_id=code, gtin14=gtin14 or code.zfill(14), name=name, brand=brand,
-            category=category, countries=[], search_text=normalize_search_text(name, brand),
+            category=category, countries=list(countries), search_text=normalize_search_text(name, brand),
             popularity=popularity, content_hash=code,
         )
         session.add(entry)
@@ -153,12 +153,87 @@ async def test_when_one_query_plan_times_out_the_other_answers(monkeypatch):
     assert [r.external_id for r in await repo.search("shampoo", category=None)] == ["s1"]
 
 
+async def _french_window_and_a_few_us_products():
+    """Like production: the popular matches are French, the few US ones barely scanned."""
+    for i in range(70):
+        await _add(
+            "open-beauty-facts", f"fr{i}", f"Shampooing {i}", category="cosmetic",
+            popularity=1000 + i, gtin14=f"000000000{i:05d}", countries=("FR",),
+        )
+    for i in range(5):
+        await _add(
+            "open-beauty-facts", f"us{i}", f"Anti dandruff shampoo {i}", category="cosmetic",
+            popularity=i, gtin14=f"000000001{i:05d}", countries=("US", "CA"),
+        )
+
+
+async def test_a_country_fills_half_the_window_with_products_sold_there():
+    await _french_window_and_a_few_us_products()
+    repo = CatalogRepository(async_session_factory)
+
+    global_ids = {r.external_id for r in await repo.search("shampoo", category="cosmetic", limit=60)}
+    regional = await repo.search("shampoo", category="cosmetic", country="us", limit=60)
+
+    assert not any(code.startswith("us") for code in global_ids)
+    assert len(regional) == 60
+    assert {r.external_id for r in regional} >= {f"us{i}" for i in range(5)}
+
+
+@pytest.mark.parametrize("country", ["", "U", "USA", "1A", "É"])
+async def test_a_country_that_is_not_an_iso_code_is_ignored(country):
+    await _french_window_and_a_few_us_products()
+    results = await CatalogRepository(async_session_factory).search("shampoo", category=None, country=country)
+    assert not any(r.external_id.startswith("us") for r in results)
+
+
+async def test_a_slow_regional_query_is_skipped_not_fatal(monkeypatch):
+    from app.repositories.catalog import CatalogSearchTimeout
+
+    await _add("open-food-facts", "1", "Chicken breast", popularity=50, gtin14="00000000000001", countries=("US",))
+    repo = CatalogRepository(async_session_factory)
+    real_run = repo._run
+
+    async def regional_times_out(stmt, timeout_ms, query, *, plan=None):
+        if "= ANY (catalog_entries.countries)" in str(stmt):
+            raise CatalogSearchTimeout(query)
+        return await real_run(stmt, timeout_ms, query, plan=plan)
+
+    monkeypatch.setattr(repo, "_run", regional_times_out)
+    assert [r.external_id for r in await repo.search("chicken", category=None, country="US")] == ["1"]
+
+
+@pytest.mark.parametrize(
+    ("category", "walked_index"),
+    [(None, "ix_catalog_entries_popularity_region"), ("cosmetic", "ix_catalog_entries_category_popularity_region")],
+)
+async def test_the_regional_walk_filters_countries_without_reading_the_table(monkeypatch, category, walked_index):
+    """In production, filtering countries from the table cost a page read per candidate (1.1 s)."""
+    await _french_window_and_a_few_us_products()
+    await _vacuum_catalog()
+    repo = CatalogRepository(async_session_factory)
+    real_run = repo._run
+    regional_walks: list[str] = []
+
+    async def explain_then_run(stmt, timeout_ms, query, *, plan=None):
+        if plan == "walk" and "= ANY (catalog_entries.countries)" in str(stmt):
+            async with async_session_factory() as session, session.begin():
+                await repo._configure(session, timeout_ms, plan)
+                regional_walks.append(await _explain(session, stmt))
+        return await real_run(stmt, timeout_ms, query, plan=plan)
+
+    monkeypatch.setattr(repo, "_run", explain_then_run)
+    await repo.search("shampoo", category=category, country="US")
+    [walk] = regional_walks
+    assert f"Index Only Scan using {walked_index}" in walk
+    assert "Bitmap" not in walk
+
+
 @pytest.mark.parametrize(
     ("query", "category", "walked_index"),
     [
-        ("chocolate", None, "ix_catalog_entries_popularity_cover"),
-        ("chocolate scrub", None, "ix_catalog_entries_popularity_cover"),
-        ("chocolate", "cosmetic", "ix_catalog_entries_category_popularity_cover"),
+        ("chocolate", None, "ix_catalog_entries_popularity_region"),
+        ("chocolate scrub", None, "ix_catalog_entries_popularity_region"),
+        ("chocolate", "cosmetic", "ix_catalog_entries_category_popularity_region"),
     ],
 )
 async def test_each_racing_query_is_pinned_to_its_own_plan(monkeypatch, query, category, walked_index):
