@@ -49,3 +49,41 @@ def test_duplicate_keys_collapse_to_the_first_occurrence():
 def test_queries_are_normalised_like_search_text():
     ranked = rank("CAFÉ", [c("b", "Noir cafe"), c("a", "Café noir")], country=None)
     assert keys(ranked) == ["a", "b"]
+
+
+def test_a_whole_word_name_prefix_beats_a_longer_word_that_starts_with_the_query():
+    """"shampoo" should put Shampoo before the French Shampooing, however often that's scanned."""
+    ranked = rank("shampoo", [c("fr", "Shampooing karité", popularity=114), c("es", "Shampoo", popularity=53)], country=None)
+    assert keys(ranked) == ["es", "fr"]
+
+
+def test_while_a_word_is_being_typed_name_prefixes_still_lead():
+    ranked = rank(
+        "shamp", [c("a", "Anti dandruff shampoo", popularity=46), c("b", "Shampooing karité", popularity=114)], country=None
+    )
+    assert keys(ranked) == ["b", "a"]
+
+
+def test_sold_in_the_users_country_beats_a_foreign_name_prefix():
+    """Production, "shampoo" on a US device: Moroccan and French matches outranked every US
+    shampoo, which mostly have one or two scans."""
+    ranked = rank(
+        "shampoo",
+        [
+            c("ma", "SHAMPOO", popularity=132, countries=["MA"]),
+            c("fr", "Shampooing karité", brand="Le Petit Olivier", popularity=114, countries=["FR", "MA"]),
+            c("us-hs", "Anti Dandruff Shampoo Deep Clean", brand="Head&shoulders", popularity=46, countries=["MA", "US"]),
+            c("us-dove", "Dove daily moisture shampoo", brand="Unilever", popularity=1, countries=["US"]),
+        ],
+        country="US",
+    )
+    assert keys(ranked) == ["us-hs", "us-dove", "ma", "fr"]
+
+
+def test_a_far_more_popular_foreign_product_named_exactly_like_the_query_still_leads():
+    ranked = rank(
+        "shampoo",
+        [c("us", "Anti dandruff shampoo", popularity=1, countries=["US"]), c("es", "Shampoo", popularity=10_000, countries=["ES"])],
+        country="US",
+    )
+    assert keys(ranked) == ["es", "us"]

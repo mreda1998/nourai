@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     openfoodfacts_contact_email: str = "hello@elory.app"
     openfoodfacts_user_agent: str = "Elory/1.0 (hello@elory.app)"
     usda_api_key: str = ""  # https://fdc.nal.usda.gov/api-guide.html (free)
+    # Optional: without a key openFDA allows 1,000 requests a day per IP. https://open.fda.gov/apis/authentication/
+    openfda_api_key: str = ""
     rapidapi_key: str = ""  # https://rapidapi.com — used for Sephora product API
 
     # Durable ingestion worker

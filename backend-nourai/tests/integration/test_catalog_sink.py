@@ -50,3 +50,23 @@ async def test_checkpoint_round_trips_and_size_budget_is_enforced():
     assert await sink.resume_line() == 1234
     with pytest.raises(ImportAborted):
         await sink.check_size()
+
+
+async def test_new_gtins_only_skips_products_another_source_already_indexes():
+    from app.services.catalog.importer import DryRunSink
+    from app.services.catalog.sink import NewGtinsOnly
+
+    off = PostgresCatalogSink(async_session_factory, await _source_id())
+    await off.write_batch([row("3017620422003")])
+    async with async_session_factory() as session:
+        usda_id = (await session.execute(select(DataSource.id).where(DataSource.slug == "usda-fooddata-central"))).scalar_one()
+
+    dry = NewGtinsOnly(DryRunSink(), async_session_factory, usda_id)
+    assert await dry.write_batch([row("3017620422003"), row("49000006346")]) == (0, 0)
+    assert (dry.rows, dry.held_elsewhere) == (1, 1)
+
+    usda = NewGtinsOnly(PostgresCatalogSink(async_session_factory, usda_id), async_session_factory, usda_id)
+    assert await usda.write_batch([row("3017620422003"), row("49000006346")]) == (1, 0)
+    # Its own rows aren't "held elsewhere": a re-run updates them.
+    assert await usda.write_batch([row("49000006346", "Coca-Cola")]) == (0, 1)
+    assert usda.held_elsewhere == 1

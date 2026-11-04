@@ -24,10 +24,9 @@ from app.models.ingestion import (
 )
 from app.models.product import IngredientStatus, Product, ProductIngredient
 from app.models.unmatched_ingredient_log import UnmatchedIngredientLog
-from app.services.ingestion.connectors.openfoodfacts import (
-    OpenFoodFactsConnector,
-    OpenFoodFactsRecord,
-)
+from app.services.ingestion.connectors.base import SourceInfo
+from app.services.ingestion.connectors.chain import ProductConnector, default_connector
+from app.services.ingestion.connectors.openfoodfacts import OpenFoodFactsRecord
 from app.services.ingestion.normalization import canonical_content_hash
 from app.services.ingestion.parser import ParsedIngredient, parse_off_ingredients
 from app.services.ingestion.resolver import IngredientResolution, resolve_ingredients
@@ -44,8 +43,8 @@ class ProductIngestionResult:
 
 
 class ProductIngestionPipeline:
-    def __init__(self, connector: OpenFoodFactsConnector | None = None) -> None:
-        self._connector = connector or OpenFoodFactsConnector()
+    def __init__(self, connector: ProductConnector | None = None) -> None:
+        self._connector = connector or default_connector()
 
     async def ingest_barcode(
         self,
@@ -65,7 +64,7 @@ class ProductIngestionPipeline:
                 text("SELECT pg_advisory_xact_lock(hashtext(:identifier))"),
                 {"identifier": gtin14},
             )
-            source = await self._get_or_create_source(session)
+            source = await self._get_or_create_source(session, record.source)
             source_record = await self._snapshot_source(session, source, record)
 
             has_ingredients = bool(
@@ -264,25 +263,21 @@ class ProductIngestionPipeline:
                 revision_created=True,
             )
 
-    async def _get_or_create_source(self, session: AsyncSession) -> DataSource:
+    async def _get_or_create_source(self, session: AsyncSession, info: SourceInfo) -> DataSource:
         source = (
-            await session.execute(
-                select(DataSource).where(
-                    DataSource.slug == OpenFoodFactsConnector.SOURCE_SLUG
-                )
-            )
+            await session.execute(select(DataSource).where(DataSource.slug == info.slug))
         ).scalar_one_or_none()
         if source is None:
             source = DataSource(
-                slug=OpenFoodFactsConnector.SOURCE_SLUG,
-                name="Open Food Facts",
+                slug=info.slug,
+                name=info.name,
                 source_type="product_catalog",
-                base_url="https://world.openfoodfacts.org",
-                license_name=OpenFoodFactsConnector.LICENSE_NAME,
-                license_url=OpenFoodFactsConnector.LICENSE_URL,
-                attribution_text=OpenFoodFactsConnector.ATTRIBUTION,
-                share_alike=True,
-                priority=50,
+                base_url=info.base_url,
+                license_name=info.license_name,
+                license_url=info.license_url,
+                attribution_text=info.attribution,
+                share_alike=info.share_alike,
+                priority=info.priority,
             )
             session.add(source)
             await session.flush()
@@ -365,7 +360,7 @@ class ProductIngestionPipeline:
         product.last_ingested_at = ingested_at
         product.extra_data = {
             **(product.extra_data or {}),
-            "source": OpenFoodFactsConnector.SOURCE_SLUG,
+            "source": record.source.slug,
             "nutriments": normalized.get("nutriments") or {},
             "serving_quantity": serving_quantity,
             "nutriscore_grade": normalized.get("nutriscore_grade"),
@@ -481,9 +476,9 @@ class ProductIngestionPipeline:
                 language=image.language[:10],
                 source_url=image.url,
                 public_url=image.url,
-                license_name=OpenFoodFactsConnector.IMAGE_LICENSE_NAME,
-                license_url=OpenFoodFactsConnector.IMAGE_LICENSE_URL,
-                attribution_text=OpenFoodFactsConnector.ATTRIBUTION,
+                license_name=record.source.image_license_name or record.source.license_name,
+                license_url=record.source.image_license_url or record.source.license_url,
+                attribution_text=record.source.attribution,
                 is_original=True,
                 is_ai_generated=False,
                 verification_status="pending",

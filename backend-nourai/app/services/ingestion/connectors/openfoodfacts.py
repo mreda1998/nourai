@@ -8,14 +8,29 @@ import httpx
 
 from app.core.config import settings
 from app.models.product import ProductCategory
+from app.services.ingestion.connectors.base import SourceError, SourceInfo, SourceNotFound
 
 
-class OpenFoodFactsError(RuntimeError):
+class OpenFoodFactsError(SourceError):
     pass
 
 
-class OpenFoodFactsNotFound(OpenFoodFactsError):
+class OpenFoodFactsNotFound(OpenFoodFactsError, SourceNotFound):
     pass
+
+
+OPEN_FOOD_FACTS = SourceInfo(
+    slug="open-food-facts",
+    name="Open Food Facts",
+    base_url="https://world.openfoodfacts.org",
+    license_name="Open Database License",
+    license_url="https://opendatacommons.org/licenses/odbl/1-0/",
+    attribution="Data and images from Open Food Facts contributors",
+    share_alike=True,
+    priority=50,
+    image_license_name="Creative Commons Attribution-ShareAlike 3.0",
+    image_license_url="https://creativecommons.org/licenses/by-sa/3.0/",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,11 +42,15 @@ class SourceImage:
 
 @dataclass(frozen=True, slots=True)
 class OpenFoodFactsRecord:
+    """A product in Open Food Facts' shape. Other connectors translate their records
+    into it, so the pipeline has one format to ingest; `source` says where it came from."""
+
     barcode: str
     request_url: str
     schema_version: str
     product: dict[str, Any]
     etag: str | None = None
+    source: SourceInfo = OPEN_FOOD_FACTS
 
     @property
     def name(self) -> str:
@@ -163,12 +182,12 @@ class OpenFoodFactsRecord:
 
 
 class OpenFoodFactsConnector:
-    SOURCE_SLUG = "open-food-facts"
-    LICENSE_NAME = "Open Database License"
-    LICENSE_URL = "https://opendatacommons.org/licenses/odbl/1-0/"
-    IMAGE_LICENSE_NAME = "Creative Commons Attribution-ShareAlike 3.0"
-    IMAGE_LICENSE_URL = "https://creativecommons.org/licenses/by-sa/3.0/"
-    ATTRIBUTION = "Data and images from Open Food Facts contributors"
+    SOURCE_SLUG = OPEN_FOOD_FACTS.slug
+    LICENSE_NAME = OPEN_FOOD_FACTS.license_name
+    LICENSE_URL = OPEN_FOOD_FACTS.license_url
+    IMAGE_LICENSE_NAME = OPEN_FOOD_FACTS.image_license_name
+    IMAGE_LICENSE_URL = OPEN_FOOD_FACTS.image_license_url
+    ATTRIBUTION = OPEN_FOOD_FACTS.attribution
 
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
         self._client = client

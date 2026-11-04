@@ -96,3 +96,35 @@ class PostgresCatalogSink:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+class NewGtinsOnly:
+    """Wraps a sink so it writes only products no other source already indexes.
+
+    Open Food Facts imported USDA's branded foods years ago and Open Beauty Facts
+    holds many US sunscreens, so most rows from the US dumps are already in the
+    index; written again they would show up twice in search. Each batch is
+    checked against the index (read-only), so a dry run reports the true count.
+    """
+
+    def __init__(self, sink, session_factory: async_sessionmaker[AsyncSession], source_id: uuid.UUID | None) -> None:
+        self._sink = sink
+        self._sessions = session_factory
+        self._source_id = source_id
+        self.held_elsewhere = 0
+
+    async def write_batch(self, rows: list[CatalogRow]) -> tuple[int, int]:
+        gtins = sorted({row.gtin14 for row in rows if row.gtin14})
+        held: set[str] = set()
+        if gtins:
+            stmt = select(CatalogEntry.gtin14).where(CatalogEntry.gtin14.in_(gtins))
+            if self._source_id is not None:
+                stmt = stmt.where(CatalogEntry.source_id != self._source_id)
+            async with self._sessions() as session:
+                held = set((await session.execute(stmt)).scalars())
+        fresh = [row for row in rows if row.gtin14 not in held]
+        self.held_elsewhere += len(rows) - len(fresh)
+        return await self._sink.write_batch(fresh) if fresh else (0, 0)
+
+    def __getattr__(self, name):
+        return getattr(self._sink, name)
