@@ -158,6 +158,7 @@ class OpenFoodFactsRecord:
             "nova_group": self.product.get("nova_group"),
             "quantity": self.product.get("quantity"),
             "countries_tags": self.product.get("countries_tags") or [],
+            "additives_tags": self.product.get("additives_tags") or [],
         }
 
 

@@ -372,6 +372,7 @@ class ProductIngestionPipeline:
             "nova_group": normalized.get("nova_group"),
             "ingredients_text": normalized.get("ingredient_statement"),
             "quantity": normalized.get("quantity"),
+            "additives_tags": normalized.get("additives_tags") or [],
         }
 
     async def _write_ingredients(

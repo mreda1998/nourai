@@ -108,3 +108,13 @@ def test_a_serving_set_that_copies_the_per_100_values_is_ignored():
     payload = record.normalized_payload()
     assert not any(key.endswith("_serving") for key in payload["nutriments"])
     assert payload["serving_quantity"] == 330  # the panel scales per-100 g values instead
+
+
+def test_normalized_payload_keeps_additives_tags():
+    record = OpenFoodFactsRecord(
+        barcode="3017620422003",
+        request_url="https://example.test/product",
+        schema_version="3.6",
+        product={"product_name": "Candy", "additives_tags": ["en:e171", "en:e102"]},
+    )
+    assert record.normalized_payload()["additives_tags"] == ["en:e171", "en:e102"]

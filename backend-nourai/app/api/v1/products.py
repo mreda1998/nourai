@@ -42,6 +42,7 @@ from app.services.product import ProductService
 from app.services.ingestion.normalization import normalize_gtin
 from app.services.ingestion.queue import IngestionQueue
 from app.services.insights import record_event
+from app.services.regulation.product_rules import attach_rules
 
 router = APIRouter()
 
@@ -110,6 +111,13 @@ async def _build_ingredient_lookup(db: AsyncSession) -> dict[str, str]:
         for alias, ingredient_ids in candidates.items()
         if len(ingredient_ids) == 1
     }
+
+
+async def _details(db: AsyncSession, product, country: str | None) -> ProductWithDetails:
+    """The full product response, with rule notes for the person's country."""
+    lookup = await _build_ingredient_lookup(db)
+    response = ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)
+    return await attach_rules(db, product, response, country)
 
 
 @router.get("", response_model=ProductSearchResponse)
@@ -226,10 +234,11 @@ async def get_product(
     catalog: Annotated[CatalogRepository, Depends(get_catalog_repository)] = None,
     hydrator: Annotated[CatalogHydrator, Depends(get_catalog_hydrator)] = None,
     current_user: OptionalUser = None,
+    country: str | None = Query(None, description="ISO country code; decides whose rules come first"),
 ):
     """A product by UUID, or `catalog:<n>` for an index entry — hydrated on first open."""
     if product_id.startswith("catalog:"):
-        return await _open_catalog_entry(product_id, db, service, catalog, hydrator)
+        return await _open_catalog_entry(product_id, db, service, catalog, hydrator, country)
     try:
         uuid = UUID(product_id)
     except ValueError:
@@ -239,11 +248,10 @@ async def get_product(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    lookup = await _build_ingredient_lookup(db)
-    return ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)
+    return await _details(db, product, country)
 
 
-async def _open_catalog_entry(product_id, db, service, catalog, hydrator):
+async def _open_catalog_entry(product_id, db, service, catalog, hydrator, country=None):
     try:
         entry = await catalog.get(int(product_id.split(":", 1)[1]))
     except ValueError:
@@ -263,8 +271,7 @@ async def _open_catalog_entry(product_id, db, service, catalog, hydrator):
     product = await service.get_product(target)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    lookup = await _build_ingredient_lookup(db)
-    return ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)
+    return await _details(db, product, country)
 
 
 @router.get("/{product_id}/personalize", response_model=PersonalAnalysisResponse)
@@ -355,6 +362,7 @@ async def get_product_by_barcode(
     catalog: Annotated[CatalogRepository, Depends(get_catalog_repository)] = None,
     hydrator: Annotated[CatalogHydrator, Depends(get_catalog_hydrator)] = None,
     current_user: OptionalUser = None,
+    country: str | None = Query(None, description="ISO country code; decides whose rules come first"),
 ):
     """A known product, or hydrate it inline; while it loads, 202 with a preview from the index."""
     async def record_scan(result: str, **fields) -> None:
@@ -379,8 +387,7 @@ async def get_product_by_barcode(
     )
     if product:
         await record_scan("cached", barcode=normalized.gtin14, product_id=product.id)
-        lookup = await _build_ingredient_lookup(db)
-        return ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)
+        return await _details(db, product, country)
 
     result = await hydrator.hydrate(db, digits=normalized.digits, gtin14=normalized.gtin14)
     if result.status == "hydrated":
@@ -388,8 +395,7 @@ async def get_product_by_barcode(
         if product:
             await catalog.link_product(normalized.gtin14, product.id)
             await record_scan("hydrated", barcode=normalized.gtin14, product_id=product.id)
-            lookup = await _build_ingredient_lookup(db)
-            return ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)
+            return await _details(db, product, country)
 
     entry = await catalog.best_for_gtin(normalized.gtin14)
     await record_scan(

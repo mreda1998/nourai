@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, computed_field
 from app.models.product import IngredientStatus, ProductCategory
 from app.schemas.claim import ClaimResponse  # kept for __init__ re-export
 from app.schemas.measure import AdditivesSummary, Measure, NutritionPanel, ProcessingInfo
+from app.schemas.regulation import RuleNoteOut, RulesGlanceOut
 
 # ─── Bio-domain scoring ───────────────────────────────────────────────────────
 # Delegated to app/services/biodomain_scorer.py.
@@ -55,6 +56,8 @@ class MobileIngredient(BaseModel):
     description: str | None = None
     ingredient_id: str | None = None  # FK → ingredients.id; present when matched to canonical
     is_nutrient: bool = False         # True for rows sourced from OFF nutriments panel
+    rule_note: RuleNoteOut | None = None   # set only when a covered place bans or flags it
+    rule_substance_id: str | None = None   # the regulated substance this label row names
 
 
 # ─── Nutrition facts parsing ──────────────────────────────────────────────────
@@ -265,6 +268,9 @@ class ProductWithDetails(BaseModel):
     doses: list[Measure] = []
     additives: AdditivesSummary | None = None
     processing: ProcessingInfo | None = None
+    # Rules: substances found only through E-number tags, and the "At a glance" counts
+    rule_extras: list[RuleNoteOut] = []
+    rules_glance: RulesGlanceOut | None = None
 
     @classmethod
     def from_orm_with_details(
