@@ -4,7 +4,7 @@
 VENV = . venv/bin/activate &&
 PYTHON = $(VENV) python3
 
-.PHONY: help up down logs migrate seed seed-peptides images research dev worker worker-once import-lab tester-report reset test backfill-links backfill-usda seed-whole-foods seed-fragrance seed-luxury-perfumes fetch-sephora enrich-pubchem fetch-cosing start seed-golden-set seed-golden-set-dry suggest-new-ingredients suggest-new-ingredients-more research-atelier
+.PHONY: help up down logs migrate seed seed-peptides images research dev worker worker-once import-lab import-rules curate-rules review-rules tester-report reset test backfill-links backfill-usda seed-whole-foods seed-fragrance seed-luxury-perfumes fetch-sephora enrich-pubchem fetch-cosing start seed-golden-set seed-golden-set-dry suggest-new-ingredients suggest-new-ingredients-more research-atelier
 
 help:
 	@echo ""
@@ -33,6 +33,7 @@ help:
 	@echo "  make worker            Start the durable ingestion worker"
 	@echo "  make worker-once       Process at most one queued ingestion job"
 	@echo "  make import-lab FILE=… Import a versioned public lab-results manifest"
+	@echo "  make import-rules SOURCE=… [FILE=…] [DERIVE=1]  Import an official regulatory list"
 	@echo "  make tester-report     HTML report: tester scans, missing products, research priority"
 	@echo "  make reset             Full reset: wipe DB, re-migrate, re-seed"
 	@echo "  make logs              Tail PostgreSQL logs"
@@ -143,6 +144,9 @@ enqueue-barcodes:
 
 import-lab:
 	$(PYTHON) -m scripts.import_lab_results $(FILE)
+
+import-rules:
+	$(PYTHON) -m scripts.import_regulatory_list $(SOURCE) $(if $(FILE),--file $(FILE),) $(if $(DERIVE),--derive,)
 
 # ─── Tester insights ─────────────────────────────────────────────────────────
 
