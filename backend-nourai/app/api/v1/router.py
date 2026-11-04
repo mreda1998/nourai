@@ -1,7 +1,7 @@
 """API v1 router configuration."""
 from fastapi import APIRouter
 
-from app.api.v1 import atelier, chat, domains, foods, ingredients, insights, lab_results, meals, peptides, products, scores, stack, users
+from app.api.v1 import atelier, chat, domains, foods, ingredients, insights, lab_results, meals, peptides, products, scores, stack, substances, users
 from app.api.v1.webhooks import revenuecat
 
 api_router = APIRouter()
@@ -20,3 +20,4 @@ api_router.include_router(peptides.router, prefix="/peptides", tags=["peptides"]
 api_router.include_router(scores.router, prefix="/scores", tags=["scores"])
 api_router.include_router(insights.router, prefix="/insights", tags=["insights"])
 api_router.include_router(lab_results.router, prefix="/lab-results", tags=["lab-results"])
+api_router.include_router(substances.router, prefix="/substances", tags=["substances"])

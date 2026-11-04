@@ -6,6 +6,7 @@ GET /ingredients/{id}            — full ingredient deep dive (profile + eviden
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -20,6 +21,9 @@ from app.models.ingredient_claim import IngredientClaim, IngredientClaimEvidence
 from app.models.ingredient_evidence import IngredientEvidence
 from app.models.ingredient_biodomain_score import IngredientBioDomainScore
 from app.models.product import Product, ProductIngredient
+from app.core.regulation import normalize_country
+from app.schemas.regulation import RulesBlock, build_rules_block
+from app.services.regulation.store import load_rule_facts, substances_for_ingredient
 
 router = APIRouter()
 
@@ -150,7 +154,10 @@ class IngredientDetail(BaseModel):
     # Products in our DB that contain this ingredient
     found_in: list[FoundInProduct]
 
-    # Peptide-specific fields (null for non-peptide ingredients)
+    # What the law and expert bodies say, per linked substance; null when none is linked
+    rules: RulesBlock | None = None
+
+    # Peptide-specific fields (null for non-peptide ingredients); kept for older app builds
     us_regulatory_status: str | None = None
     wada_status: str | None = None
     admin_routes: list[str] | None = None
@@ -272,6 +279,7 @@ async def search_ingredients(
 async def get_ingredient(
     ingredient_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    country: str | None = Query(None, description="ISO country code; decides whose rules come first"),
 ) -> Any:
     """
     Full ingredient deep dive.
@@ -350,6 +358,12 @@ async def get_ingredient(
         for bs in sorted(ingredient.biodomain_scores, key=lambda s: s.biodomain)
     ]
 
+    substances = await substances_for_ingredient(db, ingredient.id)
+    rules = None
+    if substances:
+        facts = await load_rule_facts(db, [s.id for s, _ in substances])
+        rules = build_rules_block(substances, facts, normalize_country(country), date.today())
+
     return IngredientDetail(
         id=str(ingredient.id),
         canonical_name=ingredient.canonical_name,
@@ -401,6 +415,7 @@ async def get_ingredient(
             for ev in sorted_evidence
         ],
         found_in=found_in,
+        rules=rules,
         us_regulatory_status=ingredient.us_regulatory_status,
         wada_status=ingredient.wada_status,
         admin_routes=ingredient.admin_routes,
