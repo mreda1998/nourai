@@ -1,0 +1,21 @@
+{
+  "substance": {
+    "name": "Potassium bromate",
+    "cas": "7758-01-2",
+    "e_number": null,
+    "aliases": [],
+    "ingredient": null,
+    "scope_label": null
+  },
+  "places": [
+    "US-CA",
+    "EU",
+    "CA"
+  ],
+  "documents": [
+    {
+      "url": "https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240AB418",
+      "place": "US-CA"
+    }
+  ]
+}

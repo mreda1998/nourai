@@ -1,0 +1,430 @@
+[
+  {
+    "substance": "Titanium dioxide",
+    "e_number": "E171",
+    "expect": [
+      {
+        "place": "EU",
+        "applies_to": "food_additive",
+        "status": "not_authorised",
+        "effective_from": null,
+        "source_url": "https://ec.europa.eu/food/food-feed-portal/screen/food-additives/search",
+        "quote": "Titanium dioxide is not authorised in the food categories listed in Part D and E."
+      },
+      {
+        "place": "US",
+        "applies_to": "food_additive",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://www.fda.gov/industry/color-additive-inventories/color-additive-status-list",
+        "quote": "Foods generally, NTE 1 percent (by wt.)"
+      }
+    ],
+    "product_note": {
+      "category": "food",
+      "country": "CA",
+      "text": "Not authorised as a food additive in the EU"
+    },
+    "approved_by": null
+  },
+  {
+    "substance": "Tartrazine",
+    "e_number": "E102",
+    "expect": [
+      {
+        "place": "EU",
+        "applies_to": "food_additive",
+        "status": "warning_label",
+        "effective_from": null,
+        "source_url": "https://eur-lex.europa.eu/eli/reg/2008/1333/oj",
+        "quote": "may have an adverse effect on activity and attention in children"
+      },
+      {
+        "place": "EU",
+        "applies_to": "food_additive",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://ec.europa.eu/food/food-feed-portal/screen/food-additives/search",
+        "quote": ""
+      },
+      {
+        "place": "US",
+        "applies_to": "food_additive",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://www.fda.gov/industry/color-additive-inventories/color-additive-status-list",
+        "quote": "Foods generally."
+      }
+    ],
+    "product_note": {
+      "category": "food",
+      "country": "CA",
+      "text": "Warning label required in the EU"
+    },
+    "approved_by": null
+  },
+  {
+    "substance": "Erythrosine",
+    "e_number": "E127",
+    "expect": [
+      {
+        "place": "EU",
+        "applies_to": "food_additive",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://ec.europa.eu/food/food-feed-portal/screen/food-additives/search",
+        "quote": "only cocktail cherries and candied cherries"
+      },
+      {
+        "place": "US",
+        "applies_to": "food_additive",
+        "status": "banned",
+        "effective_from": "2027-01-15",
+        "source_url": "https://www.fda.gov/industry/color-additive-inventories/color-additive-status-list",
+        "quote": "food use (including dietary supplements) will no longer be permanently listed after January 15, 2027"
+      },
+      {
+        "place": "CA",
+        "applies_to": "food_additive",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://www.canada.ca/en/health-canada/services/food-nutrition/food-safety/food-additives/lists-permitted/3-colouring-agents.html",
+        "quote": ""
+      }
+    ],
+    "product_note": {
+      "category": "food",
+      "country": "US",
+      "text": "Banned in the US from 15 Jan 2027"
+    },
+    "approved_by": null
+  },
+  {
+    "substance": "Aspartame",
+    "e_number": "E951",
+    "expect": [
+      {
+        "place": "EU",
+        "applies_to": "food_additive",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://ec.europa.eu/food/food-feed-portal/screen/food-additives/search",
+        "quote": ""
+      },
+      {
+        "place": "US",
+        "applies_to": "food_additive",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://hfpappexternal.fda.gov/scripts/fdcc/?set=FoodSubstances",
+        "quote": "172.804"
+      },
+      {
+        "place": "CA",
+        "applies_to": "food_additive",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://www.canada.ca/en/health-canada/services/food-nutrition/food-safety/food-additives/lists-permitted/9-sweeteners.html",
+        "quote": ""
+      }
+    ],
+    "product_note": null,
+    "approved_by": null
+  },
+  {
+    "substance": "Carrageenan",
+    "e_number": "E407",
+    "expect": [
+      {
+        "place": "EU",
+        "applies_to": "food_additive",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://ec.europa.eu/food/food-feed-portal/screen/food-additives/search",
+        "quote": ""
+      }
+    ],
+    "product_note": null,
+    "approved_by": null
+  },
+  {
+    "substance": "Butylated hydroxyanisole (BHA)",
+    "e_number": "E320",
+    "expect": [
+      {
+        "place": "EU",
+        "applies_to": "food_additive",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://ec.europa.eu/food/food-feed-portal/screen/food-additives/search",
+        "quote": ""
+      }
+    ],
+    "product_note": null,
+    "approved_by": null
+  },
+  {
+    "substance": "Butylphenyl methylpropional",
+    "e_number": null,
+    "expect": [
+      {
+        "place": "EU",
+        "applies_to": "cosmetic",
+        "status": "banned",
+        "effective_from": null,
+        "source_url": "https://ec.europa.eu/growth/tools-databases/cosing/reference/annexes/list/II",
+        "quote": "2-(4-tert-butylbenzyl) propionaldehyde"
+      }
+    ],
+    "product_note": {
+      "category": "cosmetic",
+      "country": "FR",
+      "text": "Banned in the EU"
+    },
+    "approved_by": null
+  },
+  {
+    "substance": "Phenoxyethanol",
+    "e_number": null,
+    "expect": [
+      {
+        "place": "EU",
+        "applies_to": "cosmetic",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://ec.europa.eu/growth/tools-databases/cosing/reference/annexes/list/V",
+        "quote": "1.0%"
+      }
+    ],
+    "product_note": {
+      "category": "cosmetic",
+      "country": "FR",
+      "text": null
+    },
+    "approved_by": null
+  },
+  {
+    "substance": "Linalool",
+    "e_number": null,
+    "expect": [
+      {
+        "place": "EU",
+        "applies_to": "cosmetic",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://ec.europa.eu/growth/tools-databases/cosing/reference/annexes/list/III",
+        "quote": "The presence of the substance must be indicated in the list of ingredients"
+      }
+    ],
+    "product_note": null,
+    "approved_by": null
+  },
+  {
+    "substance": "Triclosan",
+    "e_number": null,
+    "expect": [
+      {
+        "place": "EU",
+        "applies_to": "cosmetic",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://ec.europa.eu/growth/tools-databases/cosing/reference/annexes/list/V",
+        "quote": "0.3%"
+      },
+      {
+        "place": "CA",
+        "applies_to": "cosmetic",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://www.canada.ca/en/health-canada/services/consumer-product-safety/cosmetics/cosmetic-ingredient-hotlist-prohibited-restricted-ingredients/hotlist.html",
+        "quote": "Mouthwashes"
+      }
+    ],
+    "product_note": null,
+    "approved_by": null
+  },
+  {
+    "substance": "Hydroquinone",
+    "e_number": null,
+    "expect": [
+      {
+        "place": "EU",
+        "applies_to": "cosmetic",
+        "status": "banned",
+        "effective_from": null,
+        "source_url": "https://ec.europa.eu/growth/tools-databases/cosing/reference/annexes/list/II",
+        "quote": "with the exception of entry 14 in Annex III"
+      },
+      {
+        "place": "CA",
+        "applies_to": "cosmetic",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://www.canada.ca/en/health-canada/services/consumer-product-safety/cosmetics/cosmetic-ingredient-hotlist-prohibited-restricted-ingredients/hotlist.html",
+        "quote": "Oxidizing colouring agent for hair dyes"
+      }
+    ],
+    "product_note": null,
+    "approved_by": null
+  },
+  {
+    "substance": "Retinol",
+    "e_number": null,
+    "expect": [
+      {
+        "place": "EU",
+        "applies_to": "cosmetic",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://ec.europa.eu/growth/tools-databases/cosing/reference/annexes/list/III",
+        "quote": "0,05 % Retinol Equivalent"
+      }
+    ],
+    "product_note": null,
+    "approved_by": null
+  },
+  {
+    "substance": "Mercury and its compounds",
+    "e_number": null,
+    "expect": [
+      {
+        "place": "CA",
+        "applies_to": "cosmetic",
+        "status": "banned",
+        "effective_from": null,
+        "source_url": "https://www.canada.ca/en/health-canada/services/consumer-product-safety/cosmetics/cosmetic-ingredient-hotlist-prohibited-restricted-ingredients/hotlist.html",
+        "quote": ""
+      }
+    ],
+    "product_note": null,
+    "approved_by": null
+  },
+  {
+    "substance": "Cyclamate",
+    "e_number": null,
+    "expect": [
+      {
+        "place": "US",
+        "applies_to": "food",
+        "status": "banned",
+        "effective_from": null,
+        "source_url": "https://hfpappexternal.fda.gov/scripts/fdcc/?set=FoodSubstances",
+        "quote": "189.135"
+      }
+    ],
+    "product_note": null,
+    "approved_by": null
+  },
+  {
+    "substance": "Potassium bromate",
+    "e_number": null,
+    "expect": [
+      {
+        "place": "US",
+        "applies_to": "food_additive",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://hfpappexternal.fda.gov/scripts/fdcc/?set=FoodSubstances",
+        "quote": "172.730"
+      },
+      {
+        "place": "US-CA",
+        "applies_to": "food_additive",
+        "status": "banned",
+        "effective_from": "2027-01-01",
+        "source_url": "https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240AB418",
+        "quote": ""
+      }
+    ],
+    "product_note": null,
+    "approved_by": null
+  },
+  {
+    "substance": "Brominated vegetable oil",
+    "e_number": null,
+    "expect": [
+      {
+        "place": "US-CA",
+        "applies_to": "food_additive",
+        "status": "banned",
+        "effective_from": "2027-01-01",
+        "source_url": "https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240AB418",
+        "quote": ""
+      }
+    ],
+    "product_note": null,
+    "approved_by": null
+  },
+  {
+    "substance": "Propylparaben",
+    "e_number": null,
+    "expect": [
+      {
+        "place": "US-CA",
+        "applies_to": "food_additive",
+        "status": "banned",
+        "effective_from": "2027-01-01",
+        "source_url": "https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240AB418",
+        "quote": ""
+      }
+    ],
+    "product_note": null,
+    "approved_by": null
+  },
+  {
+    "substance": "Red yeast rice (monacolins)",
+    "e_number": null,
+    "expect": [
+      {
+        "place": "EU",
+        "applies_to": "supplement",
+        "status": "allowed_with_limits",
+        "effective_from": null,
+        "source_url": "https://eur-lex.europa.eu/eli/reg/2022/860/oj",
+        "quote": ""
+      }
+    ],
+    "product_note": null,
+    "approved_by": null
+  },
+  {
+    "substance": "Melatonin",
+    "e_number": null,
+    "expect": [
+      {
+        "place": "GB",
+        "applies_to": "supplement",
+        "status": "prescription_only",
+        "effective_from": null,
+        "source_url": "https://www.gov.uk/government/organisations/medicines-and-healthcare-products-regulatory-agency",
+        "quote": ""
+      }
+    ],
+    "product_note": {
+      "category": "supplement",
+      "country": "GB",
+      "text": "Prescription only in the UK"
+    },
+    "approved_by": null
+  },
+  {
+    "substance": "BPC-157",
+    "e_number": null,
+    "expect": [
+      {
+        "place": "WADA",
+        "applies_to": "sport",
+        "status": "banned",
+        "effective_from": null,
+        "source_url": "https://www.wada-ama.org/en/prohibited-list",
+        "quote": ""
+      }
+    ],
+    "product_note": {
+      "category": "supplement",
+      "country": "CA",
+      "text": "Banned in sport (WADA)"
+    },
+    "approved_by": null
+  }
+]

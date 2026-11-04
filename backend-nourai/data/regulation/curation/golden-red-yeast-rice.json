@@ -1,0 +1,19 @@
+{
+  "substance": {
+    "name": "Red yeast rice (monacolins)",
+    "cas": null,
+    "e_number": null,
+    "aliases": [],
+    "ingredient": null,
+    "scope_label": null
+  },
+  "places": [
+    "EU"
+  ],
+  "documents": [
+    {
+      "url": "https://eur-lex.europa.eu/eli/reg/2022/860/oj",
+      "place": "EU"
+    }
+  ]
+}

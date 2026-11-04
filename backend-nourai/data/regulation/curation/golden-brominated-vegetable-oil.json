@@ -1,0 +1,20 @@
+{
+  "substance": {
+    "name": "Brominated vegetable oil",
+    "cas": null,
+    "e_number": null,
+    "aliases": [],
+    "ingredient": null,
+    "scope_label": null
+  },
+  "places": [
+    "US-CA",
+    "US"
+  ],
+  "documents": [
+    {
+      "url": "https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240AB418",
+      "place": "US-CA"
+    }
+  ]
+}
