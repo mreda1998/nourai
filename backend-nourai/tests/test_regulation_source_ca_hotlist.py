@@ -38,3 +38,9 @@ def test_restricted_formaldehyde_keeps_every_condition():
     _, rule = _by_name(SOURCE.parse(RAW))["Formaldehyde"]
     assert rule.condition.startswith("a) Not permitted in aerosol products")
     assert "e)" in rule.condition
+
+
+def test_table_notes_row_ignored():
+    with_notes = RAW.replace(b"</table>", b"<tr><td>Table 2 notes Table 2 note 1 Cells in this column</td></tr></table>")
+    parsed = SOURCE.parse(with_notes)
+    assert "Table 2 notes Table 2 note 1 Cells in this column" not in {s.name for s in parsed.substances}

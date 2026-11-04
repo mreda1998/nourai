@@ -67,6 +67,9 @@ class CanadaCosmeticHotlist:
             if remaining == 0:
                 if entry:
                     rules.append(self._restricted(base, entry, lines))
+                    entry = None
+                if len(cells) < 3:  # a full-width row: the table's notes
+                    continue
                 remaining = int(cells[0].get("rowspan", 1))
                 entry = _substance(*[_text(c) for c in cells[:3]])
                 substances.append(entry)
@@ -85,7 +88,8 @@ class CanadaCosmeticHotlist:
 
     @staticmethod
     def _body_rows(table) -> list:
-        return [r for r in table.find_all("tr") if r.find_parent("thead") is None and r.find("td")]
+        return [r for r in table.find_all("tr")
+                if r.find_parent("thead") is None and r.find_parent("tfoot") is None and r.find("td")]
 
     @staticmethod
     def _restricted(base: dict, entry: ParsedSubstance, lines: list[str]) -> ParsedRule:
