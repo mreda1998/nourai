@@ -16,6 +16,8 @@ export interface Ingredient {
   description?: string;
   ingredient_id?: string | null;   // FK to canonical ingredient — present when matched
   is_nutrient?: boolean;           // True for rows from the OFF nutrition panel
+  rule_note?: RuleNote | null;     // set only when a covered place bans or flags it
+  rule_substance_id?: string | null; // the regulated substance this label row names
 }
 
 export interface BioDomain {
@@ -97,6 +99,85 @@ export interface ProcessingInfo {
   source: MeasureSource;
 }
 
+// ─── Ingredient rules (what the law says, place by place) ───────────────────
+
+export interface RuleSource {
+  authority: string;
+  legal_reference: string | null;
+  url: string;
+  last_checked_at: string;
+}
+
+export interface PlaceRule {
+  id: string;
+  status: string;
+  status_label: string;
+  applies_to: string | null;
+  sub_scope: string | null;
+  condition: string | null;
+  effective_from: string | null;
+  effective_until: string | null;
+  why: string | null;
+  source: RuleSource;
+}
+
+export interface PlaceRow {
+  place: string;
+  place_name: string;
+  is_yours: boolean;
+  via_place: string | null;
+  checked_no_rule: boolean;
+  rules: PlaceRule[];
+}
+
+export interface ExpertView {
+  id: string;
+  body: string;
+  body_name: string;
+  classification: string | null;
+  explainer: string | null;
+  effective_from: string | null;
+  source: RuleSource;
+}
+
+export interface SubstanceRules {
+  substance_id: string;
+  name: string;
+  scope_label: string | null;
+  summary: string | null;
+  places: PlaceRow[];
+  expert_views: ExpertView[];
+}
+
+export interface RulesBlock {
+  country: string;
+  substances: SubstanceRules[];
+  last_checked_at: string | null;
+}
+
+export interface RuleNote {
+  text: string;
+  status: string;
+  place: string;
+  more: number;
+  substance_id: string;
+  substance_name: string | null;
+}
+
+export interface RulesGlance {
+  where_you_live: number;
+  elsewhere: number;
+}
+
+export interface SubstanceDetail {
+  id: string;
+  name: string;
+  e_number: string | null;
+  inci: string | null;
+  ingredient_ids: string[];
+  rules: RulesBlock;
+}
+
 export interface Product {
   id: string;
   barcode?: string;
@@ -128,6 +209,9 @@ export interface Product {
   doses?: Measure[];
   additives?: AdditivesSummary | null;
   processing?: ProcessingInfo | null;
+  /** Substances found only through E-number tags, and the "At a glance" counts. Absent from older backends. */
+  rule_extras?: RuleNote[];
+  rules_glance?: RulesGlance | null;
 }
 
 export interface ProductListItem {
@@ -369,6 +453,8 @@ export interface IngredientDetail {
   claims?: IngredientClaim[];
   evidence: IngredientEvidenceRecord[];
   found_in: IngredientFoundInProduct[];
+  /** What the law and expert bodies say; absent from older backends, null when no substance is linked */
+  rules?: RulesBlock | null;
   // Peptide-specific fields (null for non-peptide ingredients)
   us_regulatory_status: string | null;
   wada_status: string | null;
@@ -785,6 +871,9 @@ export function configureAuthTokenProvider(fn: () => Promise<string | null>) {
   _authTokenProvider = fn;
 }
 
+/** `?country=FR` so rules come back with the person's own country first. */
+const countryQuery = (country?: string) => (country ? `?country=${encodeURIComponent(country)}` : '');
+
 class APIService {
   private baseUrl: string;
 
@@ -863,9 +952,9 @@ class APIService {
   }
 
   /** Open any product id — including "catalog:<n>", which may answer 202 with a preview while it loads. */
-  async openProduct(productId: string): Promise<Product | BarcodeIngestionResponse> {
+  async openProduct(productId: string, country?: string): Promise<Product | BarcodeIngestionResponse> {
     if (productId.startsWith('usda-')) return this.getProduct(productId);
-    return this.fetch<Product | BarcodeIngestionResponse>(`/products/${encodeURIComponent(productId)}`);
+    return this.fetch<Product | BarcodeIngestionResponse>(`/products/${encodeURIComponent(productId)}${countryQuery(country)}`);
   }
 
   /**
@@ -1190,17 +1279,22 @@ class APIService {
    * Get full ingredient deep dive by ID.
    * Returns mechanism, belief/reality summary, evidence records, and found-in products.
    */
-  async getIngredient(ingredientId: string): Promise<IngredientDetail> {
-    return this.fetch<IngredientDetail>(`/ingredients/${ingredientId}`);
+  async getIngredient(ingredientId: string, country?: string): Promise<IngredientDetail> {
+    return this.fetch<IngredientDetail>(`/ingredients/${ingredientId}${countryQuery(country)}`);
+  }
+
+  /** A regulated substance's rules — for label ingredients we haven't researched. */
+  async getSubstance(substanceId: string, country?: string): Promise<SubstanceDetail> {
+    return this.fetch<SubstanceDetail>(`/substances/${substanceId}${countryQuery(country)}`);
   }
 
   /**
    * Fetch an ingredient by ID, returning null on error.
    * Used by screens that want graceful error handling.
    */
-  async getIngredientWithFallback(ingredientId: string): Promise<IngredientDetail | null> {
+  async getIngredientWithFallback(ingredientId: string, country?: string): Promise<IngredientDetail | null> {
     try {
-      return await this.getIngredient(ingredientId);
+      return await this.getIngredient(ingredientId, country);
     } catch {
       return null;
     }
