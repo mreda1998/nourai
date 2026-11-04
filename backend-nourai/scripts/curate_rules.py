@@ -8,7 +8,10 @@ A manifest names one substance, the places to report on and the official documen
                    "aliases": [["melatonine", "name", "fr"]], "ingredient": "Melatonin",
                    "scope_label": null},
      "places": ["GB", "FR", "CA", "US"],
-     "documents": [{"url": "https://…", "place": "GB"}]}
+     "documents": [{"url": "https://…", "place": "GB"},
+                   {"url": "https://www.wada-ama.org/…", "file": "documents/wada-2026.pdf"}]}
+A document with "file" is read from a copy saved next to the manifest (for sites that refuse
+automated clients); its official "url" is still the citation.
 Drafts are stored unserved; review them with `make review-rules`.
 """
 from __future__ import annotations
@@ -28,7 +31,7 @@ from app.db.session import async_session_factory
 from app.models.ingredient import Ingredient
 from app.models.regulation import IngredientSubstance
 from app.services.regulation.curation import draft_rules, store_drafts
-from app.services.regulation.documents import fetch_document
+from app.services.regulation.documents import fetch_document, read_saved_document
 from app.services.regulation.importer import ParsedSubstance, upsert_substance
 from app.services.research.llm import ResearchLLM
 
@@ -36,7 +39,10 @@ from app.services.research.llm import ResearchLLM
 async def curate(path: Path, llm: ResearchLLM, client: httpx.AsyncClient, dry_run: bool) -> dict:
     manifest = json.loads(path.read_text())
     spec = manifest["substance"]
-    documents = [await fetch_document(d["url"], client) for d in manifest["documents"]]
+    documents = [
+        read_saved_document(d["url"], path.parent / d["file"]) if d.get("file") else await fetch_document(d["url"], client)
+        for d in manifest["documents"]
+    ]
     result = await draft_rules(llm, spec["name"], manifest["places"], documents)
     summary = {"manifest": path.name, "kept": len(result.kept), "dropped": len(result.dropped),
                "proposed_checks": len(result.checked)}

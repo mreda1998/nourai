@@ -1,0 +1,25 @@
+{
+  "substance": {
+    "name": "AOD-9604",
+    "e_number": null,
+    "cas": null,
+    "aliases": [],
+    "ingredient": "AOD-9604",
+    "scope_label": null
+  },
+  "places": [
+    "US",
+    "WADA"
+  ],
+  "documents": [
+    {
+      "url": "https://www.fda.gov/drugs/human-drug-compounding/certain-bulk-drug-substances-use-compounding-may-present-significant-safety-risks",
+      "place": "US"
+    },
+    {
+      "url": "https://www.wada-ama.org/en/prohibited-list",
+      "file": "documents/wada-prohibited-list.pdf",
+      "place": "WADA"
+    }
+  ]
+}

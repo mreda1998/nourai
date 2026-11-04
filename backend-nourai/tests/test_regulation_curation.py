@@ -85,3 +85,12 @@ async def test_fetch_document_reads_html_text():
     assert document.title == "Arrêté"
     assert "Les plantes autorisées" in " ".join(document.text.split())
     assert "x()" not in document.text
+
+
+def test_saved_document_keeps_its_official_url(tmp_path):
+    from app.services.regulation.documents import read_saved_document
+    saved = tmp_path / "list.html"
+    saved.write_text("<html><title>Prohibited List</title><body>BPC-157 is prohibited at all times.</body></html>")
+    document = read_saved_document("https://www.wada-ama.org/en/prohibited-list", saved)
+    assert document.url == "https://www.wada-ama.org/en/prohibited-list"
+    assert "BPC-157 is prohibited at all times." in document.text
