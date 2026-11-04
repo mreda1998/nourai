@@ -4,7 +4,7 @@
 VENV = . venv/bin/activate &&
 PYTHON = $(VENV) python3
 
-.PHONY: help up down logs migrate seed seed-peptides images research dev worker worker-once import-lab import-rules curate-rules review-rules tester-report reset test backfill-links backfill-usda seed-whole-foods seed-fragrance seed-luxury-perfumes fetch-sephora enrich-pubchem fetch-cosing start seed-golden-set seed-golden-set-dry suggest-new-ingredients suggest-new-ingredients-more research-atelier
+.PHONY: help up down logs migrate seed seed-peptides images research dev worker worker-once import-lab import-rules curate-rules review-rules tester-report reset test backfill-links backfill-usda seed-whole-foods seed-fragrance seed-luxury-perfumes fetch-sephora enrich-pubchem start seed-golden-set seed-golden-set-dry suggest-new-ingredients suggest-new-ingredients-more research-atelier
 
 help:
 	@echo ""
@@ -22,7 +22,6 @@ help:
 	@echo "  make seed-luxury-perfumes  Seed ~70 curated luxury perfumes (Chanel, Dior, LV, Creed...)"
 	@echo "  make fetch-sephora         Fetch thousands of luxury fragrances from Sephora (RAPIDAPI_KEY)"
 	@echo "  make enrich-pubchem        Enrich ingredients with NIH PubChem GHS safety data (free)"
-	@echo "  make fetch-cosing          Apply EU CosIng ban/restriction data to ingredients (free)"
 	@echo "  make seed-golden-set       Seed 2,500-ingredient golden set from CSV (PENDING)"
 	@echo "  make suggest-new-ingredients  Show top unmatched ingredients for next batch"
 	@echo "  make images            Upload product images → Supabase Storage"
@@ -259,7 +258,7 @@ seed-luxury-perfumes-brand:
 #   3. make fetch-sephora           ← fetch thousands more from Sephora (needs RAPIDAPI_KEY)
 #   4. make fetch-products          ← fetch from Open Beauty Facts (perfumes + all cosmetics)
 #   5. make enrich-pubchem          ← add GHS safety data from NIH PubChem (free)
-#   6. make fetch-cosing            ← apply EU CosIng ban/restriction data (free)
+#   6. make import-rules SOURCE=eu-cosing-ii (…-iii … -vi)  ← EU cosmetics annexes as rules (free)
 #   7. make research-all            ← PubMed clinical evidence per ingredient
 #   8. make backfill-links          ← re-link any unmatched product ingredients
 
@@ -284,17 +283,6 @@ enrich-pubchem:
 
 enrich-pubchem-dry:
 	$(PYTHON) scripts/enrich_ingredients_pubchem.py --dry-run
-
-fetch-cosing:
-	$(PYTHON) scripts/fetch_cosing_data.py
-	@echo ""
-	@echo "EU CosIng data applied (Annex II bans, Annex III restrictions)"
-
-fetch-cosing-dry:
-	$(PYTHON) scripts/fetch_cosing_data.py --dry-run
-
-fetch-cosing-report:
-	$(PYTHON) scripts/fetch_cosing_data.py --dry-run --report-banned
 
 # ─── Golden set v2 ────────────────────────────────────────────────────────────
 
