@@ -33,6 +33,7 @@ help:
 	@echo "  make worker-once       Process at most one queued ingestion job"
 	@echo "  make import-lab FILE=… Import a versioned public lab-results manifest"
 	@echo "  make import-rules SOURCE=… [FILE=…] [DERIVE=1]  Import an official regulatory list"
+	@echo "  make curate-rules MANIFEST=…  Draft rules from official documents (for review)"
 	@echo "  make tester-report     HTML report: tester scans, missing products, research priority"
 	@echo "  make reset             Full reset: wipe DB, re-migrate, re-seed"
 	@echo "  make logs              Tail PostgreSQL logs"
@@ -143,6 +144,9 @@ enqueue-barcodes:
 
 import-lab:
 	$(PYTHON) -m scripts.import_lab_results $(FILE)
+
+curate-rules:
+	$(PYTHON) -m scripts.curate_rules $(MANIFEST)
 
 import-rules:
 	$(PYTHON) -m scripts.import_regulatory_list $(SOURCE) $(if $(FILE),--file $(FILE),) $(if $(DERIVE),--derive,)

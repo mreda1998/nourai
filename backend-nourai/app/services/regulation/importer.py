@@ -126,7 +126,7 @@ async def _data_source(session: AsyncSession, source: BulkSource, url: str, pars
     return row
 
 
-async def _substance(session: AsyncSession, parsed: ParsedSubstance, source_id: uuid.UUID) -> tuple[RegulatedSubstance, bool]:
+async def upsert_substance(session: AsyncSession, parsed: ParsedSubstance, source_id: uuid.UUID | None) -> tuple[RegulatedSubstance, bool]:
     e_number = normalize_e_number(parsed.e_number) if parsed.e_number else None
     found = None
     if e_number:
@@ -211,7 +211,7 @@ async def import_list(
 
     substances: dict[str, RegulatedSubstance] = {}
     for item in parsed.substances:
-        substance, created = await _substance(session, item, data_source.id)
+        substance, created = await upsert_substance(session, item, data_source.id)
         substances[item.key] = substance
         result.substances_created += int(created)
     await session.flush()
