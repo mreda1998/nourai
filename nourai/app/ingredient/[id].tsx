@@ -10,6 +10,9 @@ import {
 import { api, IngredientDetail } from '@/services/api';
 import { Palette, Radius } from '@/constants/theme';
 import { evidenceStrength, strengthLabel, strengthTone, toneColor, Tone } from '@/utils/grade';
+import { userCountry } from '@/utils/rules';
+import { deviceRegion } from '@/lib/region';
+import { RulesSection } from '@/components/rules/RulesSection';
 import { studyStrength } from '@/utils/evidence';
 import { ClaimCard } from '@/components/ClaimCard';
 import { StudyCard } from '@/components/StudyCard';
@@ -29,7 +32,7 @@ export default function IngredientScreen() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    api.getIngredientWithFallback(id).then(setData).catch(() => setData(null)).finally(() => setLoading(false));
+    api.getIngredientWithFallback(id, userCountry(deviceRegion())).then(setData).catch(() => setData(null)).finally(() => setLoading(false));
   }, [id]);
 
   const askRight = <IconButton icon={Sparkles} label="Ask Elory about this ingredient" onPress={() => router.push('/(premium)/ask-elory' as never)} />;
@@ -73,6 +76,9 @@ export default function IngredientScreen() {
       <Animated.View entering={FadeInDown.duration(600)}>
         <BeliefReality data={data} strength={strength} />
       </Animated.View>
+
+      {/* What the law says, right under what the studies say. */}
+      <RulesSection rules={data.rules} />
 
       {data.description ? (
         <Section title="What it is">
@@ -244,12 +250,10 @@ function Safety({ data }: { data: IngredientDetail }) {
         ))}
       </View>
 
-      {data.us_regulatory_status || data.wada_status ? (
-        <Section title="Regulatory status">
+      {data.admin_routes?.length ? (
+        <Section title="Routes">
           <ListGroup>
-            {data.us_regulatory_status ? <ListRow icon={ShieldCheck} title="United States" subtitle={data.us_regulatory_status} /> : null}
-            {data.wada_status ? <ListRow icon={Ban} title="WADA (sport)" subtitle={data.wada_status} /> : null}
-            {data.admin_routes?.length ? <ListRow icon={PillIcon} title="Routes" subtitle={data.admin_routes.join(', ')} /> : null}
+            <ListRow icon={PillIcon} title="How it is taken" subtitle={data.admin_routes.join(', ')} />
           </ListGroup>
         </Section>
       ) : null}
