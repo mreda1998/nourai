@@ -188,6 +188,10 @@ class CatalogRepository:
 
     async def _configure(self, session: AsyncSession, timeout_ms: int, plan: str | None) -> None:
         await session.execute(text(f"SET LOCAL statement_timeout = {int(timeout_ms)}"))
+        # Each query wants its first few dozen rows in popularity order. Parallel workers
+        # merging that order run far past the LIMIT: production's "rice crackers" walk read
+        # 1.1M index entries in 6.8 s for 60 rows, where one process reads ~0.2M.
+        await session.execute(text("SET LOCAL max_parallel_workers_per_gather = 0"))
         for setting in _PLANS.get(plan, ()):
             await session.execute(text(f"SET LOCAL {setting}"))
         # Bound LIKE patterns hide the search word from a cached generic plan, which
