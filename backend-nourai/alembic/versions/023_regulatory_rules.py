@@ -1,7 +1,7 @@
 """What the law and expert bodies say about each substance, place by place.
 
-Revision ID: 021_regulatory_rules
-Revises: 020_ingredient_claims
+Revision ID: 023_regulatory_rules
+Revises: 022_openfda_source
 Create Date: 2026-11-04
 
 A substance (`regulated_substances`) is the thing a rule is about, kept apart from the curated
@@ -17,8 +17,8 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = "021_regulatory_rules"
-down_revision = "020_ingredient_claims"
+revision = "023_regulatory_rules"
+down_revision = "022_openfda_source"
 branch_labels = None
 depends_on = None
 

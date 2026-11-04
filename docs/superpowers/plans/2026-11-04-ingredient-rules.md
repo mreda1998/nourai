@@ -78,7 +78,7 @@
 
 | File | Responsibility |
 |---|---|
-| `alembic/versions/021_regulatory_rules.py` | New tables, indexes, RLS |
+| `alembic/versions/023_regulatory_rules.py` | New tables, indexes, RLS |
 | `app/models/regulation.py` | `RegulatedSubstance`, `SubstanceAlias`, `IngredientSubstance`, `RegulatoryRule`, `RuleCheck` |
 | `app/core/regulation.py` | Fixed vocabularies, places, membership, category → scopes, display phrases |
 | `app/services/regulation/__init__.py` | Package |
@@ -125,7 +125,7 @@
 
 **Files:**
 - Create: `backend-nourai/app/models/regulation.py`
-- Create: `backend-nourai/alembic/versions/021_regulatory_rules.py`
+- Create: `backend-nourai/alembic/versions/023_regulatory_rules.py`
 - Modify: `backend-nourai/app/models/__init__.py` (import + `__all__`)
 - Modify: `backend-nourai/tests/integration/conftest.py` (`_TABLES`)
 - Test: `backend-nourai/tests/integration/test_regulation_schema.py`
@@ -174,7 +174,7 @@
     - `source_id` FK null, `documents: list` (JSONB, default `[]`), `reviewed_by: str | None`
     - Unique (`substance_id`, `place`, `applies_to`).
   - Relationships: `RegulatedSubstance.aliases`, `.rules`, `.checks`; `Ingredient.substances` via the `ingredient_substances` secondary table.
-- Migration: `revision = "021_regulatory_rules"`, `down_revision = "020_ingredient_claims"`. It ends with `ALTER TABLE … ENABLE ROW LEVEL SECURITY` for all five tables. Its docstring explains why, as in `020_ingredient_claims.py`.
+- Migration: `revision = "023_regulatory_rules"`, `down_revision = "022_openfda_source"`. It ends with `ALTER TABLE … ENABLE ROW LEVEL SECURITY` for all five tables. Its docstring explains why, as in `020_ingredient_claims.py`.
 
 - [ ] **Step 1: Write the failing test** `test_regulation_schema.py`
   - `test_rule_round_trip`: create a substance (`name="Titanium dioxide"`, `e_number="E171"`), an alias, an `IngredientSubstance` link to a new `Ingredient`, one published rule (`place="EU"`, `status="not_authorised"`, `applies_to="food_additive"`, `source_url="https://eur-lex.europa.eu/eli/reg/2022/63/oj"`, `last_checked_at=now`) and one `RuleCheck`. Reload them; assert `ingredient.substances[0].rules[0].status == "not_authorised"`.
@@ -186,7 +186,7 @@
 - [ ] **Step 5: Commit**
 
 ```bash
-git add backend-nourai/app/models/regulation.py backend-nourai/app/models/__init__.py backend-nourai/alembic/versions/021_regulatory_rules.py backend-nourai/tests/integration/conftest.py backend-nourai/tests/integration/test_regulation_schema.py
+git add backend-nourai/app/models/regulation.py backend-nourai/app/models/__init__.py backend-nourai/alembic/versions/023_regulatory_rules.py backend-nourai/tests/integration/conftest.py backend-nourai/tests/integration/test_regulation_schema.py
 git commit -m "feat(rules): substances, rules and checked places"
 ```
 
