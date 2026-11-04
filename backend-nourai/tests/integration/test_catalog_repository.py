@@ -266,6 +266,33 @@ async def test_each_racing_query_is_pinned_to_its_own_plan(monkeypatch, query, c
     assert "Seq Scan on catalog_entries" not in bitmap
 
 
+async def test_catalog_queries_never_use_parallel_workers(monkeypatch):
+    """In production the planner ran the popularity walk with parallel workers: they raced
+    far past the LIMIT ("rice crackers": 1.1M index entries and 6.8 s for 60 rows, against
+    0.15 s for a similar search run by one process), so cold searches timed out empty.
+    Here parallelism is made free, so the planner picks it unless the search forbids it."""
+    for i in range(300):
+        await _add("open-food-facts", f"r{i}", f"Rice crackers {i}", popularity=i, gtin14=f"00000000{i:06d}", countries=("US",))
+    await _vacuum_catalog()
+    repo = CatalogRepository(async_session_factory)
+    real_run = repo._run
+    plans: list[str] = []
+
+    async def explain_then_run(stmt, timeout_ms, query, *, plan=None):
+        async with async_session_factory() as session, session.begin():
+            for setting in ("parallel_setup_cost = 0", "parallel_tuple_cost = 0",
+                            "min_parallel_index_scan_size = 0", "min_parallel_table_scan_size = 0"):
+                await session.execute(text(f"SET LOCAL {setting}"))
+            await repo._configure(session, timeout_ms, plan)
+            plans.append(await _explain(session, stmt))
+        return await real_run(stmt, timeout_ms, query, plan=plan)
+
+    monkeypatch.setattr(repo, "_run", explain_then_run)
+    await repo.search("rice crackers", category=None, country="US")
+    assert len(plans) == 5  # popular walk + bitmap, prefix, regional walk + bitmap
+    assert not [p for p in plans if "Gather" in p]
+
+
 async def test_when_both_query_plans_time_out_the_search_times_out(monkeypatch):
     from app.repositories.catalog import CatalogSearchTimeout
 
