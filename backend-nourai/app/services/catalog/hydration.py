@@ -17,7 +17,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ingestion import IngestionJob
-from app.services.ingestion.connectors.openfoodfacts import OpenFoodFactsError
+from app.services.ingestion.connectors.base import SourceError
 from app.services.ingestion.product_job import ProductJobOutcome, run_product_job
 
 
@@ -94,7 +94,7 @@ class CatalogHydrator:
             outcome = await asyncio.wait_for(
                 self._run_job(self._queue, self._pipeline, job, self._sessions), self._budget
             )
-        except (asyncio.TimeoutError, OpenFoodFactsError):
+        except (asyncio.TimeoutError, SourceError):
             # The job is still queued; the worker retries it with backoff.
             self._breaker.failure()
             return HydrationResult("queued", None, job)
