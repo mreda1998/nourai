@@ -148,3 +148,30 @@ async def test_derived_rule_retired_once_list_covers_it():
         await session.commit()
         live_derived = await _rules(session, origin="derived", review_status="published")
     assert live_derived == []
+
+
+async def test_derive_treats_sub_variant_as_covered_by_its_group_entry():
+    source = FakePositiveList()
+    async with async_session_factory() as session:
+        session.add(RegulatedSubstance(name="Lecithins (i)", e_number="E322I"))
+        await session.flush()
+        await import_list(session, source, _raw({"E322": "a"}), source.default_url, NOW)
+        assert await derive_not_authorised(session, "EU", source.slug, NOW) == 0
+
+
+async def test_force_reparses_identical_bytes():
+    source = FakePositiveList()
+    raw = _raw({"E171": "a"})
+    async with async_session_factory() as session:
+        await import_list(session, source, raw, source.default_url, NOW)
+        source.parse = lambda raw_bytes, original=source.parse: _changed(original(raw_bytes))
+        skipped = await import_list(session, source, raw, source.default_url, NOW)
+        forced = await import_list(session, source, raw, source.default_url, NOW, force=True)
+    assert (skipped.created, skipped.retired) == (0, 0)
+    assert (forced.created, forced.retired) == (1, 1)
+
+
+def _changed(parsed):
+    for rule in parsed.rules:
+        rule.condition = "Parser now reads it differently"
+    return parsed

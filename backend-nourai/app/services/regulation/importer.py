@@ -6,6 +6,7 @@ stored as a source record; re-importing identical bytes only refreshes "last che
 from __future__ import annotations
 
 import hashlib
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -19,6 +20,7 @@ from app.models.regulation import RegulatedSubstance, RegulatoryRule, RuleCheck,
 from app.services.regulation.identifiers import alias_key, normalize_e_number
 
 RECORD_TYPE = "regulatory_list"
+_ROMAN_SUFFIX = re.compile(r"(?<=[0-9A-Z])[IVX]+$")
 
 
 @dataclass
@@ -172,8 +174,9 @@ async def _substance(session: AsyncSession, parsed: ParsedSubstance, source_id: 
 
 
 async def import_list(
-    session: AsyncSession, source: BulkSource, raw: bytes, fetched_url: str, now: datetime
+    session: AsyncSession, source: BulkSource, raw: bytes, fetched_url: str, now: datetime, force: bool = False
 ) -> ImportResult:
+    """Import one fetch. Identical bytes only refresh "last checked", unless `force` (a parser changed)."""
     result = ImportResult()
     content_hash = hashlib.sha256(raw).hexdigest()
     data_source = await _data_source(session, source, fetched_url, None)
@@ -183,7 +186,7 @@ async def import_list(
             SourceRecord.content_hash == content_hash,
         )
     )).scalar_one_or_none()
-    if seen is not None:
+    if seen is not None and not force:
         bumped = await session.execute(
             update(RegulatoryRule)
             .where(RegulatoryRule.source_id == data_source.id, RegulatoryRule.review_status == "published")
@@ -194,13 +197,15 @@ async def import_list(
 
     parsed = source.parse(raw)
     data_source = await _data_source(session, source, fetched_url, parsed)
-    record = SourceRecord(
-        source_id=data_source.id, external_id=fetched_url[:255], record_type=RECORD_TYPE,
-        request_url=fetched_url, content_hash=content_hash, fetched_at=now,
-        license_snapshot={"name": source.licence_name, "url": source.licence_url},
-    )
-    session.add(record)
-    await session.flush()
+    record = await session.get(SourceRecord, seen) if seen is not None else None
+    if record is None:
+        record = SourceRecord(
+            source_id=data_source.id, external_id=fetched_url[:255], record_type=RECORD_TYPE,
+            request_url=fetched_url, content_hash=content_hash, fetched_at=now,
+            license_snapshot={"name": source.licence_name, "url": source.licence_url},
+        )
+        session.add(record)
+        await session.flush()
 
     substances: dict[str, RegulatedSubstance] = {}
     for item in parsed.substances:
@@ -301,11 +306,15 @@ async def derive_not_authorised(session: AsyncSession, place: str, source_slug: 
             already.add(rule.substance_id)
 
     additives = (await session.execute(
-        select(RegulatedSubstance.id).where(RegulatedSubstance.e_number.is_not(None))
-    )).scalars().all()
+        select(RegulatedSubstance.id, RegulatedSubstance.e_number).where(RegulatedSubstance.e_number.is_not(None))
+    )).all()
+    covered_codes = {code for sid, code in additives if sid in covered}
     created = 0
-    for substance_id in additives:
+    for substance_id, code in additives:
         if substance_id in covered or substance_id in already:
+            continue
+        # A sub-variant such as E322(i) is covered by its group entry E322.
+        if _ROMAN_SUFFIX.sub("", code) in covered_codes:
             continue
         session.add(RegulatoryRule(
             substance_id=substance_id, place=place, authority=meta.get("authority") or data_source.name, kind="law",
