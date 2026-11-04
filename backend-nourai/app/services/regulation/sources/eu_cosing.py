@@ -67,11 +67,16 @@ class CosingAnnex:
                 "Colour index Number / Name of Common Ingredients Glossary") or ""
             inci_names = _names(glossary, r"[/;]") + _names(cell.get("Identified INGREDIENTS or substances e.g.", ""), r",")
             key = f"{self.annex}/{ref}"
+            names = list(dict.fromkeys(inci_names))
+            single = len({n.casefold() for n in names}) == 1
             substances.append(ParsedSubstance(
-                key=key, name=chemical or (inci_names[0] if inci_names else key),
+                key=key, name=chemical or (names[0] if names else key),
                 cas=_single_cas(cell.get("CAS Number", "")),
-                inci=inci_names[0] if len(set(n.casefold() for n in inci_names)) == 1 else None,
-                aliases=[(n, "inci", "") for n in dict.fromkeys(inci_names)],
+                inci=names[0] if single else None,
+                # An entry covering several ingredients (parabens, retinoids) lists them as members:
+                # a label matches them only when no specific substance claims the name.
+                aliases=[(n, "inci", "") for n in names] if single else [],
+                group_aliases=[] if single else [(n, "inci", "") for n in names],
             ))
             rules.append(self._rule(key, ref, chemical, cell))
         return ParsedList(place="EU", applies_to="cosmetic",

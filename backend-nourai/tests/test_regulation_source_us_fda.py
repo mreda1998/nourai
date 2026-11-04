@@ -21,7 +21,9 @@ def test_titanium_dioxide_colour_limits():
     parsed = COLOURS.parse(_raw("us-fda-colour-additives.csv"))
     tio2 = next(s for s in parsed.substances if s.name == "Titanium Dioxide")
     assert tio2.e_number == "E171" and tio2.cas == "13463-67-7"
-    assert ("C.I. 77891", "name", "") in tio2.aliases
+    # Matched by E-number only: the FDA's colour names ("Turmeric") must not capture the spice on a label.
+    assert tio2.name_is_alias is False
+    assert tio2.aliases == [] and ("C.I. 77891", "name", "") in tio2.group_aliases
     [food] = _rules(parsed, tio2.key, "food_additive")
     assert food.status == "allowed_with_limits"
     assert "Foods generally, NTE 1 percent (by wt.)" in food.condition

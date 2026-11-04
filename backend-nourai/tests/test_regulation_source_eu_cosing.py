@@ -52,7 +52,7 @@ def test_annex_iii_retinol_limits():
     assert "0,05 % Retinol Equivalent" in rule.condition
     retinol = _substance(parsed, "III/376")
     assert retinol.cas is None  # several CAS numbers: none is picked
-    assert ("Retinyl Palmitate", "inci", "") in retinol.aliases
+    assert ("Retinyl Palmitate", "inci", "") in retinol.group_aliases
 
 
 def test_annex_v_preservatives():
@@ -61,5 +61,12 @@ def test_annex_v_preservatives():
     assert phenoxy.status == "allowed_with_limits"
     assert phenoxy.condition.startswith("Maximum concentration: 1.0%")
     parabens = _substance(parsed, "V/12 a")
-    assert ("PROPYLPARABEN", "inci", "") in parabens.aliases
+    assert ("PROPYLPARABEN", "inci", "") in parabens.group_aliases
     assert _rule(parsed, "12 a").legal_reference.startswith("Regulation (EC) No 1223/2009, Annex V, entry 12 a")
+
+
+
+def test_group_member_names_are_not_approved_aliases():
+    parabens = _substance(_parse("V"), "V/12 a")
+    assert ("PROPYLPARABEN", "inci", "") not in parabens.aliases
+    assert ("PROPYLPARABEN", "inci", "") in parabens.group_aliases

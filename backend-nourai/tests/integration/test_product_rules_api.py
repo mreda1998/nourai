@@ -112,3 +112,19 @@ async def test_cosmetic_ignores_food_additive_rules(client):
     row = _row(body, "Titanium dioxide")
     assert row["rule_note"] is None
     assert row["rule_substance_id"] is not None
+
+
+
+async def test_row_without_servable_rules_has_no_substance_link(client):
+    async with async_session_factory() as session:
+        bvo = await _substance(session, "Brominated vegetable oil", [("brominated vegetable oil", "name")], [])
+        session.add(RegulatoryRule(
+            substance_id=bvo.id, place="US-CA", authority="California", kind="law", status="banned",
+            applies_to="food_additive", source_url="https://leginfo.legislature.ca.gov/x", last_checked_at=NOW,
+            origin="curated", review_status="draft",
+        ))
+        product = await _product(session, "food", ["Brominated vegetable oil"])
+        await session.commit()
+        product_id = str(product.id)
+    row = _row((await client.get(f"/api/v1/products/{product_id}?country=US")).json(), "Brominated vegetable oil")
+    assert row["rule_note"] is None and row["rule_substance_id"] is None

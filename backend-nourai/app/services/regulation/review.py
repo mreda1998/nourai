@@ -17,17 +17,27 @@ from app.models.regulation import RegulatedSubstance, RegulatoryRule, RuleCheck
 async def pending_by_substance(
     session: AsyncSession, limit_substances: int | None = None, name: str | None = None
 ) -> list[tuple[RegulatedSubstance, list[RegulatoryRule]]]:
-    stmt = (select(RegulatedSubstance, RegulatoryRule)
-            .join(RegulatoryRule, RegulatoryRule.substance_id == RegulatedSubstance.id)
-            .where(RegulatoryRule.origin == "curated", RegulatoryRule.review_status == "draft")
-            .order_by(RegulatedSubstance.name, RegulatoryRule.place, RegulatoryRule.created_at))
+    """Substances with drafts or proposed checks to review, in name order, with their drafts."""
+    drafts = (select(RegulatoryRule.substance_id)
+              .where(RegulatoryRule.origin == "curated", RegulatoryRule.review_status == "draft"))
+    checks = select(RuleCheck.substance_id).where(RuleCheck.status == "pending")
+    stmt = (select(RegulatedSubstance)
+            .where(RegulatedSubstance.id.in_(drafts.union(checks)))
+            .order_by(RegulatedSubstance.name))
     if name:
         stmt = stmt.where(func.lower(RegulatedSubstance.name) == name.lower())
-    grouped: dict[uuid.UUID, tuple[RegulatedSubstance, list[RegulatoryRule]]] = {}
-    for substance, rule in (await session.execute(stmt)).all():
-        grouped.setdefault(substance.id, (substance, []))[1].append(rule)
-    groups = list(grouped.values())
-    return groups[:limit_substances] if limit_substances else groups
+    substances = list((await session.execute(stmt)).scalars())
+    if limit_substances:
+        substances = substances[:limit_substances]
+    groups = []
+    for substance in substances:
+        rules = (await session.execute(
+            select(RegulatoryRule).where(RegulatoryRule.substance_id == substance.id, RegulatoryRule.origin == "curated",
+                                         RegulatoryRule.review_status == "draft")
+            .order_by(RegulatoryRule.place, RegulatoryRule.created_at)
+        )).scalars().all()
+        groups.append((substance, list(rules)))
+    return groups
 
 
 async def pending_checks(session: AsyncSession, substance_id: uuid.UUID) -> list[RuleCheck]:
@@ -51,7 +61,8 @@ async def apply_decision(
     elif decision == "approve":
         older = (await session.execute(select(RegulatoryRule).where(
             RegulatoryRule.substance_id == rule.substance_id, RegulatoryRule.place == rule.place,
-            RegulatoryRule.applies_to == rule.applies_to, RegulatoryRule.origin == "curated",
+            RegulatoryRule.applies_to == rule.applies_to, RegulatoryRule.status == rule.status,
+            RegulatoryRule.origin == "curated",
             RegulatoryRule.review_status == "published", RegulatoryRule.id != rule.id,
             RegulatoryRule.sub_scope.is_(None) if rule.sub_scope is None else RegulatoryRule.sub_scope == rule.sub_scope,
         ))).scalars().all()
@@ -86,4 +97,8 @@ async def progress(session: AsyncSession) -> dict[str, int]:
         select(RegulatoryRule.review_status, func.count()).where(RegulatoryRule.origin == "curated")
         .group_by(RegulatoryRule.review_status)
     )).all())
-    return {status: counts.get(status, 0) for status in ("draft", "published", "retired")}
+    out = {status: counts.get(status, 0) for status in ("draft", "published", "retired")}
+    out["pending_checks"] = (await session.execute(
+        select(func.count()).select_from(RuleCheck).where(RuleCheck.status == "pending")
+    )).scalar_one()
+    return out

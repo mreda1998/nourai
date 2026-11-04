@@ -31,6 +31,11 @@ class ParsedSubstance:
     cas: str | None = None
     inci: str | None = None
     aliases: list[tuple[str, str, str]] = field(default_factory=list)  # (alias, alias_type, language)
+    # Names of an entry's group members ("Propylparaben" in a parabens entry), or another list's names
+    # for a substance it identifies by E-number. A label matches them only if no specific substance
+    # claims the name, and they never merge substances.
+    group_aliases: list[tuple[str, str, str]] = field(default_factory=list)
+    name_is_alias: bool = True
 
 
 @dataclass
@@ -121,51 +126,77 @@ async def _data_source(session: AsyncSession, source: BulkSource, url: str, pars
             **(row.extra_data or {}), "place": parsed.place, "semantics": parsed.semantics,
             "legal_reference": parsed.legal_reference, "legal_basis_quote": parsed.legal_basis_quote,
             "list_url": url, "authority": parsed.rules[0].authority if parsed.rules else None,
+            "derivable": bool(getattr(source, "derivable", False)),
         }
     await session.flush()
     return row
 
 
-async def upsert_substance(session: AsyncSession, parsed: ParsedSubstance, source_id: uuid.UUID | None) -> tuple[RegulatedSubstance, bool]:
+def _conflicts(found: RegulatedSubstance, e_number: str | None, cas: str | None) -> bool:
+    return bool((found.e_number and e_number and found.e_number != e_number) or (found.cas and cas and found.cas != cas))
+
+
+async def upsert_substance(
+    session: AsyncSession, parsed: ParsedSubstance, source_id: uuid.UUID | None, source_slug: str | None = None
+) -> tuple[RegulatedSubstance, bool]:
+    """Find the substance a list row means, or create it.
+
+    A list's own key is remembered per source and looked up first, so re-importing a list never
+    re-resolves its substances by name (another list may since have reused that name). Then E-number,
+    CAS, and an approved, specific alias with one owner — never across conflicting E-numbers or CAS.
+    """
     e_number = normalize_e_number(parsed.e_number) if parsed.e_number else None
     found = None
-    if e_number:
+    if source_slug:
+        found = (await session.execute(select(RegulatedSubstance).where(
+            RegulatedSubstance.identifiers["keys"][source_slug].astext == parsed.key
+        ).limit(1))).scalar_one_or_none()
+    if found is None and e_number:
         found = (await session.execute(
             select(RegulatedSubstance).where(RegulatedSubstance.e_number == e_number)
         )).scalar_one_or_none()
     if found is None and parsed.cas:
-        found = (await session.execute(
+        candidates = (await session.execute(
             select(RegulatedSubstance).where(RegulatedSubstance.cas == parsed.cas).limit(2)
         )).scalars().all()
-        found = found[0] if len(found) == 1 else None
-    if found is None:
+        found = candidates[0] if len(candidates) == 1 and not _conflicts(candidates[0], e_number, parsed.cas) else None
+    if found is None and parsed.name_is_alias:
         key = alias_key(parsed.inci or parsed.name, "name")
         owners = (await session.execute(
-            select(SubstanceAlias.substance_id).where(SubstanceAlias.normalized_alias == key).distinct()
+            select(SubstanceAlias.substance_id).where(
+                SubstanceAlias.normalized_alias == key, SubstanceAlias.approved.is_(True),
+                SubstanceAlias.alias_type != "group_member",
+            ).distinct()
         )).scalars().all()
         if len(owners) == 1:
-            found = await session.get(RegulatedSubstance, owners[0])
+            candidate = await session.get(RegulatedSubstance, owners[0])
+            found = candidate if not _conflicts(candidate, e_number, parsed.cas) else None
 
     created = found is None
     if created:
-        found = RegulatedSubstance(name=parsed.name, e_number=e_number, cas=parsed.cas, inci=parsed.inci)
+        found = RegulatedSubstance(name=parsed.name, e_number=e_number, cas=parsed.cas, inci=parsed.inci, identifiers={})
         session.add(found)
         await session.flush()
     else:
         found.e_number = found.e_number or e_number
         found.cas = found.cas or parsed.cas
         found.inci = found.inci or parsed.inci
+    if source_slug:
+        identifiers = dict(found.identifiers or {})
+        identifiers["keys"] = {**identifiers.get("keys", {}), source_slug: parsed.key}
+        found.identifiers = identifiers
 
-    wanted = [(parsed.name, "name", "")] + list(parsed.aliases)
+    wanted = ([(parsed.name, "name", "")] if parsed.name_is_alias else []) + list(parsed.aliases)
     if parsed.inci:
         wanted.append((parsed.inci, "inci", ""))
     if e_number:
         wanted.append((e_number, "e_number", ""))
+    wanted += [(alias, "group_member", language) for alias, _, language in parsed.group_aliases]
     existing = set((await session.execute(
         select(SubstanceAlias.normalized_alias).where(SubstanceAlias.substance_id == found.id)
     )).scalars())
     for alias, alias_type, language in wanted:
-        key = alias_key(alias, alias_type)
+        key = alias_key(alias, "name" if alias_type == "group_member" else alias_type)
         if key and key not in existing:
             existing.add(key)
             session.add(SubstanceAlias(substance_id=found.id, alias=alias[:500], normalized_alias=key[:500],
@@ -211,7 +242,7 @@ async def import_list(
 
     substances: dict[str, RegulatedSubstance] = {}
     for item in parsed.substances:
-        substance, created = await upsert_substance(session, item, data_source.id)
+        substance, created = await upsert_substance(session, item, data_source.id, source.slug)
         substances[item.key] = substance
         result.substances_created += int(created)
     await session.flush()
@@ -286,6 +317,10 @@ async def derive_not_authorised(session: AsyncSession, place: str, source_slug: 
     """
     data_source = (await session.execute(select(DataSource).where(DataSource.slug == source_slug))).scalar_one()
     meta = data_source.extra_data or {}
+    if not meta.get("derivable"):
+        # Only lists keyed by E/INS number can show absence; a name-keyed list would read a naming
+        # difference as "not authorised".
+        raise ValueError(f"{source_slug} is not a derivable list")
     covered = set((await session.execute(
         select(RegulatoryRule.substance_id).where(
             RegulatoryRule.source_id == data_source.id, RegulatoryRule.place == place,
@@ -314,12 +349,14 @@ async def derive_not_authorised(session: AsyncSession, place: str, source_slug: 
         select(RegulatedSubstance.id, RegulatedSubstance.e_number).where(RegulatedSubstance.e_number.is_not(None))
     )).all()
     covered_codes = {code for sid, code in additives if sid in covered}
+    covered_groups = {_ROMAN_SUFFIX.sub("", code) for code in covered_codes}
     created = 0
     for substance_id, code in additives:
         if substance_id in covered or substance_id in already:
             continue
-        # A sub-variant such as E322(i) is covered by its group entry E322.
-        if _ROMAN_SUFFIX.sub("", code) in covered_codes:
+        # A sub-variant such as E322(i) is covered by its group entry E322, and a group code
+        # such as E160a by its listed sub-variants E160a(i)….
+        if _ROMAN_SUFFIX.sub("", code) in covered_codes or code in covered_groups:
             continue
         session.add(RegulatoryRule(
             substance_id=substance_id, place=place, authority=meta.get("authority") or data_source.name, kind="law",

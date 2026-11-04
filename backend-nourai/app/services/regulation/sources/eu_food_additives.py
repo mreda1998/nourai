@@ -65,6 +65,7 @@ def _children(node: dict, key: str) -> list[dict]:
 
 class EuFoodAdditives:
     slug = "eu-food-additives"
+    derivable = True  # keyed by E-number: absence from the list can be read as "not authorised"
     name = "EU Union list of food additives (Regulation (EC) No 1333/2008, Annex II)"
     licence_name = "Commission reuse policy (Decision 2011/833/EU)"
     licence_url = "https://eur-lex.europa.eu/eli/dec/2011/833/oj"

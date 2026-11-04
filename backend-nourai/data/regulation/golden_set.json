@@ -317,7 +317,7 @@
   },
   {
     "substance": "Potassium bromate",
-    "e_number": null,
+    "e_number": "E924A",
     "expect": [
       {
         "place": "US",
@@ -334,6 +334,14 @@
         "effective_from": "2027-01-01",
         "source_url": "https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240AB418",
         "quote": ""
+      },
+      {
+        "place": "EU",
+        "applies_to": "food_additive",
+        "status": "not_authorised",
+        "effective_from": null,
+        "source_url": "https://ec.europa.eu/food/food-feed-portal/screen/food-additives/search",
+        "quote": ""
       }
     ],
     "product_note": null,
@@ -341,7 +349,7 @@
   },
   {
     "substance": "Brominated vegetable oil",
-    "e_number": null,
+    "e_number": "E443",
     "expect": [
       {
         "place": "US-CA",
@@ -350,6 +358,14 @@
         "effective_from": "2027-01-01",
         "source_url": "https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240AB418",
         "quote": ""
+      },
+      {
+        "place": "EU",
+        "applies_to": "food_additive",
+        "status": "not_authorised",
+        "effective_from": null,
+        "source_url": "https://ec.europa.eu/food/food-feed-portal/screen/food-additives/search",
+        "quote": ""
       }
     ],
     "product_note": null,
@@ -357,7 +373,7 @@
   },
   {
     "substance": "Propylparaben",
-    "e_number": null,
+    "e_number": "E216",
     "expect": [
       {
         "place": "US-CA",
@@ -365,6 +381,14 @@
         "status": "banned",
         "effective_from": "2027-01-01",
         "source_url": "https://leginfo.legislature.ca.gov/faces/billNavClient.xhtml?bill_id=202320240AB418",
+        "quote": ""
+      },
+      {
+        "place": "EU",
+        "applies_to": "food_additive",
+        "status": "not_authorised",
+        "effective_from": null,
+        "source_url": "https://ec.europa.eu/food/food-feed-portal/screen/food-additives/search",
         "quote": ""
       }
     ],

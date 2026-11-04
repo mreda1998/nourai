@@ -127,3 +127,18 @@ def test_glance_counts_by_own_places():
     eu_note = note_for(E171, FOOD, "FR", TODAY)
     assert glance([eu_note, eu_note], "FR") == (2, 0)
     assert glance([eu_note], "CA") == (0, 1)
+
+
+def test_national_check_does_not_hide_eu_rule():
+    rules = [law("EU", "not_authorised", "food_additive")]
+    rows = place_rows(rules, [CheckFact("FR", "food_additive", CHECKED)], "FR", TODAY)
+    assert rows[0].place_name == "France" and rows[0].via_place == "EU" and rows[0].is_yours
+    assert [r.status for r in rows[0].rules] == ["not_authorised"]
+    assert not rows[0].checked_no_rule
+
+
+def test_note_carries_sub_scope():
+    wada = note_for([law("WADA", "banned", "sport", sub_scope="S6 Stimulants; in-competition")], SUPPLEMENT, "CA", TODAY)
+    assert wada.text == "Banned in sport (WADA) · S6 Stimulants; in-competition"
+    aerosol = note_for([law("US", "banned", "cosmetic", sub_scope="Aerosol products")], COSMETIC, "US", TODAY)
+    assert aerosol.text == "Banned in the US · Aerosol products"

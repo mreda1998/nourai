@@ -61,7 +61,8 @@ async def attach_rules(
         if not match:
             continue
         on_rows.add(match.substance_id)
-        row.rule_substance_id = str(match.substance_id)
+        if facts.get(str(match.substance_id)):  # nothing reviewed yet: no rules screen to open
+            row.rule_substance_id = str(match.substance_id)
         if found := note(match.substance_id):
             row.rule_note = _note_out(found, names.get(match.substance_id))
             notes.append(found)

@@ -74,7 +74,7 @@ async def test_progress_counts():
     async with async_session_factory() as session:
         await _melatonin(session, ("GB",), ("FR",), ("CA", "prescription_only", "published"))
         counts = await progress(session)
-    assert counts == {"draft": 2, "published": 1, "retired": 0}
+    assert counts == {"draft": 2, "published": 1, "retired": 0, "pending_checks": 0}
 
 
 async def test_resume():
@@ -83,3 +83,24 @@ async def test_resume():
         await apply_decision(session, first.id, "approve", "owner", None, NOW)
         [(found, drafts)] = await pending_by_substance(session)
     assert found.id == substance.id and len(drafts) == 2
+
+
+
+async def test_pending_checks_without_drafts_are_reviewable():
+    async with async_session_factory() as session:
+        substance, _ = await _melatonin(session)
+        session.add(RuleCheck(substance_id=substance.id, place="WADA", applies_to="sport", checked_at=NOW,
+                              origin="curated", status="pending", documents=["https://www.wada-ama.org/x"]))
+        await session.flush()
+        [(found, drafts)] = await pending_by_substance(session)
+        counts = await progress(session)
+    assert found.id == substance.id and drafts == []
+    assert counts["pending_checks"] == 1
+
+
+async def test_approving_a_second_rule_in_the_same_slot_keeps_the_first():
+    async with async_session_factory() as session:
+        _, (limit, warning) = await _melatonin(session, ("EU", "allowed_with_limits", "published"), ("EU", "warning_label"))
+        await apply_decision(session, warning.id, "approve", "owner", None, NOW)
+        await session.refresh(limit)
+    assert limit.review_status == "published"

@@ -53,7 +53,7 @@ async def curate(path: Path, llm: ResearchLLM, client: httpx.AsyncClient, dry_ru
         substance, _ = await upsert_substance(session, ParsedSubstance(
             key=spec["name"], name=spec["name"], e_number=spec.get("e_number"), cas=spec.get("cas"),
             aliases=[tuple(a) for a in spec.get("aliases", [])],
-        ), None)
+        ), None, "curated-documents")
         if spec.get("ingredient"):
             ingredient = (await session.execute(
                 select(Ingredient).where(Ingredient.canonical_name == spec["ingredient"])

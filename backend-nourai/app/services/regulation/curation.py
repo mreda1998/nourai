@@ -55,6 +55,8 @@ class CuratedRuleDraft(BaseModel):
     @model_validator(mode="after")
     def _vocabulary(self) -> "CuratedRuleDraft":
         if self.kind == "law":
+            if self.place not in PLACES:
+                raise ValueError("an expert body does not make law")
             if self.status not in LAW_STATUSES:
                 raise ValueError(f"unknown law status {self.status!r}")
             if self.applies_to not in SCOPES:

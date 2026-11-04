@@ -49,3 +49,12 @@ async def test_unapproved_alias_ignored():
         await _substance(session, "Carmine", [("cochineal", "name", "en", False)])
         by_name, _ = await match_substances(session, ["Cochineal"], [])
     assert by_name == {}
+
+
+
+async def test_label_e_number_rows_match():
+    async with async_session_factory() as session:
+        tio2 = await _substance(session, "Titanium dioxide", [("E171", "e_number", "", True)], e_number="E171")
+        by_name, _ = await match_substances(session, ["E171", "Colour: E 171", "e171"], [])
+    assert {name: m.substance_id for name, m in by_name.items()} == {n: tio2.id for n in ["E171", "Colour: E 171", "e171"]}
+    assert by_name["E171"].via == "e_number"

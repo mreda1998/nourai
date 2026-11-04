@@ -2,7 +2,7 @@
   "substance": {
     "name": "Brominated vegetable oil",
     "cas": null,
-    "e_number": null,
+    "e_number": "E443",
     "aliases": [],
     "ingredient": null,
     "scope_label": null

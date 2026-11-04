@@ -31,6 +31,11 @@ def normalize_e_number(raw: str) -> str | None:
     return f"E{match.group(1)}" if match else None
 
 
+def strip_function_prefix(name: str) -> str:
+    """"Colour: titanium dioxide" → "titanium dioxide"."""
+    return _PREFIX.sub("", name)
+
+
 def alias_key(alias: str, alias_type: str) -> str:
     """The key an alias is stored and looked up under."""
     if alias_type == "e_number":

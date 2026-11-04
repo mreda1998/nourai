@@ -32,7 +32,7 @@ help:
 	@echo "  make worker            Start the durable ingestion worker"
 	@echo "  make worker-once       Process at most one queued ingestion job"
 	@echo "  make import-lab FILE=… Import a versioned public lab-results manifest"
-	@echo "  make import-rules SOURCE=… [FILE=…] [DERIVE=1]  Import an official regulatory list"
+	@echo "  make import-rules SOURCE=… [FILE=…] [DERIVE=1] [FORCE=1]  Import an official regulatory list"
 	@echo "  make curate-rules MANIFEST=…  Draft rules from official documents (for review)"
 	@echo "  make review-rules ARGS=\"--reviewer NAME\"  Approve or reject drafted rules (--status for progress)"
 	@echo "  make tester-report     HTML report: tester scans, missing products, research priority"
@@ -153,7 +153,7 @@ curate-rules:
 	$(PYTHON) -m scripts.curate_rules $(MANIFEST)
 
 import-rules:
-	$(PYTHON) -m scripts.import_regulatory_list $(SOURCE) $(if $(FILE),--file $(FILE),) $(if $(DERIVE),--derive,)
+	$(PYTHON) -m scripts.import_regulatory_list $(SOURCE) $(if $(FILE),--file $(FILE),) $(if $(DERIVE),--derive,) $(if $(FORCE),--force,)
 
 # ─── Tester insights ─────────────────────────────────────────────────────────
 

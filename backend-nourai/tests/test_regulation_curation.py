@@ -94,3 +94,9 @@ def test_saved_document_keeps_its_official_url(tmp_path):
     document = read_saved_document("https://www.wada-ama.org/en/prohibited-list", saved)
     assert document.url == "https://www.wada-ama.org/en/prohibited-list"
     assert "BPC-157 is prohibited at all times." in document.text
+
+
+
+def test_expert_body_cannot_make_law():
+    with pytest.raises(ValidationError):
+        _draft(place="EFSA", status="banned", applies_to="food_additive")

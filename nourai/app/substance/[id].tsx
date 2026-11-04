@@ -40,7 +40,7 @@ export default function SubstanceScreen() {
         {data.e_number ? <Pill label={data.e_number} /> : null}
       </View>
       {hasRules ? <RulesSection rules={data.rules} /> : (
-        <Txt variant="body" tone="secondary" style={{ marginTop: 24 }}>We haven’t found a specific rule for this ingredient in the places we cover.</Txt>
+        <Txt variant="body" tone="secondary" style={{ marginTop: 24 }}>We haven’t finished reviewing the rules for this ingredient yet.</Txt>
       )}
       {data.ingredient_ids[0] ? (
         <Button label="See the research" style={{ marginTop: 24 }} onPress={() => router.push(`/ingredient/${data.ingredient_ids[0]}` as never)} />

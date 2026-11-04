@@ -102,14 +102,19 @@ def place_rows(rules: list[RuleFact], checks: list[CheckFact], country: str, tod
 
     rows: list[PlaceRowView] = []
     skip: set[str] = set()
-    if country in by_place or country in checked:
-        rows.append(PlaceRowView(country, PLACE_NAMES.get(country, country), True, None,
-                                 by_place.get(country, []), country not in by_place))
+    if country in by_place:
+        rows.append(PlaceRowView(country, PLACE_NAMES.get(country, country), True, None, by_place[country], False))
         skip.add(country)
-    elif country in EU_MEMBERS and ("EU" in by_place or "EU" in checked):
-        # No national rule: the person's row carries the EU's, labelled as an EU rule.
-        rows.append(PlaceRowView(country, PLACE_NAMES.get(country, country), True, "EU",
-                                 by_place.get("EU", []), "EU" not in by_place))
+    elif country in EU_MEMBERS and "EU" in by_place:
+        # No national rule: the person's row carries the EU's, labelled as an EU rule. A national
+        # "checked, nothing specific" never hides an EU rule that applies there.
+        rows.append(PlaceRowView(country, PLACE_NAMES.get(country, country), True, "EU", by_place["EU"], False))
+        skip |= {"EU", country}
+    elif country in checked:
+        rows.append(PlaceRowView(country, PLACE_NAMES.get(country, country), True, None, [], True))
+        skip.add(country)
+    elif country in EU_MEMBERS and "EU" in checked:
+        rows.append(PlaceRowView(country, PLACE_NAMES.get(country, country), True, "EU", [], True))
         skip.add("EU")
 
     for place in sorted(set(by_place) | checked, key=_place_order):
@@ -167,8 +172,12 @@ def note_for(rules: list[RuleFact], scopes: tuple[str, ...], country: str, today
     words.append("in " + PLACE_PHRASES.get(best.place, best.place))
     if best.effective_from and best.effective_from > today:
         words.append(f"from {format_day(best.effective_from)}")
+    text = " ".join(words)
+    if best.sub_scope:
+        # Never "banned" without its scope: an aerosol-only or in-competition rule says so.
+        text += f" · {best.sub_scope if len(best.sub_scope) <= 60 else 'conditions apply'}"
     others = {r.place for r in candidates} - {best.place}
-    return NoteView(text=" ".join(words), status=best.status, place=best.place, more=len(others),
+    return NoteView(text=text, status=best.status, place=best.place, more=len(others),
                     substance_id=best.substance_id)
 
 

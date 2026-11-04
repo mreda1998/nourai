@@ -72,10 +72,16 @@ class FdaColourAdditives:
             key = row.get("CAS Reg No or other ID code") or name
             key = f"{key}|{name}"
             cas = row.get("CAS Reg No or other ID code") or None
+            e_number = row.get("EEC No") or None
+            names = [(n, "name", "") for n in dict.fromkeys(other_names(row.get("Other names", "")))]
             substances.append(ParsedSubstance(
                 key=key, name=name, cas=cas if cas and re.match(r"^\d+-\d{2}-\d$", cas) else None,
-                e_number=row.get("EEC No") or None,
-                aliases=[(n, "name", "") for n in dict.fromkeys(other_names(row.get("Other names", "")))],
+                e_number=e_number,
+                # With an E-number the colour is matched by it: FDA's names ("Turmeric") must not
+                # capture the spice on a label.
+                aliases=[] if e_number else names,
+                group_aliases=names if e_number else [],
+                name_is_alias=not e_number,
             ))
             rules += self._rules(key, name, row)
         return ParsedList(place="US", applies_to="food_additive", semantics="positive",
