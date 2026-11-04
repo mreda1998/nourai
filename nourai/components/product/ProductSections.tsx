@@ -9,8 +9,10 @@ import type { LucideIcon } from 'lucide-react-native';
 import { MeasureInk, Palette } from '@/constants/theme';
 import type {
   AdditiveItem, AdditivesSummary, BioDomain, Ingredient, LabObservation, Measure, MeasureTone, NutritionPanel,
-  ProcessingInfo, Product,
+  ProcessingInfo, Product, RuleNote,
 } from '@/services/api';
+import { statusTone } from '@/utils/rules';
+import { toneColor } from '@/utils/grade';
 import { ContributorBar, ListRow, MeasureRow, PressableScale, SummaryCard, Txt, showMeasureSources } from '@/components/ui';
 
 type CardProps = { open: boolean; onToggle: () => void };
@@ -117,12 +119,14 @@ export function DoseCard({ doses, open, onToggle }: CardProps & { doses: Measure
 
 // ─── Ingredients ─────────────────────────────────────────────────────────────
 
-export function IngredientsCard({ ingredients, additives, describe, resolving, onOpenIngredient, open, onToggle }: CardProps & {
+export function IngredientsCard({ ingredients, additives, describe, resolving, onOpenIngredient, ruleExtras, open, onToggle }: CardProps & {
   ingredients: Ingredient[];
   additives?: AdditivesSummary | null;
   describe: (ing: Ingredient) => { dot: string; subtitle?: string };
   resolving: string | null;
   onOpenIngredient: (ing: Ingredient) => void;
+  /** Rules found only through the product's E-number tags, shown after the label list. */
+  ruleExtras?: RuleNote[];
 }) {
   const avoid = additives?.avoid ?? [];
   const watch = additives?.watch ?? [];
@@ -179,6 +183,17 @@ export function IngredientsCard({ ingredients, additives, describe, resolving, o
           <Txt variant="footnote" tone="secondary">We don’t have an ingredient list for this product yet.</Txt>
         </View>
       )}
+
+      {ruleExtras?.map((note) => (
+        <View key={note.substance_id} style={styles.divider}>
+          <ListRow
+            leading={<View style={[styles.dot, { backgroundColor: toneColor(statusTone(note.status)) }]} />}
+            title={note.substance_name ?? note.place}
+            subtitle={`${note.text}${note.more ? ` +${note.more} more` : ''}`}
+            onPress={() => router.push(`/substance/${note.substance_id}` as never)}
+          />
+        </View>
+      ))}
 
       {additives?.unreviewed_count ? (
         <View style={[styles.strip, styles.divider]}>

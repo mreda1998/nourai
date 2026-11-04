@@ -7,11 +7,13 @@ import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { AlertTriangle, Check, CircleSlash, Plus, Sparkles, Target } from 'lucide-react-native';
 import { Palette, Radius } from '@/constants/theme';
 import { api, getProductWithFallback, isBarcodeIngestionResponse } from '@/services/api';
+import { glanceText, statusTone, userCountry } from '@/utils/rules';
+import { deviceRegion } from '@/lib/region';
 import type { BarcodeIngestionResponse, Ingredient, LabObservation, Product, ServerPersonalAnalysis } from '@/services/api';
 import { useAppState } from '@/context/app-state';
 import { useAuth } from '@/context/auth-context';
 import { analyzeIngredients, buildPersonalAnalysis } from '@/utils/personalization';
-import { categoryLabel } from '@/utils/grade';
+import { categoryLabel, toneColor } from '@/utils/grade';
 import { AddToStackSheet, type StackEntry } from '@/components/AddToStackSheet';
 import { FeedbackSheet } from '@/components/FeedbackSheet';
 import { isCatalogueId, track } from '@/lib/insights';
@@ -54,7 +56,7 @@ export default function ProductDetailScreen() {
     setError(null);
     setPending(null);
     try {
-      const data = await getProductWithFallback(id);
+      const data = await getProductWithFallback(id, userCountry(deviceRegion()));
       if (!data) { setError('We couldn’t find this product.'); return; }
       if (isBarcodeIngestionResponse(data)) { await waitForDetails(data); return; }
       setProduct(data);
@@ -122,6 +124,7 @@ export default function ProductDetailScreen() {
   // ── Actions ─────────────────────────────────────────────────────────────────
   const openIngredient = async (ing: Ingredient) => {
     if (ing.ingredient_id) { router.push(`/ingredient/${ing.ingredient_id}` as never); return; }
+    if (ing.rule_substance_id) { router.push(`/substance/${ing.rule_substance_id}` as never); return; }
     setResolving(ing.name);
     try {
       const r = await api.searchIngredients(ing.name, 1);
@@ -229,9 +232,11 @@ export default function ProductDetailScreen() {
     const p = perIngredient?.get(ing.name);
     const flaggedHere = isFlagged(ing);
     const helps = !!p?.goalSupports.length;
-    const dot = flaggedHere ? Palette.weak : helps ? Palette.strong : ing.ingredient_id ? Palette.accent : Palette.ink4;
+    const rule = ing.rule_note;
+    const dot = flaggedHere ? Palette.weak : rule ? toneColor(statusTone(rule.status)) : helps ? Palette.strong : ing.ingredient_id ? Palette.accent : Palette.ink4;
     const note = flaggedHere ? (p?.concernFlags[0]?.label ?? ing.tag) : helps ? `Supports ${p!.goalSupports[0].label.toLowerCase()}` : undefined;
-    return { dot, subtitle: [ing.concentration, note].filter(Boolean).join(' · ') || undefined };
+    const law = rule ? `${rule.text}${rule.more ? ` +${rule.more} more` : ''}` : undefined;
+    return { dot, subtitle: [ing.concentration, note, law].filter(Boolean).join(' · ') || undefined };
   };
 
   return (
@@ -280,6 +285,9 @@ export default function ProductDetailScreen() {
             <View style={styles.statRule} />
             <Stat value={flagged} label="Flagged" tone={flagged ? 'weak' : undefined} />
           </View>
+          {glanceText(product.rules_glance) ? (
+            <Txt variant="footnote" tone="secondary" style={{ marginTop: 14 }}>{glanceText(product.rules_glance)}</Txt>
+          ) : null}
           {product.is_ai_generated ? <Pill label="AI-generated analysis" icon={Sparkles} style={{ marginTop: 14 }} /> : null}
         </Card>
       </Animated.View>
@@ -328,6 +336,7 @@ export default function ProductDetailScreen() {
           describe={describe}
           resolving={resolving}
           onOpenIngredient={openIngredient}
+          ruleExtras={product.rule_extras}
           {...cardProps('ingredients')}
         />
         {product.processing ? <ProcessingCard processing={product.processing} {...cardProps('processing')} /> : null}

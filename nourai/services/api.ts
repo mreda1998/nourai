@@ -1424,9 +1424,9 @@ export const api = new APIService();
  * Fetch a product by ID, returning null instead of throwing on error.
  * Used by the product detail screen so it can show a graceful error state.
  */
-export async function getProductWithFallback(id: string): Promise<Product | BarcodeIngestionResponse | null> {
+export async function getProductWithFallback(id: string, country?: string): Promise<Product | BarcodeIngestionResponse | null> {
   try {
-    return await api.openProduct(id);
+    return await api.openProduct(id, country);
   } catch {
     return null;
   }
