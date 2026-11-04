@@ -34,6 +34,7 @@ help:
 	@echo "  make import-lab FILE=… Import a versioned public lab-results manifest"
 	@echo "  make import-rules SOURCE=… [FILE=…] [DERIVE=1]  Import an official regulatory list"
 	@echo "  make curate-rules MANIFEST=…  Draft rules from official documents (for review)"
+	@echo "  make review-rules ARGS=\"--reviewer NAME\"  Approve or reject drafted rules (--status for progress)"
 	@echo "  make tester-report     HTML report: tester scans, missing products, research priority"
 	@echo "  make reset             Full reset: wipe DB, re-migrate, re-seed"
 	@echo "  make logs              Tail PostgreSQL logs"
@@ -144,6 +145,9 @@ enqueue-barcodes:
 
 import-lab:
 	$(PYTHON) -m scripts.import_lab_results $(FILE)
+
+review-rules:
+	$(PYTHON) -m scripts.review_rules $(ARGS)
 
 curate-rules:
 	$(PYTHON) -m scripts.curate_rules $(MANIFEST)
