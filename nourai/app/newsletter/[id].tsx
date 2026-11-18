@@ -1,62 +1,50 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import React, { useState } from 'react';
+import { Linking, StyleSheet, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Check } from 'lucide-react-native';
-import { Fonts, Palette, Radius } from '@/constants/theme';
+import { ArrowUpRight, Check, CircleSlash, FlaskConical } from 'lucide-react-native';
+import { Fonts, Palette } from '@/constants/theme';
 import { Imagery } from '@/constants/imagery';
-import { Card, Screen, Txt } from '@/components/ui';
+import { JOURNAL_BYLINE, journalStory } from '@/constants/journal';
+import { api } from '@/services/api';
+import { Button, Card, EmptyState, ListGroup, PressableScale, Screen, Section, Txt } from '@/components/ui';
 
-/** Journal article. Only "creatine" has content; unknown ids fall back to it. */
-
-interface Article {
-  sectionTag: string;
-  title: string;
-  author: string;
-  date: string;
-  intro: string;
-  pullQuote: string;
-  body: string[];
-}
-
-const ARTICLES: Record<string, Article> = {
-  creatine: {
-    sectionTag: 'Metabolic Performance',
-    title: 'The Science of Creatine Supplementation',
-    author: 'Dr. Marcus Webb',
-    date: 'March 3, 2026',
-    intro:
-      'Creatine monohydrate sits at a rare intersection: it is one of the most studied supplements in human history and simultaneously one of the most misunderstood. Strip away the gym-floor mythology and what remains is a molecule of remarkable biological utility — not merely for athletes, but for anyone who depends on a brain that works well under pressure.',
-    pullQuote:
-      '"We are not merely what we supplement, but when and how we choose to replenish our most fundamental energy currency."',
-    body: [
-      "The mechanism is deceptively simple. Creatine is stored in muscle and brain tissue as phosphocreatine, a high-energy compound that rapidly regenerates ATP — the cell's primary fuel — during moments of intense demand. When your neurons are firing in rapid succession, or your legs are climbing a flight of stairs, it is phosphocreatine that bridges the gap between the oxygen-dependent pathways and the urgent need for energy now.",
-      "What separates creatine from the graveyard of sports nutrition fads is the consistency of the evidence base. Over 500 randomised controlled trials have examined its safety and efficacy. Meta-analyses in the Journal of the International Society of Sports Nutrition confirm a 10–20% improvement in high-intensity, short-duration performance. More recently, research published in Psychopharmacology has demonstrated cognitive benefits — particularly in sleep-deprived subjects — pointing to its relevance far beyond the weight room.",
-      "The dosing question is where most people err. The common protocol — 5g daily — is correct for maintenance, but many users never complete a loading phase (20g per day for 5–7 days, split into 4 doses) to saturate muscle stores. The result is a delayed onset of benefits that many interpret as non-response. It bears noting: vegetarians and vegans, whose dietary creatine intake is near zero, show the most pronounced cognitive and physical gains upon supplementation.",
-      "On the safety front, three decades of research have found no credible evidence of kidney or liver damage in healthy individuals at recommended doses. The persistent belief that creatine damages the kidneys stems from a 1998 case report of a single individual with pre-existing renal disease — a sample size that has, nonetheless, proven remarkably durable in popular mythology.",
-      "The practical takeaway is straightforward: 3–5g of creatine monohydrate daily, taken consistently with adequate hydration, represents an evidence-backed intervention with a cost-to-benefit ratio that few supplements can match. The form matters too — monohydrate remains superior to buffered or ethyl-ester variants in every head-to-head trial, and it costs a fraction of the price.",
-    ],
-  },
-};
-
-const TAKEAWAYS = [
-  'Creatine monohydrate remains the best-supported form.',
-  'Consistency matters more than precise timing.',
-  'Benefits extend beyond strength into cognitive energy.',
-];
-
+/** A Journal story: takeaways first, then the piece, then every source it rests on. */
 export default function ArticleScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const article = ARTICLES[id] ?? ARTICLES.creatine;
+  const story = journalStory(id);
+  const [opening, setOpening] = useState(false);
+
+  if (!story) {
+    return (
+      <Screen back>
+        <EmptyState icon={CircleSlash} title="Story not found" message="This story may have been moved or withdrawn." action="Back to the Journal" onAction={() => router.replace('/(tabs)/journal' as never)} />
+      </Screen>
+    );
+  }
+
+  const openIngredient = async () => {
+    if (!story.ingredientQuery || opening) return;
+    setOpening(true);
+    try {
+      const found = await api.searchIngredients(story.ingredientQuery, 1);
+      if (found.ingredients[0]) router.push(`/ingredient/${found.ingredients[0].id}` as never);
+      else router.push({ pathname: '/(tabs)/explore', params: { q: story.ingredientQuery } } as never);
+    } catch {
+      router.push({ pathname: '/(tabs)/explore', params: { q: story.ingredientQuery } } as never);
+    } finally { setOpening(false); }
+  };
+
+  const split = Math.min(2, story.body.length);
 
   return (
     <Screen
       back
-      title={article.title}
+      title={story.title}
       hero={
         <View style={{ height: 300 + insets.top }}>
           <View style={{ position: 'absolute', top: -600, left: 0, right: 0, height: 600, backgroundColor: '#EDE6DA' }} />
@@ -66,21 +54,22 @@ export default function ArticleScreen() {
       }
     >
       <Animated.View entering={FadeInDown.duration(500)} style={{ marginTop: -40 }}>
-        <Txt variant="overline" tone="accent">{article.sectionTag}</Txt>
-        <Txt variant="display" style={{ marginTop: 10 }}>{article.title}</Txt>
+        <Txt variant="overline" tone="accent">{story.kicker} · {story.minutes} min read</Txt>
+        <Txt variant="display" style={{ marginTop: 10 }} accessibilityRole="header">{story.title}</Txt>
+        <Txt variant="callout" tone="secondary" style={{ marginTop: 10 }}>{story.dek}</Txt>
         <View style={styles.byline}>
-          <View style={styles.avatar}><Txt variant="headline" tone="accent">{article.author.slice(0, 1)}</Txt></View>
-          <View>
-            <Txt variant="subheadStrong">{article.author}</Txt>
-            <Txt variant="footnote" tone="secondary">{article.date}</Txt>
+          <View style={styles.avatar}><Txt variant="headline" tone="accent">E</Txt></View>
+          <View style={{ flex: 1 }}>
+            <Txt variant="subheadStrong">{JOURNAL_BYLINE}</Txt>
+            <Txt variant="footnote" tone="secondary">Checked against {story.sources.length} {story.sources.length === 1 ? 'source' : 'sources'} · {story.reviewed}</Txt>
           </View>
         </View>
       </Animated.View>
 
       <Card padding={20} style={{ marginTop: 24 }}>
-        <Txt variant="overline" tone="secondary">Key takeaways</Txt>
+        <Txt variant="overline" tone="secondary">In short</Txt>
         <View style={{ gap: 12, marginTop: 14 }}>
-          {TAKEAWAYS.map((t) => (
+          {story.takeaways.map((t) => (
             <View key={t} style={{ flexDirection: 'row', gap: 12 }}>
               <View style={styles.tick}><Check size={13} color={Palette.accent} strokeWidth={2.8} /></View>
               <Txt variant="callout" style={{ flex: 1 }}>{t}</Txt>
@@ -91,17 +80,44 @@ export default function ArticleScreen() {
 
       <View style={{ marginTop: 32 }}>
         <Txt variant="body" style={styles.para}>
-          <Txt variant="display" style={styles.dropCap}>{article.intro.charAt(0)}</Txt>
-          {article.intro.slice(1)}
+          <Txt variant="display" style={styles.dropCap}>{story.intro.charAt(0)}</Txt>
+          {story.intro.slice(1)}
         </Txt>
-        {article.body.slice(0, 2).map((p, i) => <Txt key={i} variant="body" style={styles.para}>{p}</Txt>)}
-        <View style={styles.quote}>
-          <Txt variant="title1" italic>{article.pullQuote}</Txt>
+        {story.body.slice(0, split).map((p) => <Txt key={p} variant="body" style={styles.para}>{p}</Txt>)}
+        <View style={styles.standfirst}>
+          <Txt variant="title1" italic>{story.standfirst}</Txt>
         </View>
-        {article.body.slice(2).map((p, i) => <Txt key={i + 2} variant="body" style={styles.para}>{p}</Txt>)}
+        {story.body.slice(split).map((p) => <Txt key={p} variant="body" style={styles.para}>{p}</Txt>)}
       </View>
 
-      <Txt variant="caption" tone="tertiary" align="center" style={{ marginTop: 16 }}>Educational content, not medical advice.</Txt>
+      {story.ingredientQuery ? (
+        <Button
+          label="See every study in the library"
+          variant="secondary"
+          icon={<FlaskConical size={18} color={Palette.ink} />}
+          loading={opening}
+          onPress={openIngredient}
+          style={{ marginTop: 4 }}
+        />
+      ) : null}
+
+      <Section title="Sources" caption="Every factual claim above traces to one of these">
+        <ListGroup>
+          {story.sources.map((source, i) => (
+            <PressableScale key={source.url} pressedScale={0.99} onPress={() => Linking.openURL(source.url)} accessibilityRole="link" accessibilityLabel={`Source ${i + 1}: ${source.citation}`}>
+              <View style={styles.source}>
+                <Txt variant="numeral" tone="accent" style={{ width: 22 }}>{i + 1}</Txt>
+                <Txt variant="footnote" tone="secondary" style={{ flex: 1 }}>{source.citation}</Txt>
+                <ArrowUpRight size={16} color={Palette.ink3} />
+              </View>
+            </PressableScale>
+          ))}
+        </ListGroup>
+      </Section>
+
+      <Txt variant="caption" tone="tertiary" align="center" style={{ marginTop: 20, paddingHorizontal: 24 }}>
+        Educational content, not medical advice. Talk to a clinician before changing medications or treatments.
+      </Txt>
     </Screen>
   );
 }
@@ -112,5 +128,6 @@ const styles = StyleSheet.create({
   tick: { width: 22, height: 22, borderRadius: 11, backgroundColor: Palette.accentSoft, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
   para: { lineHeight: 28, marginBottom: 20 },
   dropCap: { fontFamily: Fonts.serif, fontSize: 56, lineHeight: 56, color: Palette.accent },
-  quote: { borderLeftWidth: 3, borderLeftColor: Palette.accent, paddingLeft: 18, marginVertical: 12, marginBottom: 28, borderRadius: Radius.xs },
+  standfirst: { borderLeftWidth: 3, borderLeftColor: Palette.accent, paddingLeft: 18, marginTop: 4, marginBottom: 28 },
+  source: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingHorizontal: 16, paddingVertical: 14 },
 });

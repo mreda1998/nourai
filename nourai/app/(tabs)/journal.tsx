@@ -5,27 +5,26 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Palette, Radius } from '@/constants/theme';
 import { Imagery } from '@/constants/imagery';
-import { JOURNAL } from '@/constants/journal';
-import { Card, ChipRow, EmptyState, Pill, PressableScale, Screen, Txt } from '@/components/ui';
+import { JOURNAL, JOURNAL_TOPICS, type JournalStory } from '@/constants/journal';
+import { StoryCard } from '@/components/StoryCard';
+import { ChipRow, PressableScale, Screen, Txt } from '@/components/ui';
 
-const TOPICS = [
-  { key: 'all', label: 'Latest' },
-  { key: 'longevity', label: 'Longevity' },
-  { key: 'nutrition', label: 'Nutrition' },
-  { key: 'supplements', label: 'Supplements' },
-  { key: 'mind', label: 'Mind' },
-];
+type Filter = 'all' | JournalStory['topic'];
 
 export default function JournalScreen() {
-  const [topic, setTopic] = useState('all');
+  const [topic, setTopic] = useState<Filter>('all');
+  // Only topics that have a story: a filter that leads nowhere is a broken promise.
+  const topics = JOURNAL_TOPICS.filter((t) => JOURNAL.some((s) => s.topic === t.key));
   const [cover, ...rest] = JOURNAL;
-  const list = (topic === 'all' ? rest : JOURNAL).filter((s) => topic === 'all' || s.topic === topic);
+  const list = topic === 'all' ? rest : JOURNAL.filter((s) => s.topic === topic);
 
   return (
-    <Screen back title="Journal" subtitle="Evidence over opinion, in plain language.">
-      <ChipRow options={TOPICS} value={topic} onChange={setTopic} />
+    <Screen back title="Journal" subtitle="Evidence over opinion, in plain language. Every story lists its sources.">
+      {topics.length > 1 ? (
+        <ChipRow<Filter> options={[{ key: 'all', label: 'Latest' }, ...topics]} value={topic} onChange={setTopic} />
+      ) : null}
 
-      {topic === 'all' ? (
+      {topic === 'all' && cover ? (
         <PressableScale onPress={() => router.push(`/newsletter/${cover.id}` as never)} style={styles.cover} accessibilityLabel={cover.title}>
           <Image source={Imagery.journalCover} style={StyleSheet.absoluteFill} contentFit="cover" />
           <LinearGradient colors={['rgba(10,29,28,0)', 'rgba(10,29,28,0.82)']} locations={[0.25, 1]} style={StyleSheet.absoluteFill} />
@@ -38,21 +37,7 @@ export default function JournalScreen() {
       ) : null}
 
       <View style={{ gap: 12, marginTop: 20 }}>
-        {list.length ? list.map((s, i) => (
-          <Card key={s.id} padding={18} onPress={s.published ? () => router.push(`/newsletter/${s.id}` as never) : undefined} accessibilityLabel={s.title}>
-            <View style={{ flexDirection: 'row', gap: 16 }}>
-              <Txt variant="title1" tone="accent" italic style={{ width: 34 }}>{String(i + (topic === 'all' ? 2 : 1)).padStart(2, '0')}</Txt>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Txt variant="overline" tone="secondary">{s.kicker}</Txt>
-                  {s.published ? <Txt variant="caption" tone="tertiary">{s.minutes} min</Txt> : <Pill label="Coming soon" />}
-                </View>
-                <Txt variant="title2" style={{ marginTop: 6 }}>{s.title}</Txt>
-                <Txt variant="footnote" tone="secondary" style={{ marginTop: 4 }}>{s.dek}</Txt>
-              </View>
-            </View>
-          </Card>
-        )) : <EmptyState title="Nothing here yet" message="New stories on this topic are on the way." />}
+        {list.map((s) => <StoryCard key={s.id} story={s} />)}
       </View>
     </Screen>
   );
