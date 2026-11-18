@@ -48,7 +48,14 @@ export function toneSoft(tone: Tone): string {
   }
 }
 
-/** Evidence level strings from the research agent → 1–5 strength. */
+/**
+ * Evidence level strings from the research agent → 1–5.
+ *
+ * The level says how well an ingredient has been *studied*, not whether it
+ * works: strong evidence that something does nothing is still strong evidence.
+ * So the labels describe depth of research, and the colour is the brand accent,
+ * never the good/bad scale.
+ */
 export function evidenceStrength(level?: string | null): number {
   const l = (level ?? '').toLowerCase();
   if (!l) return 0;
@@ -59,20 +66,32 @@ export function evidenceStrength(level?: string | null): number {
   return 3;
 }
 
-export function strengthTone(strength: number): Tone {
-  if (strength >= 4) return 'strong';
-  if (strength >= 2) return 'moderate';
-  if (strength >= 1) return 'weak';
-  return 'neutral';
+/** Depth of research is neutral information: thin research is grey, not red. */
+export function strengthTone(strength: number): Tone | 'accent' {
+  return strength >= 2 ? 'accent' : 'neutral';
 }
 
 export function strengthLabel(strength: number): string {
-  if (strength >= 5) return 'Strong evidence';
-  if (strength === 4) return 'Good evidence';
-  if (strength === 3) return 'Mixed evidence';
-  if (strength === 2) return 'Emerging evidence';
-  if (strength === 1) return 'Weak evidence';
+  if (strength >= 5) return 'Extensively studied';
+  if (strength === 4) return 'Well studied';
+  if (strength === 3) return 'Some research';
+  if (strength === 2) return 'Lightly studied';
+  if (strength === 1) return 'Not enough research';
   return 'Not yet reviewed';
+}
+
+const INGREDIENT_CATEGORIES: Record<string, string> = {
+  vitamin: 'Vitamin', mineral: 'Mineral', amino_acid: 'Amino acid', herb: 'Botanical', probiotic: 'Probiotic',
+  enzyme: 'Enzyme', fatty_acid: 'Fatty acid', antioxidant: 'Antioxidant', preservative: 'Preservative',
+  sweetener: 'Sweetener', additive: 'Additive', peptide: 'Peptide', other: 'Ingredient',
+};
+
+/** "fatty_acid" → "Fatty acid". The API sends the raw enum. */
+export function ingredientCategoryLabel(category?: string | null): string {
+  const key = (category ?? '').toLowerCase();
+  if (INGREDIENT_CATEGORIES[key]) return INGREDIENT_CATEGORIES[key];
+  const words = key.replace(/_/g, ' ').trim();
+  return words ? words[0].toUpperCase() + words.slice(1) : 'Ingredient';
 }
 
 export function categoryLabel(category?: string | null): string {

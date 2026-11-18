@@ -9,7 +9,7 @@ import type { LucideIcon } from 'lucide-react-native';
 import { MeasureInk, Palette } from '@/constants/theme';
 import type {
   AdditiveItem, AdditivesSummary, BioDomain, Ingredient, LabObservation, Measure, MeasureTone, NutritionPanel,
-  ProcessingInfo, Product, RuleNote,
+  ProcessingInfo, Product, RuleNote, VerdictPillar,
 } from '@/services/api';
 import { statusTone } from '@/utils/rules';
 import { toneColor } from '@/utils/grade';
@@ -119,7 +119,9 @@ export function DoseCard({ doses, open, onToggle }: CardProps & { doses: Measure
 
 // ─── Ingredients ─────────────────────────────────────────────────────────────
 
-export function IngredientsCard({ ingredients, additives, describe, resolving, onOpenIngredient, ruleExtras, open, onToggle }: CardProps & {
+export function IngredientsCard({ ingredients, additives, describe, resolving, onOpenIngredient, ruleExtras, pillar, open, onToggle }: CardProps & {
+  /** The verdict's own line for ingredients, so the card and the verdict never disagree. */
+  pillar?: VerdictPillar | null;
   ingredients: Ingredient[];
   additives?: AdditivesSummary | null;
   describe: (ing: Ingredient) => { dot: string; subtitle?: string };
@@ -138,17 +140,19 @@ export function IngredientsCard({ ingredients, additives, describe, resolving, o
   const canExpand = ingredients.length > preview;
   const reviewed = avoid.length + watch.length + (additives?.clean_count ?? 0);
 
-  const verdict = avoid.length
-    ? `${avoid.length} to avoid${watch.length ? ` · ${watch.length} to watch` : ''}`
-    : watch.length ? `${watch.length} to watch`
+  const risks = (n: number, word: string) => `${n} ${word} risk${n === 1 ? '' : 's'}`;
+  const verdict = pillar?.verdict ?? (avoid.length
+    ? `${risks(avoid.length, 'documented')}${watch.length ? ` · ${watch.length} possible` : ''}`
+    : watch.length ? risks(watch.length, 'possible')
       : reviewed ? 'Nothing flagged'
-        : ingredients.length ? 'Not yet reviewed' : 'None listed';
-  const tone: MeasureTone = avoid.length ? 'weak' : watch.length ? 'moderate' : reviewed ? 'good' : 'neutral';
+        : ingredients.length ? 'Not yet reviewed' : 'None listed');
+  // A documented risk is worth knowing, not a failing grade; red is kept for bans and limits.
+  const tone: MeasureTone = pillar?.tone ?? (avoid.length ? 'moderate' : reviewed && !watch.length ? 'good' : 'neutral');
 
   return (
     <SummaryCard title="Ingredients" verdict={verdict} tone={tone} open={open} onToggle={onToggle}>
-      {avoid.length ? <TierGroup title="Avoid" items={avoid} tone="weak" /> : null}
-      {watch.length ? <TierGroup title="Watch" items={watch} tone="moderate" /> : null}
+      {avoid.length ? <TierGroup title="Documented risks" items={avoid} tone="weak" /> : null}
+      {watch.length ? <TierGroup title="Possible risks" items={watch} tone="moderate" /> : null}
 
       {ingredients.length ? (
         <>
@@ -198,7 +202,7 @@ export function IngredientsCard({ ingredients, additives, describe, resolving, o
       {additives?.unreviewed_count ? (
         <View style={[styles.strip, styles.divider]}>
           <Txt variant="footnote" tone="tertiary">
-            {additives.unreviewed_count} ingredient{additives.unreviewed_count === 1 ? ' isn’t' : 's aren’t'} in our research library yet, so {additives.unreviewed_count === 1 ? 'it isn’t' : 'they aren’t'} rated.
+            {additives.unreviewed_count} ingredient{additives.unreviewed_count === 1 ? ' hasn’t' : 's haven’t'} been researched yet, so {additives.unreviewed_count === 1 ? 'it counts' : 'they count'} neither for nor against this product.
           </Txt>
         </View>
       ) : null}
@@ -216,9 +220,14 @@ function TierGroup({ title, items, tone }: { title: string; items: AdditiveItem[
       {items.map((item) => (
         <PressableScale key={item.ingredient_id ?? item.name} pressedScale={0.99} onPress={openIngredientPage(item.ingredient_id)} accessibilityLabel={`${item.name}, ${title}`}>
           <View style={styles.tierRow}>
-            <View style={[styles.dot, { backgroundColor: MeasureInk[tone], marginHorizontal: 0 }]} />
-            <Txt variant="callout" style={{ flex: 1 }}>{item.name}</Txt>
-            {item.reason ? <Txt variant="footnote" tone="tertiary">{item.reason}</Txt> : null}
+            <View style={[styles.dot, { backgroundColor: MeasureInk[tone], marginHorizontal: 0, marginTop: 7, alignSelf: 'flex-start' }]} />
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
+                <Txt variant="callout" style={{ flex: 1 }}>{item.name}</Txt>
+                {item.reason ? <Txt variant="footnote" color={MeasureInk[tone]}>{item.reason}</Txt> : null}
+              </View>
+              {item.note ? <Txt variant="footnote" tone="secondary" style={{ marginTop: 2 }}>{item.note}</Txt> : null}
+            </View>
             <ChevronRight size={16} color={Palette.ink4} />
           </View>
         </PressableScale>
@@ -294,11 +303,43 @@ export function LabCard({ lab, open, onToggle }: CardProps & { lab: LabObservati
 
 // ─── Supports & source ───────────────────────────────────────────────────────
 
+/** What the trials support for the ingredients in this product — claims, not scores. */
+export function BenefitsCard({ ingredients, open, onToggle }: CardProps & { ingredients: Ingredient[] }) {
+  const rank: Record<string, number> = { good: 0, moderate: 1, weak: 2 };
+  const rows = [...ingredients].sort((a, b) => (rank[a.benefit_tone ?? ''] ?? 3) - (rank[b.benefit_tone ?? ''] ?? 3));
+  const backed = rows.filter((i) => i.benefit_tone === 'good').length;
+  const early = rows.filter((i) => i.benefit_tone === 'moderate').length;
+  const verdict = backed ? `${backed} backed by trials` : early ? 'Early evidence only' : 'Claims not supported';
+  const tone: MeasureTone = backed ? 'good' : early ? 'moderate' : 'weak';
+  return (
+    <SummaryCard title="Evidence" verdict={verdict} tone={tone} open={open} onToggle={onToggle}>
+      {rows.map((ing, i) => (
+        <PressableScale key={`${ing.name}-${i}`} pressedScale={0.99} onPress={openIngredientPage(ing.ingredient_id)} accessibilityLabel={`${ing.name}: ${ing.benefit_label}`}>
+          <View style={[styles.tierRow, styles.divider]}>
+            <View style={[styles.dot, { backgroundColor: MeasureInk[ing.benefit_tone ?? 'neutral'], marginHorizontal: 0, marginTop: 7, alignSelf: 'flex-start' }]} />
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
+                <Txt variant="callout" style={{ flex: 1 }}>{ing.name}</Txt>
+                <Txt variant="footnote" color={MeasureInk[ing.benefit_tone ?? 'neutral']}>{ing.benefit_label}</Txt>
+              </View>
+              {ing.benefit_note ? <Txt variant="footnote" tone="secondary" style={{ marginTop: 2 }}>{ing.benefit_note}</Txt> : null}
+            </View>
+            <ChevronRight size={16} color={Palette.ink4} />
+          </View>
+        </PressableScale>
+      ))}
+      <View style={[styles.strip, styles.divider]}>
+        <Txt variant="footnote" tone="tertiary">The best-supported claim for each ingredient. Tap one to read the studies.</Txt>
+      </View>
+    </SummaryCard>
+  );
+}
+
 export function SupportsCard({ supports, open, onToggle }: CardProps & { supports: BioDomain[] }) {
   return (
     <SummaryCard title="What it supports" verdict={supports[0]?.name ?? ''} tone="good" open={open} onToggle={onToggle}>
       <View style={[styles.panel, { paddingVertical: 6 }]}>
-        {supports.slice(0, 6).map((d, i) => <ContributorBar key={d.name} label={d.name} value={d.value} valueLabel={`${Math.round(d.value)}`} delay={i * 70} />)}
+        {supports.slice(0, 6).map((d, i) => <ContributorBar key={d.name} label={d.name} value={d.value} valueLabel="" delay={i * 70} />)}
       </View>
     </SummaryCard>
   );

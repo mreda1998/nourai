@@ -9,15 +9,16 @@ import {
 } from 'lucide-react-native';
 import { api, IngredientDetail } from '@/services/api';
 import { Palette, Radius } from '@/constants/theme';
-import { evidenceStrength, strengthLabel, strengthTone, toneColor, Tone } from '@/utils/grade';
+import { evidenceStrength, ingredientCategoryLabel, strengthLabel, strengthTone, toneColor, Tone } from '@/utils/grade';
+import { BIODOMAIN_BY_KEY } from '@/constants/biodomains';
 import { userCountry } from '@/utils/rules';
 import { deviceRegion } from '@/lib/region';
 import { RulesSection } from '@/components/rules/RulesSection';
-import { studyStrength } from '@/utils/evidence';
+import { studyStrength, verdictTone } from '@/utils/evidence';
 import { ClaimCard } from '@/components/ClaimCard';
 import { StudyCard } from '@/components/StudyCard';
 import {
-  Button, Card, ContributorBar, EmptyState, EvidenceMeter, IconButton, ListGroup, ListRow, Pill,
+  Button, Card, EmptyState, EvidenceMeter, IconButton, ListGroup, ListRow, Pill,
   ProductImage, Screen, Section, SegmentedControl, SkeletonCard, Txt,
 } from '@/components/ui';
 
@@ -65,7 +66,7 @@ export default function IngredientScreen() {
             : <Molecule />}
         </View>
         <View style={{ flex: 1 }}>
-          <Txt variant="overline" tone="secondary">{data.category || 'Active ingredient'}</Txt>
+          <Txt variant="overline" tone="secondary">{ingredientCategoryLabel(data.category)}</Txt>
           <View style={{ marginTop: 10, alignItems: 'flex-start' }}>
             <EvidenceMeter strength={strength} width={96} />
           </View>
@@ -101,6 +102,7 @@ export default function IngredientScreen() {
         <View style={{ marginTop: 16 }}>
           {claims.length ? (
             <View style={{ gap: 12 }}>
+              <ClaimTally claims={claims} />
               {claims.map((c, i) => (
                 <ClaimCard key={c.id} claim={c} index={i} onPress={() => router.push(`/research/${data.id}?claim=${c.id}` as never)} />
               ))}
@@ -136,18 +138,21 @@ export default function IngredientScreen() {
             </Txt>
           </Card>
           {data.biodomain_scores.length ? (
-            <Section title="Where it acts" caption="Strength of effect by body system">
-              <Card padding={18} style={{ paddingVertical: 6 }}>
-                {data.biodomain_scores.slice(0, 6).map((d, i) => (
-                  <ContributorBar
-                    key={d.biodomain}
-                    label={d.biodomain}
-                    value={d.direction === 'harm' ? 30 : Math.round(d.magnitude * 100)}
-                    valueLabel={d.direction === 'benefit' ? 'Benefit' : d.direction === 'harm' ? 'Risk' : d.direction === 'mixed' ? 'Mixed' : 'Neutral'}
-                    delay={i * 70}
-                  />
-                ))}
-              </Card>
+            <Section title="Where it acts" caption="Body systems the studies looked at, and which way they point">
+              <ListGroup>
+                {data.biodomain_scores.slice(0, 6).map((d) => {
+                  const way = DIRECTIONS[d.direction] ?? DIRECTIONS.neutral;
+                  return (
+                    <ListRow
+                      key={d.biodomain}
+                      leading={<View style={[styles.wayDot, { backgroundColor: toneColor(way.tone) }]} />}
+                      title={BIODOMAIN_BY_KEY[d.biodomain]?.name ?? d.biodomain.replace(/_/g, ' ')}
+                      subtitle={d.notes ?? undefined}
+                      value={`${way.label} · ${d.confidence} confidence`}
+                    />
+                  );
+                })}
+              </ListGroup>
             </Section>
           ) : null}
         </View>
@@ -184,7 +189,9 @@ function BeliefReality({ data, strength }: { data: IngredientDetail; strength: n
   const belief = data.common_belief;
   const reality = data.evidence_reality || data.evidence.find((e) => e.confidence === 'high')?.finding || null;
   if (!belief && !reality) return null;
-  const tone = strengthTone(strength);
+  // How deeply it has been studied is not a verdict, so it never borrows the good/bad colours.
+  const studied = strengthTone(strength) === 'accent';
+  const ink = studied ? Palette.accent : Palette.ink3;
   return (
     <View style={{ marginTop: 24 }}>
       {belief ? (
@@ -202,16 +209,16 @@ function BeliefReality({ data, strength }: { data: IngredientDetail; strength: n
         </View>
       ) : null}
       {reality ? (
-        <Card padding={20} radius={Radius.xl} style={{ borderWidth: 1.5, borderColor: toneColor(tone) }}>
+        <Card padding={20} radius={Radius.xl} style={{ borderWidth: 1.5, borderColor: studied ? Palette.accent : Palette.hairline }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <ShieldCheck size={16} color={toneColor(tone)} strokeWidth={2} />
-              <Txt variant="overline" color={toneColor(tone)}>What the evidence shows</Txt>
+              <ShieldCheck size={16} color={ink} strokeWidth={2} />
+              <Txt variant="overline" color={ink}>What the evidence shows</Txt>
             </View>
           </View>
           <Txt variant="title2" style={{ marginTop: 10 }}>{reality}</Txt>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
-            <Pill label={strengthLabel(strength)} tone={tone} />
+            <Pill label={strengthLabel(strength)} tone={studied ? 'accent' : 'neutral'} />
             {data.evidence.length ? <Txt variant="footnote" tone="secondary">{data.evidence.length} studies reviewed</Txt> : null}
           </View>
         </Card>
@@ -221,6 +228,63 @@ function BeliefReality({ data, strength }: { data: IngredientDetail; strength: n
 }
 
 // ─── Evidence ─────────────────────────────────────────────────────────────────
+
+const DIRECTIONS: Record<string, { label: string; tone: Tone }> = {
+  benefit: { label: 'Benefit', tone: 'strong' },
+  harm: { label: 'Risk', tone: 'weak' },
+  mixed: { label: 'Mixed', tone: 'moderate' },
+  neutral: { label: 'No clear effect', tone: 'neutral' },
+};
+
+const TALLY: { tone: Tone; label: string }[] = [
+  { tone: 'strong', label: 'hold up' },
+  { tone: 'moderate', label: 'early or mixed' },
+  { tone: 'weak', label: 'not supported' },
+  { tone: 'neutral', label: 'unclear' },
+];
+
+/**
+ * The page in one line: of the things people believe about this ingredient,
+ * how many the studies support. Safety questions are counted apart, because a
+ * "supported" safety claim is bad news.
+ */
+function ClaimTally({ claims }: { claims: IngredientDetail['claims'] }) {
+  const beliefs = (claims ?? []).filter((c) => c.kind === 'benefit');
+  const safety = (claims ?? []).filter((c) => c.kind === 'safety');
+  if (!beliefs.length) return null;
+  const counts: Record<Tone, number> = { strong: 0, moderate: 0, weak: 0, neutral: 0 };
+  for (const c of beliefs) counts[verdictTone('benefit', c.verdict, c.certainty)] += 1;
+  const risks = safety.filter((c) => verdictTone('safety', c.verdict, c.certainty) === 'weak').length;
+  const shown = TALLY.filter((t) => counts[t.tone] > 0);
+  return (
+    <Card padding={18} accessibilityLabel={`${counts.strong} of ${beliefs.length} beliefs hold up`}>
+      <Txt variant="overline" tone="secondary">{beliefs.length} {beliefs.length === 1 ? 'belief' : 'beliefs'} tested</Txt>
+      <Txt variant="title2" style={{ marginTop: 6 }}>
+        {counts.strong ? `${counts.strong} of ${beliefs.length} hold up` : counts.moderate ? 'None proven, some early signs' : counts.weak ? 'None hold up so far' : 'Too little research to say'}
+      </Txt>
+      <View style={styles.tallyBar}>
+        {shown.map((t) => (
+          <View key={t.tone} style={{ flex: counts[t.tone], height: 6, borderRadius: 3, backgroundColor: t.tone === 'neutral' ? Palette.ink4 : toneColor(t.tone) }} />
+        ))}
+      </View>
+      <View style={styles.tallyLegend}>
+        {shown.map((t) => (
+          <View key={t.tone} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: t.tone === 'neutral' ? Palette.ink4 : toneColor(t.tone) }} />
+            <Txt variant="caption" tone="secondary">{counts[t.tone]} {t.label}</Txt>
+          </View>
+        ))}
+      </View>
+      {safety.length ? (
+        <Txt variant="footnote" tone={risks ? 'weak' : 'secondary'} style={{ marginTop: 12 }}>
+          {risks
+            ? `${risks} of ${safety.length} safety ${safety.length === 1 ? 'question' : 'questions'} found a documented risk.`
+            : `${safety.length} safety ${safety.length === 1 ? 'question' : 'questions'} checked, no established risk.`}
+        </Txt>
+      ) : null}
+    </Card>
+  );
+}
 
 function Count({ value, label, tone }: { value: number; label: string; tone: Tone }) {
   return (
@@ -234,21 +298,31 @@ function Count({ value, label, tone }: { value: number; label: string; tone: Ton
 // ─── Safety ───────────────────────────────────────────────────────────────────
 
 function Safety({ data }: { data: IngredientDetail }) {
+  // Only the amounts we actually hold: an empty tile reading "Not set" tells the reader nothing.
   const doses = [
-    { label: 'Typical range', value: data.typical_dose_range },
+    { label: 'Studied range', value: data.typical_dose_range },
     { label: 'Daily guidance', value: data.recommended_daily },
     { label: 'Upper limit', value: data.upper_limit },
-  ];
+  ].filter((d) => d.value);
+  const cautions = (data.claims ?? []).filter((c) => c.avoid_if).map((c) => c.avoid_if as string)
+    .filter((text, i, all) => all.indexOf(text) === i);
   return (
     <View style={{ marginTop: 16 }}>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        {doses.map((d) => (
-          <Card key={d.label} padding={14} style={{ flex: 1, minHeight: 96 }}>
-            <Txt variant="caption" tone="secondary">{d.label}</Txt>
-            <Txt variant="headline" style={{ marginTop: 8 }} tone={d.value ? 'primary' : 'tertiary'}>{d.value || 'Not set'}</Txt>
-          </Card>
-        ))}
-      </View>
+      {doses.length ? (
+        <ListGroup>
+          {doses.map((d) => <ListRow key={d.label} icon={PillIcon} title={d.label} subtitle={d.value ?? undefined} />)}
+        </ListGroup>
+      ) : (
+        <Card variant="sunken" padding={16}>
+          <Txt variant="subhead" tone="secondary">No dose range or upper limit has been established in the research we reviewed.</Txt>
+        </Card>
+      )}
+
+      {cautions.length ? (
+        <Section title="Who should check first" caption="From the studies behind each claim">
+          <ListGroup>{cautions.map((s) => <ListRow key={s} icon={AlertTriangle} iconTint={Palette.moderate} title={s} />)}</ListGroup>
+        </Section>
+      ) : null}
 
       {data.admin_routes?.length ? (
         <Section title="Routes">
@@ -261,7 +335,7 @@ function Safety({ data }: { data: IngredientDetail }) {
       <Section title="Possible side effects">
         {data.side_effects.length ? (
           <ListGroup>{data.side_effects.map((s) => <ListRow key={s} icon={AlertTriangle} iconTint={Palette.moderate} title={s} />)}</ListGroup>
-        ) : <Txt variant="subhead" tone="secondary">No common side effects documented.</Txt>}
+        ) : <Txt variant="subhead" tone="secondary">None recorded in our library. That is not the same as none existing.</Txt>}
       </Section>
 
       {data.drug_interactions.length ? (
@@ -292,5 +366,8 @@ const styles = StyleSheet.create({
   structure: { width: 76, height: 76, borderRadius: 38, backgroundColor: Palette.surface, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: Palette.hairline },
   connector: { alignItems: 'center', height: 20, justifyContent: 'center', zIndex: 2 },
   connectorDot: { width: 30, height: 30, borderRadius: 15, backgroundColor: Palette.accent, alignItems: 'center', justifyContent: 'center', marginVertical: -8, borderWidth: 3, borderColor: Palette.canvas },
+  wayDot: { width: 9, height: 9, borderRadius: 4.5, marginHorizontal: 10 },
+  tallyBar: { flexDirection: 'row', gap: 3, marginTop: 14 },
+  tallyLegend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 6, marginTop: 10 },
   mechImage: { height: 220, borderRadius: Radius.xl, borderCurve: 'continuous', overflow: 'hidden', backgroundColor: Palette.sunken, marginBottom: 12 },
 });

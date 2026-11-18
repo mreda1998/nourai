@@ -18,6 +18,52 @@ export interface Ingredient {
   is_nutrient?: boolean;           // True for rows from the OFF nutrition panel
   rule_note?: RuleNote | null;     // set only when a covered place bans or flags it
   rule_substance_id?: string | null; // the regulated substance this label row names
+  // Where the ingredient stands, from its researched claims (absent on older servers)
+  standing?: 'risk' | 'caution' | 'clear' | 'unreviewed' | null;
+  standing_label?: string | null;   // "Likely risk", "No known concerns"
+  standing_note?: string | null;    // the claim that standing rests on
+  benefit_label?: string | null;    // "Probably works"
+  benefit_note?: string | null;
+  benefit_tone?: MeasureTone | null;
+}
+
+export interface VerdictPillar {
+  key: 'nutrition' | 'processing' | 'dose' | 'evidence' | 'ingredients';
+  label: string;
+  tone: MeasureTone;
+  verdict: string;
+  detail?: string | null;
+}
+
+/** The overall read of a product: the worst of a few cited checks, never a score. */
+export interface ProductVerdict {
+  level: 'good' | 'mixed' | 'poor' | 'unknown';
+  tone: MeasureTone;
+  headline: string;
+  summary: string;
+  pillars: VerdictPillar[];
+  reviewed_count: number;
+  ingredient_count: number;
+  basis: string;
+}
+
+export interface ReviewFinding {
+  ingredient_id: string;
+  ingredient: string;
+  label: string;
+  tone: MeasureTone;
+  claim?: string | null;
+  products: string[];
+}
+
+/** What holds up, what to know and what overlaps across a stack. */
+export interface StackReview {
+  supported: ReviewFinding[];
+  risks: ReviewFinding[];
+  overlaps: ReviewFinding[];
+  product_count: number;
+  ingredient_count: number;
+  reviewed_count: number;
 }
 
 export interface BioDomain {
@@ -82,6 +128,7 @@ export interface AdditiveItem {
   name: string;
   ingredient_id?: string | null;
   reason?: string | null;
+  note?: string | null;   // the researched claim behind the flag
 }
 
 export interface AdditivesSummary {
@@ -212,6 +259,7 @@ export interface Product {
   /** Substances found only through E-number tags, and the "At a glance" counts. Absent from older backends. */
   rule_extras?: RuleNote[];
   rules_glance?: RulesGlance | null;
+  verdict?: ProductVerdict | null;
 }
 
 export interface ProductListItem {
@@ -1129,6 +1177,13 @@ class APIService {
   /**
    * Score an explicit list of products (the on-device stack). Works for guests.
    */
+  async getStackReview(productIds: string[]): Promise<StackReview> {
+    return this.fetch<StackReview>('/scores/review', {
+      method: 'POST',
+      body: JSON.stringify({ product_ids: productIds.slice(0, 50) }),
+    });
+  }
+
   async getStackScore(productIds: string[]): Promise<DailyScoreResponse> {
     return this.fetch<DailyScoreResponse>('/scores/daily', {
       method: 'POST',

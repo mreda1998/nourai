@@ -67,7 +67,7 @@ export function Screen({
         <Animated.View style={[styles.barTitle, collapsed]} pointerEvents="none">
           {title ? <Txt variant="headline" tone={night ? 'inverse' : 'primary'} numberOfLines={1}>{title}</Txt> : null}
         </Animated.View>
-        <View style={[styles.barSide, { alignItems: 'flex-end' }]}>{right}</View>
+        <View style={[styles.barSide, { justifyContent: 'flex-end' }]}>{right}</View>
       </View>
     </View>
   ) : null;

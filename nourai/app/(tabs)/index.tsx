@@ -6,12 +6,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ArrowUpRight, ChevronRight, Moon, ScanLine, Search, Sparkles, Sun, Sunrise, Sunset } from 'lucide-react-native';
-import { Layout, Palette, Radius } from '@/constants/theme';
+import { Layout, MeasureInk, Palette, Radius } from '@/constants/theme';
 import { greeting, Imagery, todayHero } from '@/constants/imagery';
+import { JOURNAL } from '@/constants/journal';
 import { useAppState, type Product } from '@/context/app-state';
 import { useAuth } from '@/context/auth-context';
 import { isCatalogueId } from '@/lib/insights';
-import { api, DailyScoreResponse, ScanHistoryItem } from '@/services/api';
+import { api, ReviewFinding, ScanHistoryItem, StackReview } from '@/services/api';
 import {
   Button, Card, IconButton, PressableScale, ProductImage, Screen, Section, Skeleton, Txt,
 } from '@/components/ui';
@@ -21,24 +22,24 @@ const HERO_H = 380;
 export default function TodayScreen() {
   const { stack, isStackLoading, stackError, refreshStack } = useAppState();
   const { user } = useAuth();
-  const [areas, setAreas] = useState<DailyScoreResponse | null>(null);
-  const [areasLoading, setAreasLoading] = useState(true);
-  const [areasFailed, setAreasFailed] = useState(false);
+  const [review, setReview] = useState<StackReview | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(true);
+  const [reviewFailed, setReviewFailed] = useState(false);
   const [recent, setRecent] = useState<ScanHistoryItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const firstName = user?.name?.trim().split(' ')[0];
 
-  // What the stack supports right now (guests included).
+  // What the research says about the stack as a whole (guests included).
   const stackIds = stack.map((p) => p.id).filter(isCatalogueId).join(',');
   const load = useCallback(async () => {
     const [s, r] = await Promise.allSettled([
-      stackIds ? api.getStackScore(stackIds.split(',')) : Promise.resolve(null),
+      stackIds ? api.getStackReview(stackIds.split(',')) : Promise.resolve(null),
       api.getScanHistory({ limit: 8 }),
     ]);
-    setAreas(s.status === 'fulfilled' ? s.value : null);
-    setAreasFailed(s.status === 'rejected');
+    setReview(s.status === 'fulfilled' ? s.value : null);
+    setReviewFailed(s.status === 'rejected');
     setRecent(r.status === 'fulfilled' ? r.value.items : []);
-    setAreasLoading(false);
+    setReviewLoading(false);
   }, [stackIds]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -55,7 +56,7 @@ export default function TodayScreen() {
   return (
     <Screen tabbed hero={<Hero name={firstName} />} refreshing={refreshing} onRefresh={refresh}>
       <View style={{ marginTop: -150 }}>
-        {hasStack ? <StackCard count={stack.length} areas={areas} loading={areasLoading} failed={areasFailed} />
+        {hasStack ? <StackCard count={stack.length} review={review} loading={reviewLoading} failed={reviewFailed} />
           : stackUnknown ? <StackStatus failed={!!stackError} onRetry={() => refreshStack().catch(() => undefined)} />
             : <WelcomeCard />}
       </View>
@@ -112,49 +113,56 @@ function Hero({ name }: { name?: string }) {
 
 // ─── Stack ────────────────────────────────────────────────────────────────────
 
-/** "sleep", "sleep and gut", "sleep, gut and skin" */
-function listOf(words: string[]) {
-  return words.length < 2 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** The headline is the most useful true thing we can say about the stack. */
+function reviewHeadline(review: StackReview | null, count: number): string {
+  if (!review) return `${plural(count, 'product')} in your stack`;
+  const documented = review.risks.filter((r) => r.tone === 'weak').length;
+  if (review.overlaps.length) return `${plural(review.overlaps.length, 'ingredient')} doubled up across products`;
+  if (documented) return `${plural(documented, 'documented risk')} worth knowing`;
+  const backed = review.supported.filter((f) => f.tone === 'good').length;
+  if (backed) return `${plural(backed, 'ingredient')} backed by trials`;
+  if (review.supported.length) return 'Early evidence, nothing proven yet';
+  return `${plural(count, 'product')} in your stack`;
 }
 
-// No score (Elory gives none): what the research says the stack supports, in words.
-function StackCard({ count, areas, loading, failed }: {
+// No score: what the research says the stack does, what to know, and what overlaps.
+function StackCard({ count, review, loading, failed }: {
   count: number;
-  areas: DailyScoreResponse | null;
+  review: StackReview | null;
   loading: boolean;
   failed: boolean;
 }) {
-  const supported = (areas?.categories ?? []).filter((c) => c.value > 0).sort((a, b) => b.value - a.value).slice(0, 4);
-  const products = `${count} product${count === 1 ? '' : 's'} in your stack`;
+  const overlaps = review?.overlaps.slice(0, 2) ?? [];
+  const risks = review?.risks.slice(0, 2) ?? [];
+  const supported = review?.supported.slice(0, 3) ?? [];
+  const empty = !overlaps.length && !risks.length && !supported.length;
   return (
     <Animated.View entering={FadeInDown.duration(700).delay(150)}>
       <Card padding={22}>
-        <Txt variant="overline" tone="accent">Your stack</Txt>
+        <Txt variant="overline" tone="accent">Your stack, reviewed</Txt>
         {loading ? (
           <View style={{ gap: 10, marginTop: 12 }}><Skeleton width={240} height={26} /><Skeleton width={180} height={14} /></View>
         ) : (
           <>
-            <Txt variant="title1" style={{ marginTop: 10 }}>
-              {supported.length ? `Supports your ${listOf(supported.map((c) => c.label.toLowerCase()))}` : products}
-            </Txt>
+            <Txt variant="title1" style={{ marginTop: 10 }}>{reviewHeadline(review, count)}</Txt>
             <Txt variant="subhead" tone="secondary" style={{ marginTop: 8 }}>
-              {supported.length
-                ? `${products}. Based on the research behind each ingredient — tap an area to see what helps.`
+              {review
+                ? `${plural(count, 'product')} · ${review.reviewed_count} of ${plural(review.ingredient_count, 'ingredient')} researched so far.`
                 : failed
-                  ? 'We couldn’t check your stack. Pull down to try again.'
-                  : 'We’re still researching the ingredients in your stack. What they support will show here.'}
+                  ? 'We couldn’t review your stack. Pull down to try again.'
+                  : `${plural(count, 'product')} saved.`}
+              {review && empty ? ' Nothing to flag yet, and nothing proven either. This fills in as our research library grows.' : ''}
             </Txt>
           </>
         )}
 
-        {supported.length ? (
+        {!loading && !empty ? (
           <View style={{ marginTop: 18, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Palette.hairline }}>
-            {supported.map((c) => (
-              <PressableScale key={c.key} onPress={() => router.push('/domains' as never)} style={styles.areaRow} accessibilityLabel={c.label}>
-                <Txt variant="subheadStrong" style={{ flex: 1 }}>{c.label}</Txt>
-                <ChevronRight size={18} color={Palette.ink4} strokeWidth={2} />
-              </PressableScale>
-            ))}
+            {overlaps.map((f) => <FindingRow key={`o${f.ingredient_id}`} finding={f} label="Doubled up" tone="moderate" detail={`In ${f.products.join(' and ')}. Add the amounts up before taking both.`} />)}
+            {risks.map((f) => <FindingRow key={`r${f.ingredient_id}`} finding={f} label={f.label} tone={f.tone} detail={f.claim} />)}
+            {supported.map((f) => <FindingRow key={`s${f.ingredient_id}`} finding={f} label={f.label} tone={f.tone} detail={f.claim} />)}
           </View>
         ) : null}
 
@@ -165,6 +173,27 @@ function StackCard({ count, areas, loading, failed }: {
         </PressableScale>
       </Card>
     </Animated.View>
+  );
+}
+
+function FindingRow({ finding, label, tone, detail }: { finding: ReviewFinding; label: string; tone: ReviewFinding['tone']; detail?: string | null }) {
+  const ink = tone === 'neutral' ? Palette.ink2 : MeasureInk[tone];
+  return (
+    <PressableScale
+      onPress={() => router.push(`/ingredient/${finding.ingredient_id}` as never)}
+      style={styles.areaRow}
+      accessibilityLabel={`${finding.ingredient}: ${label}${detail ? `. ${detail}` : ''}`}
+    >
+      <View style={[styles.findingDot, { backgroundColor: ink }]} />
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
+          <Txt variant="subheadStrong" style={{ flex: 1 }} numberOfLines={1}>{finding.ingredient}</Txt>
+          <Txt variant="footnote" color={ink}>{label}</Txt>
+        </View>
+        {detail ? <Txt variant="footnote" tone="secondary" numberOfLines={2} style={{ marginTop: 2 }}>{detail}</Txt> : null}
+      </View>
+      <ChevronRight size={18} color={Palette.ink4} strokeWidth={2} style={{ marginTop: 1 }} />
+    </PressableScale>
   );
 }
 
@@ -212,7 +241,7 @@ function HowItWorks() {
   const steps = [
     { n: '1', title: 'Scan or search', body: 'Barcode, label, or name — we identify the exact formulation.' },
     { n: '2', title: 'See the evidence', body: 'Every ingredient checked against what studies show, not marketing.' },
-    { n: '3', title: 'Build your stack', body: 'Add what you use and see what your routine supports — and what to watch.' },
+    { n: '3', title: 'Build your stack', body: 'Add what you use. We check the whole routine for what’s proven, what to know and what doubles up.' },
   ];
   return (
     <Section title="How Elory works">
@@ -290,14 +319,16 @@ function RecentCard({ item, index }: { item: ScanHistoryItem; index: number }) {
 }
 
 function JournalFeature() {
+  // Rotates through the published stories by day, so the home screen is not always the same card.
+  const story = JOURNAL[Math.floor(Date.now() / 86_400_000) % JOURNAL.length];
   return (
-    <PressableScale onPress={() => router.push('/newsletter/creatine' as never)} style={styles.journal} accessibilityLabel="Read: Creatine beyond strength">
+    <PressableScale onPress={() => router.push(`/newsletter/${story.id}` as never)} style={styles.journal} accessibilityLabel={`Read: ${story.title}`}>
       <Image source={Imagery.journalCover} style={StyleSheet.absoluteFill} contentFit="cover" />
       <LinearGradient colors={['rgba(10,29,28,0)', 'rgba(10,29,28,0.78)']} locations={[0.3, 1]} style={StyleSheet.absoluteFill} />
       <View style={{ position: 'absolute', left: 20, right: 20, bottom: 20 }}>
-        <Txt variant="overline" tone="inverse2">Research brief · 7 min</Txt>
-        <Txt variant="title1" tone="inverse" style={{ marginTop: 8 }}>Creatine beyond strength</Txt>
-        <Txt variant="footnote" tone="inverse2" style={{ marginTop: 6 }}>What the newest trials say about memory, mood and ageing.</Txt>
+        <Txt variant="overline" tone="inverse2">{story.kicker} · {story.minutes} min</Txt>
+        <Txt variant="title1" tone="inverse" style={{ marginTop: 8 }}>{story.title}</Txt>
+        <Txt variant="footnote" tone="inverse2" style={{ marginTop: 6 }}>{story.dek}</Txt>
       </View>
     </PressableScale>
   );
@@ -306,7 +337,8 @@ function JournalFeature() {
 const styles = StyleSheet.create({
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(252,251,248,0.82)', alignItems: 'center', justifyContent: 'center' },
-  areaRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Palette.hairline },
+  areaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Palette.hairline },
+  findingDot: { width: 8, height: 8, borderRadius: 4, marginTop: 7 },
   askPill: { marginTop: 18, height: 50, borderRadius: 25, backgroundColor: 'rgba(14,31,30,0.05)', flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16 },
   step: { flexDirection: 'row', gap: 14, alignItems: 'center', padding: 14 },
   stepNum: { width: 40, height: 40, borderRadius: 20, backgroundColor: Palette.accentSoft, alignItems: 'center', justifyContent: 'center' },

@@ -9,9 +9,10 @@ import { deviceRegion } from '@/lib/region';
 import { track } from '@/lib/insights';
 import { Palette, Radius } from '@/constants/theme';
 import { JOURNAL } from '@/constants/journal';
-import { categoryLabel, evidenceStrength } from '@/utils/grade';
+import { StoryCard } from '@/components/StoryCard';
+import { categoryLabel, evidenceStrength, ingredientCategoryLabel } from '@/utils/grade';
 import {
-  Button, Card, Chip, EmptyState, EvidenceMeter, ListGroup, ListRow, Pill, PressableScale, ProductImage,
+  Button, Chip, EmptyState, EvidenceMeter, ListGroup, ListRow, PressableScale, ProductImage,
   Screen, SearchField, Section, SegmentedControl, Txt,
 } from '@/components/ui';
 
@@ -183,16 +184,7 @@ export default function DiscoverScreen() {
 
           <Section title="Journal" action="All stories" onAction={() => router.push('/(tabs)/journal' as never)}>
             <View style={{ gap: 12 }}>
-              {JOURNAL.slice(0, 2).map((s) => (
-                <Card key={s.id} padding={18} onPress={s.published ? () => router.push(`/newsletter/${s.id}` as never) : undefined} accessibilityLabel={s.title}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Txt variant="overline" tone="accent">{s.kicker}</Txt>
-                    {s.published ? <Txt variant="caption" tone="tertiary">{s.minutes} min read</Txt> : <Pill label="Coming soon" />}
-                  </View>
-                  <Txt variant="title2" style={{ marginTop: 8 }}>{s.title}</Txt>
-                  <Txt variant="footnote" tone="secondary" style={{ marginTop: 4 }}>{s.dek}</Txt>
-                </Card>
-              ))}
+              {JOURNAL.slice(0, 2).map((story) => <StoryCard key={story.id} story={story} />)}
             </View>
           </Section>
         </>
@@ -205,7 +197,7 @@ function IngredientRow({ item }: { item: IngredientListItem }) {
   return (
     <ListRow
       title={item.canonical_name}
-      subtitle={item.category}
+      subtitle={ingredientCategoryLabel(item.category)}
       trailing={<EvidenceMeter strength={evidenceStrength(item.evidence_level)} showLabel={false} width={52} />}
       onPress={() => router.push(`/ingredient/${item.id}` as never)}
     />

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 import { Palette } from '@/constants/theme';
-import { strengthLabel, strengthTone, toneColor } from '@/utils/grade';
+import { strengthLabel, strengthTone } from '@/utils/grade';
 import { Txt } from './Txt';
 
 /** Five-segment evidence strength meter. Replaces the old dot "spectrum". */
@@ -11,7 +11,8 @@ export function EvidenceMeter({ strength, showLabel = true, width = 72, night = 
   width?: number;
   night?: boolean;
 }) {
-  const color = toneColor(strengthTone(strength));
+  // Research depth, not a verdict: one accent colour, grey when there is too little to say.
+  const color = strengthTone(strength) === 'accent' ? Palette.accent : Palette.ink3;
   const seg = (width - 4 * 3) / 5;
   return (
     <View style={{ alignItems: 'flex-end' }} accessible accessibilityLabel={strengthLabel(strength)}>

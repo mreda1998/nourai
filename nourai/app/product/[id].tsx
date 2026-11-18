@@ -9,7 +9,7 @@ import { Palette, Radius } from '@/constants/theme';
 import { api, getProductWithFallback, isBarcodeIngestionResponse } from '@/services/api';
 import { glanceText, statusTone, userCountry } from '@/utils/rules';
 import { deviceRegion } from '@/lib/region';
-import type { BarcodeIngestionResponse, Ingredient, LabObservation, Product, ServerPersonalAnalysis } from '@/services/api';
+import type { BarcodeIngestionResponse, Ingredient, LabObservation, Product, ServerPersonalAnalysis, VerdictPillar } from '@/services/api';
 import { useAppState } from '@/context/app-state';
 import { useAuth } from '@/context/auth-context';
 import { analyzeIngredients, buildPersonalAnalysis } from '@/utils/personalization';
@@ -22,10 +22,15 @@ import {
   Screen, Section, SkeletonCard, Txt,
 } from '@/components/ui';
 import {
-  DoseCard, IngredientsCard, LabCard, LegacyNutritionCard, NutritionCard, ProcessingCard, SourceCard, SupportsCard,
+  BenefitsCard, DoseCard, IngredientsCard, LabCard, LegacyNutritionCard, NutritionCard, ProcessingCard, SourceCard, SupportsCard,
 } from '@/components/product/ProductSections';
+import { VerdictCard } from '@/components/product/VerdictCard';
 
-type CardKey = 'nutrition' | 'doses' | 'ingredients' | 'processing' | 'lab' | 'supports' | 'source';
+type CardKey = 'nutrition' | 'doses' | 'ingredients' | 'processing' | 'lab' | 'benefits' | 'supports' | 'source';
+
+const PILLAR_CARD: Record<VerdictPillar['key'], CardKey> = {
+  nutrition: 'nutrition', processing: 'processing', dose: 'doses', evidence: 'benefits', ingredients: 'ingredients',
+};
 
 export default function ProductDetailScreen() {
   const { id, via } = useLocalSearchParams<{ id: string; via?: string }>();
@@ -210,8 +215,10 @@ export default function ProductDetailScreen() {
   const ingredients = product.ingredients.filter((i) => !i.is_nutrient);
   const nutrients = product.ingredients.filter((i) => i.is_nutrient);
   const linked = ingredients.filter((i) => i.ingredient_id).length;
-  // Unmatched ingredients default to "watch" at ingestion — only library matches count as flagged.
-  const isFlagged = (ing: Ingredient) => !!perIngredient?.get(ing.name)?.concernFlags.length || (ing.tag_type === 'warning' && !!ing.ingredient_id);
+  // A flag is a personal concern or a risk the research supports — never an unknown ingredient.
+  const isFlagged = (ing: Ingredient) => !!perIngredient?.get(ing.name)?.concernFlags.length
+    || (ing.standing ? ing.standing === 'risk' : ing.tag_type === 'warning' && !!ing.ingredient_id);
+  const backed = ingredients.filter((i) => i.benefit_label && i.ingredient_id);
   const flagged = product.additives
     ? product.additives.avoid.length + product.additives.watch.length
     : ingredients.filter(isFlagged).length;
@@ -227,14 +234,29 @@ export default function ProductDetailScreen() {
     return next;
   });
   const cardProps = (key: CardKey) => ({ open: open.has(key), onToggle: () => toggleCard(key) });
+  // A check in the verdict opens the card that shows its working.
+  const openPillar = (pillar: VerdictPillar) => {
+    Haptics.selectionAsync();
+    setOpenCards(new Set<CardKey>([...open, PILLAR_CARD[pillar.key]]));
+  };
 
   const describe = (ing: Ingredient) => {
     const p = perIngredient?.get(ing.name);
     const flaggedHere = isFlagged(ing);
     const helps = !!p?.goalSupports.length;
     const rule = ing.rule_note;
-    const dot = flaggedHere ? Palette.weak : rule ? toneColor(statusTone(rule.status)) : helps ? Palette.strong : ing.ingredient_id ? Palette.accent : Palette.ink4;
-    const note = flaggedHere ? (p?.concernFlags[0]?.label ?? ing.tag) : helps ? `Supports ${p!.goalSupports[0].label.toLowerCase()}` : undefined;
+    const reviewed = ing.standing ? ing.standing !== 'unreviewed' : !!ing.ingredient_id;
+    const dot = flaggedHere ? Palette.weak
+      : rule ? toneColor(statusTone(rule.status))
+        : ing.standing === 'caution' ? Palette.moderate
+          : helps || ing.benefit_tone === 'good' ? Palette.strong
+            : reviewed ? Palette.accent : Palette.ink4;
+    // One line of "why": your own concern first, then what the research says.
+    const note = p?.concernFlags[0]?.label
+      ?? (ing.standing === 'risk' || ing.standing === 'caution' ? [ing.standing_label, ing.standing_note].filter(Boolean).join(': ') : undefined)
+      ?? (helps ? `Supports ${p!.goalSupports[0].label.toLowerCase()}` : undefined)
+      ?? (ing.benefit_label && ing.benefit_tone !== 'weak' ? [ing.benefit_label, ing.benefit_note].filter(Boolean).join(': ') : undefined)
+      ?? (flaggedHere ? ing.tag : undefined);
     const law = rule ? `${rule.text}${rule.more ? ` +${rule.more} more` : ''}` : undefined;
     return { dot, subtitle: [ing.concentration, note, law].filter(Boolean).join(' · ') || undefined };
   };
@@ -269,27 +291,30 @@ export default function ProductDetailScreen() {
       </Animated.View>
 
       {/* Verdict */}
-      <Animated.View entering={FadeInDown.duration(500).delay(100)}>
-        <Card style={{ marginTop: 24 }} padding={20}>
-          <Txt variant="overline" tone="secondary">At a glance</Txt>
-          <Txt variant="title2" style={{ marginTop: 6 }}>{glance(ingredients.length, linked, flagged)}</Txt>
-          <Txt variant="callout" style={{ marginTop: 16 }}>
-            {product.description || (product.is_ai_generated
-              ? 'This analysis was generated automatically from the label. Verify anything important with a professional.'
-              : `${product.name} contains ${ingredients.length} ingredient${ingredients.length === 1 ? '' : 's'}, ${linked} of which link to our research library.`)}
-          </Txt>
-          <View style={styles.stats}>
-            <Stat value={ingredients.length} label="Ingredients" />
-            <View style={styles.statRule} />
-            <Stat value={linked} label="With research" />
-            <View style={styles.statRule} />
-            <Stat value={flagged} label="Flagged" tone={flagged ? 'weak' : undefined} />
-          </View>
-          {glanceText(product.rules_glance) ? (
-            <Txt variant="footnote" tone="secondary" style={{ marginTop: 14 }}>{glanceText(product.rules_glance)}</Txt>
-          ) : null}
-          {product.is_ai_generated ? <Pill label="AI-generated analysis" icon={Sparkles} style={{ marginTop: 14 }} /> : null}
-        </Card>
+      <Animated.View entering={FadeInDown.duration(500).delay(100)} style={{ marginTop: 24 }}>
+        {product.verdict ? (
+          <VerdictCard verdict={product.verdict} onOpenPillar={openPillar} />
+        ) : (
+          // Older servers send no verdict: say what we know about the label instead.
+          <Card padding={20}>
+            <Txt variant="overline" tone="secondary">At a glance</Txt>
+            <Txt variant="title2" style={{ marginTop: 6 }}>{glance(ingredients.length, linked, flagged)}</Txt>
+            <View style={styles.stats}>
+              <Stat value={ingredients.length} label="Ingredients" />
+              <View style={styles.statRule} />
+              <Stat value={linked} label="With research" />
+              <View style={styles.statRule} />
+              <Stat value={flagged} label="Flagged" tone={flagged ? 'weak' : undefined} />
+            </View>
+          </Card>
+        )}
+        {product.description ? (
+          <Txt variant="callout" tone="secondary" style={{ marginTop: 16, paddingHorizontal: 4 }}>{product.description}</Txt>
+        ) : null}
+        {product.verdict && glanceText(product.rules_glance) ? (
+          <Txt variant="footnote" tone="secondary" style={{ marginTop: 12, paddingHorizontal: 4 }}>{glanceText(product.rules_glance)}</Txt>
+        ) : null}
+        {product.is_ai_generated ? <Pill label="AI-generated analysis" icon={Sparkles} style={{ marginTop: 14 }} /> : null}
       </Animated.View>
 
       {/* Allergen */}
@@ -337,11 +362,13 @@ export default function ProductDetailScreen() {
           resolving={resolving}
           onOpenIngredient={openIngredient}
           ruleExtras={product.rule_extras}
+          pillar={product.verdict?.pillars.find((p) => p.key === 'ingredients')}
           {...cardProps('ingredients')}
         />
         {product.processing ? <ProcessingCard processing={product.processing} {...cardProps('processing')} /> : null}
         {lab.length ? <LabCard lab={lab} {...cardProps('lab')} /> : null}
-        {supports.length ? <SupportsCard supports={supports} {...cardProps('supports')} /> : null}
+        {backed.length ? <BenefitsCard ingredients={backed} {...cardProps('benefits')} /> : null}
+        {!product.verdict && supports.length ? <SupportsCard supports={supports} {...cardProps('supports')} /> : null}
         {product.attribution ? <SourceCard attribution={product.attribution} {...cardProps('source')} /> : null}
       </View>
 
