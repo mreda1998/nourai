@@ -144,3 +144,18 @@ def test_fairy_dust_actives_are_called_out():
 def test_food_gets_no_skin_check():
     out = ProductWithDetails.from_orm_with_details(_product("Bar", ["Sugar", "Glycerin"], ProductCategory.FOOD))
     assert out.skin is None
+
+
+def test_research_on_a_base_ingredient_is_not_the_cosmetic_evidence():
+    from app.services.verdicts import build_product_verdict as build
+    silicone = SimpleNamespace(id=uuid4(), canonical_name="Dimethicone", category=None, typical_dose_range=None,
+                               contraindications=[], biodomain_scores=[],
+                               claims=[SimpleNamespace(kind="benefit", verdict="strong", certainty="high", claim="Smooths skin")])
+    product = _product("Sport Lotion SPF 50", SUNSCREEN)
+    for row in product.product_ingredients:
+        if row.name == "Dimethicone":
+            row.ingredient, row.ingredient_id = silicone, silicone.id
+    out = ProductWithDetails.from_orm_with_details(product)
+    verdict = build(out)
+    assert "evidence" not in [p.key for p in verdict.pillars]
+    assert "dimethicone" not in verdict.summary.lower()

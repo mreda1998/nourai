@@ -285,7 +285,18 @@ def _ingredients_pillar(rows: list[Any], extras: list[Any], glance: Any | None) 
 
 # ─── Skin pillars (cosmetics) ─────────────────────────────────────────────────
 
-_BASE_ACTIVES = {"Glycerin"}  # in nearly every cream: real, but not a reason to buy one
+_BASE_ACTIVES = {"Glycerin"}
+
+# Formula roles that hold a product together rather than act on the skin.
+_BASE_ROLES = (
+    "Solvent", "Humectant", "Emollient", "Occlusive", "Silicone", "Emulsifier", "Thickener", "Preservative",
+    "Film former", "Absorbent", "Chelating", "pH adjuster", "Fragrance", "Colour", "Cleanser", "Conditioning",
+    "Fatty alcohol", "UV filter", "Plant oil", "Essential oil", "Common allergen", "Possible irritant",
+)
+
+
+def _is_base_role(role: str | None) -> bool:
+    return bool(role) and role.startswith(_BASE_ROLES)  # in nearly every cream: real, but not a reason to buy one
 
 
 def _sun_pillar(skin: Any | None) -> VerdictPillar | None:
@@ -389,7 +400,10 @@ def build_product_verdict(response: Any) -> ProductVerdict:
         # The skin checks already read the label; "not reviewed yet" adds nothing beside them.
         if ingredients is not None and ingredients.tone == "neutral" and ingredients.verdict in ("Not reviewed yet", "Mostly unreviewed"):
             ingredients = None
-        candidates = [_sun_pillar(skin), actives or _evidence_pillar(rows), _reactions_pillar(skin), ingredients]
+        # Research on a base ingredient (a silicone, a solvent) is no reason to buy a cream:
+        # the evidence check only speaks for ingredients that do something for the skin.
+        doing = [r for r in rows if not _is_base_role(getattr(r, "role", None))]
+        candidates = [_sun_pillar(skin), actives or _evidence_pillar(doing), _reactions_pillar(skin), ingredients]
     else:
         candidates = [ingredients, _evidence_pillar(rows)]
     pillars = [p for p in candidates if p is not None]
