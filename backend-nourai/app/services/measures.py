@@ -11,6 +11,7 @@ import re
 from collections.abc import Iterable
 
 from app.core.references import (
+    FSA_HIGH_PER_100G,
     FDA_5_20,
     FDA_DV,
     MICRONUTRIENT_REFERENCES,
@@ -263,6 +264,22 @@ def build_nutrition_panel(
     else:
         label = serving_size or (f"{fmt(qty)} g" if qty else "1 serving")
     return NutritionPanel(basis=basis, serving_label=label, measures=measures)
+
+
+def high_per_100g(nutriments: dict | None) -> list[str]:
+    """Panel labels that are "high" per 100 g by UK FSA front-of-pack criteria, in panel order."""
+    nutriments = nutriments or {}
+    found: list[str] = []
+    for key, label, high, to_grams in FSA_HIGH_PER_100G:
+        if label in found:
+            continue
+        try:
+            value = float(nutriments[f"{key}_100g"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if value * to_grams > high:
+            found.append(label)
+    return found
 
 
 # ─── Doses ────────────────────────────────────────────────────────────────────

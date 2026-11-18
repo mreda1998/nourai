@@ -350,7 +350,7 @@ export default function ProductDetailScreen() {
       {/* Stacked summary cards */}
       <View style={{ marginTop: 28, gap: 12 }}>
         {product.nutrition ? (
-          <NutritionCard panel={product.nutrition} {...cardProps('nutrition')} />
+          <NutritionCard panel={product.nutrition} pillar={product.verdict?.pillars.find((p) => p.key === 'nutrition')} {...cardProps('nutrition')} />
         ) : nutrients.length ? (
           <LegacyNutritionCard nutrients={nutrients} {...cardProps('nutrition')} />
         ) : null}

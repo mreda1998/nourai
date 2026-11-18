@@ -168,7 +168,7 @@ def test_supplement_dose_and_evidence_pillars():
     assert verdict.level == "good"
     assert {p.key: p.tone for p in verdict.pillars} == {"dose": "good", "evidence": "good", "ingredients": "good"}
     assert verdict.pillars[1].detail == "Creatine monohydrate. “Builds strength”: works."
-    assert verdict.summary == "The dose is in range, creatine monohydrate is backed by trials and nothing is flagged in the ingredients."
+    assert verdict.summary == "The dose is in range, creatine monohydrate is backed by trials, and nothing is flagged in the ingredients."
     assert "clause" not in verdict.model_dump()["pillars"][0]
 
 
@@ -267,3 +267,30 @@ async def test_review_endpoint(client):
         response = await client.post("/api/v1/scores/review", json={"product_ids": []})
     assert response.status_code == 200
     assert response.json()["supported"] == []
+
+
+def test_a_small_serving_cannot_hide_a_sugary_food():
+    """Nutella lists a 15 g serving: 9% of the sugar reference per serving, 56 g per 100 g."""
+    sugar = _ingredient("Sugar", [_claim("safety", "strong", "moderate", "Raises the risk of tooth decay")])
+    product = _product(
+        ProductCategory.FOOD, [_pi("sugar", ingredient=sugar), _pi("palm oil")],
+        extra_data={"nutriments": {"sugars_100g": 56.3, "saturated-fat_100g": 10.6, "sodium_100g": 0.043}, "nova_group": 3, "serving_quantity": 15},
+    )
+    out, verdict = _verdict(product)
+    sugar_row = next(m for m in out.nutrition.measures if m.key == "sugars")
+    assert sugar_row.band == "moderate"                       # per serving, by the FDA rule
+    assert out.high_per_100g == ["Sugar", "Saturated fat"]   # per 100 g, by the UK FSA
+    assert "high_per_100g" not in out.model_dump()           # never sent to the app
+    nutrition = verdict.pillars[0]
+    assert (nutrition.tone, nutrition.verdict) == ("weak", "High in sugar & sat fat")
+    assert "UK Food Standards Agency" in nutrition.detail
+    assert verdict.summary == "It is high in sugar and saturated fat, and processed. Sugar has a documented risk."
+
+
+def test_salt_or_sodium_per_100g():
+    from app.services.measures import high_per_100g
+
+    assert high_per_100g({"salt_100g": 2.0}) == ["Sodium"]
+    assert high_per_100g({"sodium_100g": 0.7}) == ["Sodium"]        # 1.75 g salt
+    assert high_per_100g({"sodium_100g": 0.5, "sugars_100g": 22.5}) == []  # at the limit is not over it
+    assert high_per_100g(None) == []

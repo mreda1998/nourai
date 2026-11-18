@@ -55,15 +55,27 @@ const SHORT_NAMES: Record<string, string> = { 'saturated-fat': 'sat fat', 'added
 
 // ─── Nutrition ───────────────────────────────────────────────────────────────
 
-export function NutritionCard({ panel, open, onToggle }: CardProps & { panel: NutritionPanel }) {
+export function NutritionCard({ panel, pillar, open, onToggle }: CardProps & {
+  panel: NutritionPanel;
+  /** The verdict's nutrition check, which also weighs the per-100 g amounts the bars don't show. */
+  pillar?: VerdictPillar | null;
+}) {
   const [openKey, toggle] = useAccordion(panel.measures, (m) => m.key);
   const highs = panel.measures.filter((m) => m.kind === 'limit' && m.band === 'high').map((m) => SHORT_NAMES[m.key] ?? m.label.toLowerCase());
   const moderate = panel.measures.some((m) => m.kind === 'limit' && m.band === 'moderate');
-  const verdict = highs.length > 2 ? `${highs.length} nutrients high` : highs.length ? `High in ${joinAnd(highs)}` : moderate ? 'Moderate' : 'Nothing high';
-  const tone: MeasureTone = highs.length ? 'weak' : moderate ? 'moderate' : 'good';
+  const verdict = pillar?.verdict ?? (highs.length > 2 ? `${highs.length} nutrients high` : highs.length ? `High in ${joinAnd(highs)}` : moderate ? 'Moderate' : 'Nothing high');
+  const tone: MeasureTone = pillar?.tone ?? (highs.length ? 'weak' : moderate ? 'moderate' : 'good');
+  // When the per-100 g check found something the per-serving bars don't, say so above them.
+  const per100Note = pillar?.detail?.includes('per 100 g') ? pillar.detail : null;
 
   return (
     <SummaryCard title="Nutrition" verdict={verdict} tone={tone} open={open} onToggle={onToggle}>
+      {per100Note ? (
+        <View style={styles.strip}>
+          <View style={[styles.dot, { backgroundColor: MeasureInk.weak, marginHorizontal: 0 }]} />
+          <Txt variant="footnote" tone="secondary" style={{ flex: 1 }}>{per100Note}</Txt>
+        </View>
+      ) : null}
       <View style={styles.strip}>
         <Txt variant="subheadStrong">{panel.basis === 'serving' ? 'Per serving' : 'Per 100 g'}</Txt>
         <Txt variant="footnote" tone="secondary" numberOfLines={1} style={styles.stripRight}>

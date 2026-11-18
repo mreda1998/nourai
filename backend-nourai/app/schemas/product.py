@@ -1,7 +1,7 @@
 """Product Pydantic schemas."""
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from app.models.product import IngredientStatus, ProductCategory
 from app.schemas.claim import ClaimResponse  # kept for __init__ re-export
@@ -281,6 +281,8 @@ class ProductWithDetails(BaseModel):
     rules_glance: RulesGlanceOut | None = None
     # The overall read of the product, built once rules are attached (api/v1/products.py)
     verdict: ProductVerdict | None = None
+    # Nutrients high per 100 g (UK FSA); feeds the verdict, not sent to the app.
+    high_per_100g: list[str] = Field(default_factory=list, exclude=True)
 
     @classmethod
     def from_orm_with_details(
@@ -346,6 +348,7 @@ class ProductWithDetails(BaseModel):
         # ── Measures (bars) ───────────────────────────────────────────────────
         # Lazy imports avoid circular dependency: schemas.product ↔ services.*
         from app.services.measures import (  # noqa: PLC0415
+            high_per_100g,
             build_additives_summary,
             build_dose_measure,
             build_nutrition_panel,
@@ -356,6 +359,7 @@ class ProductWithDetails(BaseModel):
         rows = product.product_ingredients or []
         nutrition = None
         processing = None
+        per_100g_high: list[str] = []
         if product.category == ProductCategory.FOOD:
             nutrition = build_nutrition_panel(
                 extra.get("nutriments"),
@@ -363,6 +367,7 @@ class ProductWithDetails(BaseModel):
                 getattr(product, "serving_size", None) or extra.get("serving_size"),
             )
             processing = build_processing(extra)
+            per_100g_high = high_per_100g(extra.get("nutriments"))
         doses: list[Measure] = []
         if product.category == ProductCategory.SUPPLEMENT:
             for pi, mobile in zip(rows, ingredients):
@@ -442,6 +447,7 @@ class ProductWithDetails(BaseModel):
             doses=doses,
             additives=additives,
             processing=processing,
+            high_per_100g=per_100g_high,
         )
 
 

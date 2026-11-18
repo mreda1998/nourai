@@ -145,18 +145,33 @@ def _reviewed(reviewed: int, total: int) -> str:
     return f"{reviewed} of {total} ingredients reviewed."
 
 
-def _nutrition_pillar(panel: Any | None) -> VerdictPillar | None:
+def _nutrition_pillar(panel: Any | None, per_100g_high: list[str] | None = None) -> VerdictPillar | None:
+    """
+    High if a nutrient is high per serving (FDA 5%/20%) *or* per 100 g (UK FSA).
+    A per-serving check alone lets a tiny listed serving hide a sugary food:
+    15 g of a hazelnut spread is "moderate" in sugar, 100 g of it is 56 g.
+    """
     if panel is None:
         return None
     limits = [m for m in panel.measures if m.kind == "limit"]
-    highs = [_SHORT.get(m.label, m.label.lower()) for m in limits if m.band == "high"]
+    serving_high = [m.label for m in limits if m.band == "high"]
+    per_100g = [label for label in (per_100g_high or []) if label not in serving_high]
+    order = [m.label for m in limits]
+    highs_full = sorted(serving_high + per_100g, key=lambda l: order.index(l) if l in order else 99)
+    highs = [_SHORT.get(l, l.lower()) for l in highs_full]
     sources = [m.label.lower() for m in panel.measures if m.kind == "goal" and m.band in ("high_source", "good_source")]
     per = "per serving" if panel.basis == "serving" else "per 100 g"
     if highs:
         verdict = f"{len(highs)} nutrients high" if len(highs) > 2 else f"High in {_join(highs)}"
-        return VerdictPillar(key="nutrition", label="Nutrition", tone="weak", verdict=verdict,
-                             detail=f"20% or more of the daily reference {per}.",
-                             clause=f"it is high in {_list([m.label.lower() for m in limits if m.band == 'high'])}")
+        if serving_high and per_100g:
+            detail = f"20% or more of the daily reference {per}; {_list([l.lower() for l in per_100g])} high per 100 g."
+        elif serving_high:
+            detail = f"20% or more of the daily reference {per}."
+        else:
+            detail = ("High per 100 g by UK Food Standards Agency limits, "
+                      "even though the listed serving is small.")
+        return VerdictPillar(key="nutrition", label="Nutrition", tone="weak", verdict=verdict, detail=detail,
+                             clause=f"it is high in {_list([l.lower() for l in highs_full])}")
     if not limits:
         return VerdictPillar(key="nutrition", label="Nutrition", tone="neutral", verdict="Partial label",
                              detail="The label doesn’t list sugar, saturated fat or sodium.")
@@ -276,7 +291,7 @@ def build_product_verdict(response: Any) -> ProductVerdict:
 
     candidates: list[VerdictPillar | None]
     if category == "food":
-        candidates = [_nutrition_pillar(response.nutrition), _processing_pillar(response.processing), ingredients]
+        candidates = [_nutrition_pillar(response.nutrition, getattr(response, "high_per_100g", None)), _processing_pillar(response.processing), ingredients]
     elif category == "supplement":
         candidates = [_dose_pillar(response.doses), _evidence_pillar(rows), ingredients]
     else:
@@ -299,17 +314,22 @@ def build_product_verdict(response: Any) -> ProductVerdict:
         level = "unknown"
     headline, tone = _HEADLINES[level]
 
-    def sentence(pillars_: list[VerdictPillar]) -> str:
-        clauses = [p.clause for p in pillars_ if p.clause]
-        # "It is high in sugar and ultra-processed", not "…and it is ultra-processed".
-        if clauses and clauses[0].startswith("it is "):
-            clauses = clauses[:1] + [c.removeprefix("it is ") for c in clauses[1:]]
+    def series(items: list[str]) -> str:
         # An Oxford comma keeps "sugar and saturated fat, and ultra-processed" readable.
-        if len(clauses) > 1 and any(" and " in c for c in clauses[:-1]):
-            text = f"{', '.join(clauses[:-1])}, and {clauses[-1]}"
-        else:
-            text = _list(clauses)
-        return f"{text[0].upper()}{text[1:]}." if text else ""
+        if len(items) > 2 or (len(items) == 2 and " and " in items[0]):
+            return f"{', '.join(items[:-1])}, and {items[-1]}"
+        return _list(items)
+
+    def sentence(pillars_: list[VerdictPillar]) -> str:
+        """"It is high in sugar and ultra-processed. Sugar has a documented risk." """
+        clauses = [p.clause for p in pillars_ if p.clause]
+        about_it = [c.removeprefix("it is ") for c in clauses if c.startswith("it is ")]
+        others = [c for c in clauses if not c.startswith("it is ")]
+        parts = [f"It is {series(about_it)}"] if about_it else []
+        if others:
+            rest = series(others)
+            parts.append(rest[0].upper() + rest[1:])
+        return " ".join(f"{p}." for p in parts)
 
     if level == "unknown":
         summary = ("We don’t have enough label data or reviewed ingredients to judge this product. "

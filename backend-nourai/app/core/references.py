@@ -21,6 +21,19 @@ EU_RI = (
     "EU daily reference intake",
     "https://eur-lex.europa.eu/eli/reg/2011/1169/oj",
 )
+# UK front-of-pack "traffic light" criteria, per 100 g of food. Used alongside
+# the per-serving FDA check so a tiny listed serving can't hide a sugary food.
+FSA_FOP = (
+    "UK Food Standards Agency front-of-pack guidance",
+    "https://www.food.gov.uk/business-guidance/packaging-and-labelling",
+)
+FSA_HIGH_PER_100G: tuple[tuple[str, str, float, float], ...] = (
+    # (Open Food Facts key, panel label, grams per 100 g above which it is "high", OFF→grams factor)
+    ("sugars", "Sugar", 22.5, 1.0),
+    ("saturated-fat", "Saturated fat", 5.0, 1.0),
+    ("salt", "Sodium", 1.5, 1.0),        # FSA states salt; we report it on the sodium row
+    ("sodium", "Sodium", 1.5, 2.5),      # sodium × 2.5 = salt, when only sodium is given
+)
 NOVA = (
     "NOVA classification (via Open Food Facts)",
     "https://world.openfoodfacts.org/nova",
