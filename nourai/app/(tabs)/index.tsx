@@ -114,18 +114,67 @@ function Hero({ name }: { name?: string }) {
 // ─── Stack ────────────────────────────────────────────────────────────────────
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const listOf = (items: string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
+
+/** Everything the review says about one ingredient, on one row. */
+interface StackRow {
+  id: string;
+  name: string;
+  label: string;
+  tone: ReviewFinding['tone'];
+  detail: string | null;
+  rank: number;
+}
+
+const TONE_RANK: Record<ReviewFinding['tone'], number> = { weak: 0, moderate: 1, good: 2, neutral: 3 };
+
+/**
+ * Overlaps, risks and benefits arrive as separate lists and often name the same
+ * ingredient. Merge them so magnesium is one row that says it is doubled up *and*
+ * what the risk is, ordered by what most needs attention.
+ */
+function stackRows(review: StackReview | null): StackRow[] {
+  if (!review) return [];
+  const rows = new Map<string, StackRow>();
+  const row = (f: ReviewFinding) => rows.get(f.ingredient_id) ?? { id: f.ingredient_id, name: f.ingredient, label: '', tone: 'neutral' as const, detail: null, rank: 9 };
+  for (const f of review.risks) {
+    const r = row(f);
+    rows.set(f.ingredient_id, { ...r, label: f.label, tone: f.tone, detail: f.claim ?? null, rank: TONE_RANK[f.tone] });
+  }
+  for (const f of review.overlaps) {
+    const r = row(f);
+    const where = `In ${listOf(f.products)}.`;
+    rows.set(f.ingredient_id, {
+      ...r,
+      label: r.label ? `Doubled up · ${r.label}` : 'Doubled up',
+      tone: r.label ? r.tone : 'moderate',
+      detail: r.detail ? `${where} ${r.detail}.` : `${where} Add the amounts up before taking both.`,
+      rank: Math.min(r.rank, 0.5),
+    });
+  }
+  for (const f of review.supported) {
+    if (rows.has(f.ingredient_id)) continue; // a risk or overlap matters more on this card
+    rows.set(f.ingredient_id, { ...row(f), label: f.label, tone: f.tone, detail: f.claim ?? null, rank: 2 + TONE_RANK[f.tone] });
+  }
+  return [...rows.values()].sort((x, y) => x.rank - y.rank || x.name.localeCompare(y.name));
+}
 
 /** The headline is the most useful true thing we can say about the stack. */
 function reviewHeadline(review: StackReview | null, count: number): string {
   if (!review) return `${plural(count, 'product')} in your stack`;
-  const documented = review.risks.filter((r) => r.tone === 'weak').length;
-  if (review.overlaps.length) return `${plural(review.overlaps.length, 'ingredient')} doubled up across products`;
-  if (documented) return `${plural(documented, 'documented risk')} worth knowing`;
+  const documented = review.risks.filter((r) => r.tone === 'weak');
+  const [overlap] = review.overlaps;
+  if (review.overlaps.length === 1) return `${overlap.ingredient} is in ${plural(overlap.products.length, 'product')}`;
+  if (review.overlaps.length) return `${plural(review.overlaps.length, 'ingredient')} doubled up`;
+  if (documented.length === 1) return `One risk worth knowing: ${documented[0].ingredient.toLowerCase()}`;
+  if (documented.length) return `${plural(documented.length, 'risk')} worth knowing`;
   const backed = review.supported.filter((f) => f.tone === 'good').length;
   if (backed) return `${plural(backed, 'ingredient')} backed by trials`;
   if (review.supported.length) return 'Early evidence, nothing proven yet';
   return `${plural(count, 'product')} in your stack`;
 }
+
+const SHOWN = 4;
 
 // No score: what the research says the stack does, what to know, and what overlaps.
 function StackCard({ count, review, loading, failed }: {
@@ -134,10 +183,8 @@ function StackCard({ count, review, loading, failed }: {
   loading: boolean;
   failed: boolean;
 }) {
-  const overlaps = review?.overlaps.slice(0, 2) ?? [];
-  const risks = review?.risks.slice(0, 2) ?? [];
-  const supported = review?.supported.slice(0, 3) ?? [];
-  const empty = !overlaps.length && !risks.length && !supported.length;
+  const rows = stackRows(review);
+  const more = rows.length - SHOWN;
   return (
     <Animated.View entering={FadeInDown.duration(700).delay(150)}>
       <Card padding={22}>
@@ -153,16 +200,19 @@ function StackCard({ count, review, loading, failed }: {
                 : failed
                   ? 'We couldn’t review your stack. Pull down to try again.'
                   : `${plural(count, 'product')} saved.`}
-              {review && empty ? ' Nothing to flag yet, and nothing proven either. This fills in as our research library grows.' : ''}
+              {review && !rows.length ? ' Nothing to flag yet, and nothing proven either. This fills in as our research library grows.' : ''}
             </Txt>
           </>
         )}
 
-        {!loading && !empty ? (
+        {!loading && rows.length ? (
           <View style={{ marginTop: 18, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Palette.hairline }}>
-            {overlaps.map((f) => <FindingRow key={`o${f.ingredient_id}`} finding={f} label="Doubled up" tone="moderate" detail={`In ${f.products.join(' and ')}. Add the amounts up before taking both.`} />)}
-            {risks.map((f) => <FindingRow key={`r${f.ingredient_id}`} finding={f} label={f.label} tone={f.tone} detail={f.claim} />)}
-            {supported.map((f) => <FindingRow key={`s${f.ingredient_id}`} finding={f} label={f.label} tone={f.tone} detail={f.claim} />)}
+            {rows.slice(0, SHOWN).map((r) => <FindingRow key={r.id} row={r} />)}
+            {more > 0 ? (
+              <Txt variant="footnote" tone="tertiary" style={{ paddingTop: 12 }}>
+                {plural(more, 'more finding')} on each ingredient’s page.
+              </Txt>
+            ) : null}
           </View>
         ) : null}
 
@@ -176,21 +226,21 @@ function StackCard({ count, review, loading, failed }: {
   );
 }
 
-function FindingRow({ finding, label, tone, detail }: { finding: ReviewFinding; label: string; tone: ReviewFinding['tone']; detail?: string | null }) {
-  const ink = tone === 'neutral' ? Palette.ink2 : MeasureInk[tone];
+function FindingRow({ row }: { row: StackRow }) {
+  const ink = row.tone === 'neutral' ? Palette.ink2 : MeasureInk[row.tone];
   return (
     <PressableScale
-      onPress={() => router.push(`/ingredient/${finding.ingredient_id}` as never)}
+      onPress={() => router.push(`/ingredient/${row.id}` as never)}
       style={styles.areaRow}
-      accessibilityLabel={`${finding.ingredient}: ${label}${detail ? `. ${detail}` : ''}`}
+      accessibilityLabel={`${row.name}: ${row.label}${row.detail ? `. ${row.detail}` : ''}`}
     >
       <View style={[styles.findingDot, { backgroundColor: ink }]} />
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
-          <Txt variant="subheadStrong" style={{ flex: 1 }} numberOfLines={1}>{finding.ingredient}</Txt>
-          <Txt variant="footnote" color={ink}>{label}</Txt>
+          <Txt variant="subheadStrong" style={{ flex: 1 }} numberOfLines={1}>{row.name}</Txt>
+          <Txt variant="footnote" color={ink}>{row.label}</Txt>
         </View>
-        {detail ? <Txt variant="footnote" tone="secondary" numberOfLines={2} style={{ marginTop: 2 }}>{detail}</Txt> : null}
+        {row.detail ? <Txt variant="footnote" tone="secondary" numberOfLines={3} style={{ marginTop: 2 }}>{row.detail}</Txt> : null}
       </View>
       <ChevronRight size={18} color={Palette.ink4} strokeWidth={2} style={{ marginTop: 1 }} />
     </PressableScale>

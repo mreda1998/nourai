@@ -62,7 +62,7 @@ export function Screen({
       </Animated.View>
       <View style={styles.barRow} pointerEvents="box-none">
         <View style={styles.barSide}>
-          {back ? <IconButton icon={ChevronLeft} label="Back" variant={night || hero ? 'night' : 'surface'} iconSize={22} onPress={onBack ?? (() => router.back())} /> : null}
+          {back ? <IconButton icon={ChevronLeft} label="Back" variant={night ? 'night' : hero ? 'glass' : 'surface'} iconSize={22} onPress={onBack ?? (() => router.back())} /> : null}
         </View>
         <Animated.View style={[styles.barTitle, collapsed]} pointerEvents="none">
           {title ? <Txt variant="headline" tone={night ? 'inverse' : 'primary'} numberOfLines={1}>{title}</Txt> : null}
