@@ -61,12 +61,13 @@ class NutritionPanel(BaseModel):
 class AdditiveItem(BaseModel):
     name: str
     ingredient_id: str | None = None
-    reason: str | None = None
+    reason: str | None = None   # "Likely risk", "Possible risk"
+    note: str | None = None     # the researched claim behind it
 
 
 class AdditivesSummary(BaseModel):
-    avoid: list[AdditiveItem]
-    watch: list[AdditiveItem]
+    avoid: list[AdditiveItem]   # documented risks (kept as `avoid` for older builds)
+    watch: list[AdditiveItem]   # possible risks: early or conflicting evidence
     clean_count: int
     unreviewed_count: int
 

@@ -13,8 +13,9 @@ We capture this by computing a dose_ratio:
 
     dose_ratio = clamp(product_amount / effective_dose_low, 0, 1)
 
-If the ingredient has no dose information, dose_ratio = 1.0 (assume full effect).
-If the product does not list an amount, dose_ratio = 0.5 (conservative default).
+If the research records no dose threshold, dose_ratio = 1.0. If the effect is
+dose-dependent and the label gives no comparable amount, the ingredient makes
+no contribution: an unknown dose is not evidence of an effect.
 
 Confidence multipliers (from biodomains.py) downweight low-quality evidence.
 
@@ -28,6 +29,7 @@ This is intentionally simple — one linear equation, fully auditable.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -99,46 +101,47 @@ def compute_dose_ratio(
     effective_dose_low: float | None,
     dose_unit: str | None,
     dose_dependent: bool,
-) -> float:
+) -> float | None:
     """
-    Return a scalar [0, 1] representing how much of the effective dose the
-    product delivers.
+    How much of the effective dose the product delivers, as a scalar [0, 1],
+    or None when that cannot be known.
 
-    • Not dose-dependent            → 1.0 (full effect regardless of amount)
-    • No dose info from research    → 1.0 (can't penalize what we don't know)
-    • Amount present but no units   → 0.5 (conservative default)
-    • Parseable amount ≥ effective  → 1.0
-    • Parseable amount < effective  → amount / effective_dose_low
+    • Not dose-dependent            → 1.0 (the amount doesn't change the effect)
+    • No dose threshold in research → 1.0 (nothing to compare against)
+    • Amount missing or unreadable  → None
+    • Units that can't be compared  → None
+    • Comparable amount             → min(amount / effective_dose_low, 1)
+
+    Unknown stays unknown: a label with no amount is not assumed to deliver
+    half the studied dose, and "500 IU" is not assumed to equal "500 mg".
     """
     if not dose_dependent:
         return 1.0
 
     if effective_dose_low is None or effective_dose_low <= 0:
-        return 1.0  # No dose threshold known — assume full effect
+        return 1.0
 
     if product_amount is None:
-        return 0.5  # Amount unlisted — conservative halfway assumption
+        return None
 
-    # Try to parse the product amount as a float
-    try:
-        parsed_amount = float(str(product_amount).strip().split()[0])
-    except (ValueError, IndexError):
-        return 0.5
+    text = str(product_amount).strip().replace(",", "")
+    match = re.match(r"(\d+(?:\.\d+)?)\s*([a-zA-Zµ]+)?", text)
+    if not match:
+        return None
+    parsed_amount = float(match.group(1))
+    # "500 mg" is often stored whole in `amount` with no separate unit.
+    unit = product_unit or match.group(2)
 
-    # Try to normalize both to mg for comparison
-    prod_mg = _normalize_to_mg(parsed_amount, product_unit)
+    prod_mg = _normalize_to_mg(parsed_amount, unit)
     dose_mg = _normalize_to_mg(effective_dose_low, dose_unit)
-
     if prod_mg is not None and dose_mg is not None and dose_mg > 0:
         return min(prod_mg / dose_mg, 1.0)
 
-    # Units are incompatible (e.g., IU vs mg) — fall back to dimensionless ratio
-    # if units match exactly
-    if product_unit and dose_unit and product_unit.lower() == dose_unit.lower():
+    # Not mass units (IU, CFU): comparable only when both sides use the same unit.
+    if unit and dose_unit and unit.lower().strip() == dose_unit.lower().strip():
         return min(parsed_amount / effective_dose_low, 1.0)
 
-    # Can't compare — assume full effect
-    return 1.0
+    return None
 
 
 # ─── Main scoring function ────────────────────────────────────────────────────
@@ -188,6 +191,9 @@ def score_product_biodomains(
                 dose_unit=bs.dose_unit,
                 dose_dependent=bs.dose_dependent,
             )
+
+            if dose_ratio is None:
+                continue  # can't tell how much is in the product: no claim either way
 
             confidence_weight = CONFIDENCE_WEIGHTS.get(bs.confidence, 0.2)
             weighted = bs.magnitude * dose_ratio * confidence_weight * direction_sign
@@ -241,7 +247,7 @@ def score_product_biodomains(
     if positive_scores:
         base = sum(positive_scores) / len(positive_scores)
     else:
-        base = 50.0  # No data — neutral default
+        base = 0.0  # nothing positive is known: never a neutral-looking 50
 
     penalty = min(sum(negative_scores), base)  # Can't go below 0
     health_score = max(0, min(100, round(base - penalty)))

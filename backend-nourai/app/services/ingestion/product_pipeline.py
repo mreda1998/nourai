@@ -9,7 +9,7 @@ from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.ingredient import Ingredient, IngredientCategory
+from app.models.ingredient import Ingredient
 from app.models.ingestion import (
     DataSource,
     IngestionJob,
@@ -492,13 +492,10 @@ class ProductIngestionPipeline:
         return asset_ids
 
 
-def _infer_status(ingredient: Ingredient | None) -> IngredientStatus:
-    if ingredient is None:
-        return IngredientStatus.WATCH
-    if ingredient.category in {
-        IngredientCategory.ADDITIVE,
-        IngredientCategory.PRESERVATIVE,
-        IngredientCategory.SWEETENER,
-    } or ingredient.contraindications:
-        return IngredientStatus.WATCH
-    return IngredientStatus.CLEAN
+def _infer_status(ingredient: Ingredient | None) -> IngredientStatus | None:
+    """
+    Nothing is flagged at ingestion. An ingredient's standing is read from its
+    researched claims when the product is shown (services/verdicts.py); being
+    unknown to us, or being an additive, is not a reason to mark it "watch".
+    """
+    return None

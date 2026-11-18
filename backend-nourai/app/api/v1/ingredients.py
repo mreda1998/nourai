@@ -11,7 +11,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select, func
+from sqlalchemy import String, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -241,23 +241,28 @@ async def search_ingredients(
       • Search tab when the user toggles to "Ingredients"
       • Any screen that needs ingredient autocomplete
     """
-    pattern = f"%{q}%"
+    # Names and synonyms both match ("vitamin b3" finds Niacinamide); names that
+    # start with the query come first, so "mag" leads with Magnesium.
+    term = q.strip()
+    pattern = f"%{term}%"
+    matches = or_(
+        Ingredient.canonical_name.ilike(pattern),
+        Ingredient.synonyms.cast(String).ilike(pattern),
+    )
     stmt = (
         select(Ingredient)
-        .where(Ingredient.canonical_name.ilike(pattern))
-        .order_by(Ingredient.canonical_name)
+        .where(matches)
+        .order_by(
+            Ingredient.canonical_name.ilike(f"{term}%").desc(),
+            Ingredient.canonical_name.ilike(pattern).desc(),
+            Ingredient.canonical_name,
+        )
         .limit(limit)
     )
     result = await db.execute(stmt)
     ingredients = result.scalars().all()
 
-    # Also count total matches (for the UI to show "X results")
-    count_stmt = (
-        select(func.count())
-        .select_from(Ingredient)
-        .where(Ingredient.canonical_name.ilike(pattern))
-    )
-    total = (await db.execute(count_stmt)).scalar_one()
+    total = (await db.execute(select(func.count()).select_from(Ingredient).where(matches))).scalar_one()
 
     return IngredientSearchResponse(
         ingredients=[

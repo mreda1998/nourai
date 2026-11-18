@@ -513,43 +513,36 @@ def build_processing(extra_data: dict | None) -> ProcessingInfo | None:
     )
 
 
-_REASONS = {"additive": "Additive", "preservative": "Preservative", "sweetener": "Sweetener"}
-
-
-def _value(x) -> str | None:
-    return getattr(x, "value", x)
-
-
-def build_additives_summary(rows: Iterable) -> AdditivesSummary:
+def build_additives_summary(rows: Iterable, standings: Iterable) -> AdditivesSummary:
     """
-    Tier the ingredients we actually know. Only rows matched to the research
-    library are judged; unmatched rows default to 'watch' at ingestion, so
-    they are counted as unreviewed instead of flagged.
+    Tier the ingredients we have actually researched. `standings` are the
+    response rows built from the same label rows, carrying each ingredient's
+    standing from its claims. An ingredient is never flagged for its category
+    (additive, sweetener, preservative) or for being unknown to us: unknown
+    rows are counted as unreviewed.
     """
     avoid: list[AdditiveItem] = []
     watch: list[AdditiveItem] = []
     clean = unreviewed = 0
     seen: set[str] = set()
-    for row in rows:
-        if not row.ingredient_id:
+    for row, standing in zip(rows, standings):
+        level = standing.standing or "unreviewed"
+        if not row.ingredient_id or level == "unreviewed":
             unreviewed += 1
             continue
         key = str(row.ingredient_id)
         if key in seen:
             continue
         seen.add(key)
-        status = _value(row.status)
-        canonical = getattr(row, "ingredient", None)
-        if status not in ("avoid", "watch"):
+        if level == "clear":
             clean += 1
             continue
-        reason = row.note or _REASONS.get(_value(getattr(canonical, "category", None)) or "")
-        if not reason and getattr(canonical, "contraindications", None):
-            reason = "Has known contraindications"
+        canonical = getattr(row, "ingredient", None)
         item = AdditiveItem(
             name=getattr(canonical, "canonical_name", None) or row.name,
             ingredient_id=key,
-            reason=reason,
+            reason=standing.standing_label,
+            note=standing.standing_note,
         )
-        (avoid if status == "avoid" else watch).append(item)
+        (avoid if level == "risk" else watch).append(item)
     return AdditivesSummary(avoid=avoid, watch=watch, clean_count=clean, unreviewed_count=unreviewed)

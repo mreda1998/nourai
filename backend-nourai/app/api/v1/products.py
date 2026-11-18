@@ -43,6 +43,7 @@ from app.services.ingestion.normalization import normalize_gtin
 from app.services.ingestion.queue import IngestionQueue
 from app.services.insights import record_event
 from app.services.regulation.product_rules import attach_rules
+from app.services.verdicts import build_product_verdict
 
 router = APIRouter()
 
@@ -117,7 +118,9 @@ async def _details(db: AsyncSession, product, country: str | None) -> ProductWit
     """The full product response, with rule notes for the person's country."""
     lookup = await _build_ingredient_lookup(db)
     response = ProductWithDetails.from_orm_with_details(product, ingredient_lookup=lookup)
-    return await attach_rules(db, product, response, country)
+    response = await attach_rules(db, product, response, country)
+    response.verdict = build_product_verdict(response)
+    return response
 
 
 @router.get("", response_model=ProductSearchResponse)

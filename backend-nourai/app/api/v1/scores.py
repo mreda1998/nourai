@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.api.deps import DBSession
 from app.schemas.user import DailyScoreResponse, HealthDomainResponse, StackScoreRequest
+from app.services.stack_review import StackReview, stack_review
 from app.services.stack_score import daily_score, health_domain, load_product_ingredients
 
 router = APIRouter()
@@ -21,3 +22,9 @@ async def score_stack_domain(biodomain: str, body: StackScoreRequest, db: DBSess
     if result is None:
         raise HTTPException(status_code=404, detail="Unknown biodomain")
     return result
+
+
+@router.post("/review", response_model=StackReview)
+async def review_stack(body: StackScoreRequest, db: DBSession):
+    """What holds up, what to know and what overlaps across the given products. No score."""
+    return stack_review(await load_product_ingredients(db, body.product_ids))

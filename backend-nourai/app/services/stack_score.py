@@ -71,7 +71,9 @@ async def load_product_ingredients(
         select(ProductIngredient)
         .where(ProductIngredient.product_id.in_(unique_ids))
         .options(
-            selectinload(ProductIngredient.ingredient).selectinload(Ingredient.biodomain_scores)
+            selectinload(ProductIngredient.ingredient).selectinload(Ingredient.biodomain_scores),
+            selectinload(ProductIngredient.ingredient).selectinload(Ingredient.claims),
+            selectinload(ProductIngredient.product),
         )
     )
     return list(result.scalars().all())

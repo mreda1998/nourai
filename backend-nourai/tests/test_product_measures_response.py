@@ -42,8 +42,9 @@ def test_food_gets_nutrition_processing_and_additives():
     assert out.nutrition.serving_label == "1 bar (50 g)"
     assert [m.key for m in out.nutrition.measures] == ["sugars", "sodium"]
     assert out.processing.nova_group == 4
-    assert [w.name for w in out.additives.watch] == ["Sucralose"]
-    assert out.additives.unreviewed_count == 1
+    # A sweetener with no researched claims is unreviewed, not flagged for its category.
+    assert out.additives.watch == []
+    assert out.additives.unreviewed_count == 2
     assert out.doses == []
     # legacy nutrient rows are still present for older app builds
     assert any(i.is_nutrient for i in out.ingredients)

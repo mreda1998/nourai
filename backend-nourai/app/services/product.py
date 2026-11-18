@@ -6,7 +6,7 @@ import httpx
 from sqlalchemy import select, text
 
 from app.core.config import settings
-from app.models.ingredient import Ingredient, IngredientCategory
+from app.models.ingredient import Ingredient
 from app.models.product import Product, ProductCategory, ProductIngredient, IngredientStatus
 from app.repositories.product import ProductRepository
 from app.schemas.product import ProductWithDetails
@@ -280,27 +280,32 @@ def _parse_off_ingredient_names(product: dict) -> list[str]:
 
 
 def _match_ingredient(raw_name: str, lookup: dict[str, Ingredient]) -> Ingredient | None:
-    norm = raw_name.lower().strip()
+    """
+    Exact name or synonym first; otherwise the longest library name that appears
+    in the label text as whole words ("organic cane sugar" → "cane sugar").
+
+    The label text is never matched *inside* a longer library name: "oil" is not
+    fish oil and "acid" is not hyaluronic acid.
+    """
+    norm = _RE_SPACES.sub(" ", raw_name.lower().strip())
     if norm in lookup:
         return lookup[norm]
+    padded = f" {re.sub(r'[^a-z0-9]+', ' ', norm).strip()} "
     best: Ingredient | None = None
     best_len = 0
     for key, ing in lookup.items():
-        if len(key) >= 5 and (key in norm or norm in key) and len(key) > best_len:
+        if len(key) < 5 or len(key) <= best_len:
+            continue
+        if f" {re.sub(r'[^a-z0-9]+', ' ', key).strip()} " in padded:
             best = ing
             best_len = len(key)
     return best
 
 
-def _infer_status(canonical: Ingredient | None) -> IngredientStatus:
-    if canonical is None:
-        return IngredientStatus.WATCH
-    if canonical.category in (
-        IngredientCategory.ADDITIVE,
-        IngredientCategory.PRESERVATIVE,
-        IngredientCategory.SWEETENER,
-    ):
-        return IngredientStatus.WATCH
-    if canonical.contraindications:
-        return IngredientStatus.WATCH
-    return IngredientStatus.CLEAN
+def _infer_status(canonical: Ingredient | None) -> IngredientStatus | None:
+    """
+    Nothing is flagged at ingestion. An ingredient's standing is read from its
+    researched claims when the product is shown (services/verdicts.py); being
+    unknown to us, or being an additive, is not a reason to mark it "watch".
+    """
+    return None

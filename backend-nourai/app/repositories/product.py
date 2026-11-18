@@ -35,6 +35,9 @@ class ProductRepository(BaseRepository[Product]):
                 selectinload(Product.product_ingredients)
                     .selectinload(ProductIngredient.ingredient)
                     .selectinload(Ingredient.biodomain_scores),
+                selectinload(Product.product_ingredients)
+                    .selectinload(ProductIngredient.ingredient)
+                    .selectinload(Ingredient.claims),
                 selectinload(Product.claims).selectinload(Claim.sources),
             )
         )
@@ -52,6 +55,9 @@ class ProductRepository(BaseRepository[Product]):
                 selectinload(Product.product_ingredients)
                     .selectinload(ProductIngredient.ingredient)
                     .selectinload(Ingredient.biodomain_scores),
+                selectinload(Product.product_ingredients)
+                    .selectinload(ProductIngredient.ingredient)
+                    .selectinload(Ingredient.claims),
                 selectinload(Product.claims).selectinload(Claim.sources),
             )
         )
@@ -72,6 +78,9 @@ class ProductRepository(BaseRepository[Product]):
                 selectinload(Product.product_ingredients)
                     .selectinload(ProductIngredient.ingredient)
                     .selectinload(Ingredient.biodomain_scores),
+                selectinload(Product.product_ingredients)
+                    .selectinload(ProductIngredient.ingredient)
+                    .selectinload(Ingredient.claims),
                 selectinload(Product.claims).selectinload(Claim.sources),
             )
         )

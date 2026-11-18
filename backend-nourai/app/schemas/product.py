@@ -7,6 +7,7 @@ from app.models.product import IngredientStatus, ProductCategory
 from app.schemas.claim import ClaimResponse  # kept for __init__ re-export
 from app.schemas.measure import AdditivesSummary, Measure, NutritionPanel, ProcessingInfo
 from app.schemas.regulation import RuleNoteOut, RulesGlanceOut
+from app.services.verdicts import ProductVerdict, ingredient_standing
 
 # ─── Bio-domain scoring ───────────────────────────────────────────────────────
 # Delegated to app/services/biodomain_scorer.py.
@@ -58,6 +59,13 @@ class MobileIngredient(BaseModel):
     is_nutrient: bool = False         # True for rows sourced from OFF nutriments panel
     rule_note: RuleNoteOut | None = None   # set only when a covered place bans or flags it
     rule_substance_id: str | None = None   # the regulated substance this label row names
+    # Where the ingredient stands, from its researched claims (services/verdicts.py)
+    standing: str | None = None            # risk | caution | clear | unreviewed
+    standing_label: str | None = None      # "Likely risk", "No known concerns"
+    standing_note: str | None = None       # the claim that standing rests on
+    benefit_label: str | None = None       # "Probably works"
+    benefit_note: str | None = None        # the benefit claim
+    benefit_tone: str | None = None        # good | moderate | weak
 
 
 # ─── Nutrition facts parsing ──────────────────────────────────────────────────
@@ -271,6 +279,8 @@ class ProductWithDetails(BaseModel):
     # Rules: substances found only through E-number tags, and the "At a glance" counts
     rule_extras: list[RuleNoteOut] = []
     rules_glance: RulesGlanceOut | None = None
+    # The overall read of the product, built once rules are attached (api/v1/products.py)
+    verdict: ProductVerdict | None = None
 
     @classmethod
     def from_orm_with_details(
@@ -287,12 +297,19 @@ class ProductWithDetails(BaseModel):
             if pi.amount:
                 concentration = f"{pi.amount} {pi.unit}".strip() if pi.unit else pi.amount
 
+            # The tag older builds read now follows the research, not the stored
+            # ingestion default (which marked every unmatched or additive row "watch").
+            standing = ingredient_standing(getattr(pi, "ingredient", None))
+            stored = pi.status if isinstance(pi.status, str) or pi.status is None else pi.status.value
+            curated = stored == "avoid" and bool(pi.note)
             tag: str | None = None
             tag_type: str | None = None
-            if pi.status:
-                tag = pi.status if isinstance(pi.status, str) else pi.status.value
-                if tag in ("watch", "avoid"):
-                    tag_type = "warning"
+            if curated or standing.level == "risk":
+                tag, tag_type = ("avoid" if curated else "watch"), "warning"
+            elif standing.level == "caution":
+                tag = "watch"
+            elif standing.level == "clear":
+                tag = "clean"
 
             ingredients.append(MobileIngredient(
                 name=pi.name,
@@ -301,6 +318,12 @@ class ProductWithDetails(BaseModel):
                 tag_type=tag_type,
                 description=pi.note,
                 ingredient_id=str(pi.ingredient_id) if pi.ingredient_id else None,
+                standing="risk" if curated else standing.level,
+                standing_label=standing.label,
+                standing_note=(pi.note if curated else standing.note),
+                benefit_label=standing.benefit_label,
+                benefit_note=standing.benefit_note,
+                benefit_tone=standing.benefit_tone if standing.benefit_label else None,
             ))
 
         # ── Citations from claim sources ──────────────────────────────────────
@@ -353,7 +376,7 @@ class ProductWithDetails(BaseModel):
                 )
                 if measure:
                     doses.append(measure)
-        additives = build_additives_summary(rows) if rows else None
+        additives = build_additives_summary(rows, ingredients) if rows else None
 
         # ── Biodomain scoring ─────────────────────────────────────────────────
         from app.services.biodomain_scorer import (  # noqa: PLC0415
@@ -363,7 +386,7 @@ class ProductWithDetails(BaseModel):
         )
 
         # Tier-1: PubMed-backed scores from canonical ingredient_biodomain_scores
-        tier1_scores, computed_health_score = score_product_biodomains(
+        tier1_scores, _ = score_product_biodomains(
             product.product_ingredients or []
         )
 
@@ -382,8 +405,9 @@ class ProductWithDetails(BaseModel):
             for ds in sorted(domain_scores, key=lambda d: d.display_value, reverse=True)
         ]
 
-        # Prefer computed score; fall back to manually seeded score if no domains found
-        effective_score = computed_health_score if domain_scores else product.health_score
+        # A grade only ever comes from a reviewed, stored score. The sum over body
+        # systems is not a product rating, so it is never turned into one.
+        effective_score = product.health_score
         source = (product.extra_data or {}).get("source")
         attribution = None
         if source in {"openfoodfacts", "open-food-facts"}:

@@ -279,32 +279,35 @@ def test_processing_without_a_valid_nova_group_is_none(extra):
     assert build_processing(extra) is None
 
 
-def _row(name, status, matched=True, category="additive", note=None, ing_id=None):
-    ingredient = SimpleNamespace(category=SimpleNamespace(value=category), canonical_name=name) if matched else None
-    return SimpleNamespace(
-        name=name, status=SimpleNamespace(value=status), note=note,
-        ingredient_id=(ing_id or f"id-{name}") if matched else None, ingredient=ingredient,
-    )
+def _row(name, matched=True, ing_id=None):
+    ingredient = SimpleNamespace(canonical_name=name) if matched else None
+    return SimpleNamespace(name=name, ingredient_id=(ing_id or f"id-{name}") if matched else None, ingredient=ingredient)
 
 
-def test_additives_tier_only_ingredients_matched_to_the_library():
-    summary = build_additives_summary([
-        _row("Sucralose", "avoid", category="sweetener"),
-        _row("Carrageenan", "watch"),
-        _row("Oats", "clean", category="other"),
-        _row("Unparsed Thing", "watch", matched=False),
-    ])
-    assert [a.name for a in summary.avoid] == ["Sucralose"]
-    assert summary.avoid[0].reason == "Sweetener"
+def _standing(level, label=None, note=None):
+    return SimpleNamespace(standing=level, standing_label=label, standing_note=note)
+
+
+def test_additives_tier_by_researched_standing_only():
+    rows = [_row("Sodium nitrite"), _row("Carrageenan"), _row("Oats"), _row("Sucralose"), _row("Unparsed Thing", matched=False)]
+    standings = [
+        _standing("risk", "Likely risk", "Linked to bowel cancer in processed meat"),
+        _standing("caution", "Possible risk"),
+        _standing("clear"),
+        _standing("unreviewed"),   # in the library, not researched yet
+        _standing("unreviewed"),
+    ]
+    summary = build_additives_summary(rows, standings)
+    assert [a.name for a in summary.avoid] == ["Sodium nitrite"]
+    assert (summary.avoid[0].reason, summary.avoid[0].note) == ("Likely risk", "Linked to bowel cancer in processed meat")
     assert [w.name for w in summary.watch] == ["Carrageenan"]
     assert summary.clean_count == 1
-    assert summary.unreviewed_count == 1
+    assert summary.unreviewed_count == 2
 
 
 def test_additives_dedupe_repeated_matches():
-    summary = build_additives_summary([
-        _row("Sucralose", "watch", ing_id="x"), _row("Sucralose", "watch", ing_id="x"),
-    ])
+    rows = [_row("Sucralose", ing_id="x"), _row("Sucralose", ing_id="x")]
+    summary = build_additives_summary(rows, [_standing("caution"), _standing("caution")])
     assert len(summary.watch) == 1
 
 

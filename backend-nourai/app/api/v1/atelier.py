@@ -435,11 +435,9 @@ def _classify_exposures(product: Product, pi: ProductIngredient, ingredient: Ing
 
 
 def _severity(pi: ProductIngredient) -> float:
-    if pi.status == "avoid":
-        return 1.0
-    if pi.status == "watch":
-        return 0.7
-    return 0.45
+    # Only a curated "avoid" weighs more. "watch" was the ingestion default for
+    # every unmatched row, so it says nothing about the ingredient.
+    return 1.0 if pi.status == "avoid" else 0.45
 
 
 @router.get("/exposure-ledger", response_model=ExposureLedgerResponse)
