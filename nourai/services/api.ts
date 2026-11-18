@@ -25,10 +25,11 @@ export interface Ingredient {
   benefit_label?: string | null;    // "Probably works"
   benefit_note?: string | null;
   benefit_tone?: MeasureTone | null;
+  role?: string | null;             // cosmetics: what it does in the formula ("Humectant")
 }
 
 export interface VerdictPillar {
-  key: 'nutrition' | 'processing' | 'dose' | 'evidence' | 'ingredients';
+  key: 'nutrition' | 'processing' | 'dose' | 'evidence' | 'ingredients' | 'sun' | 'actives' | 'reactions';
   label: string;
   tone: MeasureTone;
   verdict: string;
@@ -85,6 +86,71 @@ export interface Citation {
 // ─── Measures: a label value against a cited reference (every bar) ────────────
 
 export type MeasureTone = 'neutral' | 'good' | 'moderate' | 'weak';
+
+// ─── Skin check (cosmetics) ───────────────────────────────────────────────────
+
+export interface SkinSource { label: string; url: string }
+
+export interface SkinActive {
+  name: string;
+  label_name: string;
+  does: string;
+  evidence: string;          // "Good evidence"
+  tone: MeasureTone;
+  reality: string;
+  studied?: string | null;   // "2–5 %"
+  amount?: string | null;    // stated on the label
+  likely_low: boolean;       // below the 1 % line while trials used more
+  source: SkinSource;
+}
+
+export interface SkinFlag {
+  name: string;
+  label_name: string;
+  kind: 'frequent' | 'listed' | 'irritant' | 'photo';
+  note: string;
+  source: SkinSource;
+}
+
+export interface SunFilter {
+  name: string;
+  label_name: string;
+  covers: string;
+  status: string;
+  amount?: string | null;
+  note?: string | null;
+}
+
+export interface SunCheck {
+  filters: SunFilter[];
+  broad: boolean;
+  stabilised?: boolean | null;
+  tone: MeasureTone;
+  verdict: string;
+  detail: string;
+  sources: SkinSource[];
+}
+
+export interface SkinNote {
+  key: string;
+  title: string;
+  body: string;
+  tone: MeasureTone;
+  source?: SkinSource | null;
+}
+
+export interface SkinCheck {
+  use: 'leave-on' | 'rinse-off';
+  one_percent_index?: number | null;
+  one_percent_marker?: string | null;
+  actives: SkinActive[];
+  flags: SkinFlag[];
+  sun?: SunCheck | null;
+  notes: SkinNote[];
+  free_of: string[];
+  checked_allergens: number;
+  recognised: number;
+}
 
 export interface MeasureSource {
   name: string;
@@ -260,6 +326,7 @@ export interface Product {
   rule_extras?: RuleNote[];
   rules_glance?: RulesGlance | null;
   verdict?: ProductVerdict | null;
+  skin?: SkinCheck | null;          // cosmetics only
 }
 
 export interface ProductListItem {

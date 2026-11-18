@@ -25,11 +25,14 @@ import {
   BenefitsCard, DoseCard, IngredientsCard, LabCard, LegacyNutritionCard, NutritionCard, ProcessingCard, SourceCard, SupportsCard,
 } from '@/components/product/ProductSections';
 import { VerdictCard } from '@/components/product/VerdictCard';
+import { ActivesCard, GoodToKnowCard, ReactionsCard, SunCard } from '@/components/product/SkinSections';
 
-type CardKey = 'nutrition' | 'doses' | 'ingredients' | 'processing' | 'lab' | 'benefits' | 'supports' | 'source';
+type CardKey = 'nutrition' | 'doses' | 'ingredients' | 'processing' | 'lab' | 'benefits' | 'supports' | 'source'
+  | 'sun' | 'actives' | 'reactions' | 'notes';
 
 const PILLAR_CARD: Record<VerdictPillar['key'], CardKey> = {
   nutrition: 'nutrition', processing: 'processing', dose: 'doses', evidence: 'benefits', ingredients: 'ingredients',
+  sun: 'sun', actives: 'actives', reactions: 'reactions',
 };
 
 export default function ProductDetailScreen() {
@@ -224,9 +227,12 @@ export default function ProductDetailScreen() {
     : ingredients.filter(isFlagged).length;
   const supports = product.bio_domains.filter((d) => d.value > 0 && !d.is_negative).sort((a, b) => b.value - a.value);
   const doses = product.doses ?? [];
+  const skin = product.skin ?? null;
+  const pillarFor = (key: VerdictPillar['key']) => product.verdict?.pillars.find((p) => p.key === key);
 
   // The first card with something to measure starts open; the rest read as verdicts.
-  const defaultOpen: CardKey = product.nutrition || nutrients.length ? 'nutrition' : doses.length ? 'doses' : 'ingredients';
+  const defaultOpen: CardKey = product.nutrition || nutrients.length ? 'nutrition' : doses.length ? 'doses'
+    : skin?.sun ? 'sun' : skin?.actives.length ? 'actives' : 'ingredients';
   const open = openCards ?? new Set<CardKey>([defaultOpen]);
   const toggleCard = (key: CardKey) => setOpenCards(() => {
     const next = new Set(open);
@@ -258,7 +264,9 @@ export default function ProductDetailScreen() {
       ?? (ing.benefit_label && ing.benefit_tone !== 'weak' ? [ing.benefit_label, ing.benefit_note].filter(Boolean).join(': ') : undefined)
       ?? (flaggedHere ? ing.tag : undefined);
     const law = rule ? `${rule.text}${rule.more ? ` +${rule.more} more` : ''}` : undefined;
-    return { dot, subtitle: [ing.concentration, note, law].filter(Boolean).join(' · ') || undefined };
+    // Cosmetics: what the ingredient does in the formula, when there's nothing more pressing to say.
+    const role = !note && !law ? ing.role ?? undefined : undefined;
+    return { dot, subtitle: [ing.concentration, note, law, role].filter(Boolean).join(' · ') || undefined };
   };
 
   return (
@@ -355,6 +363,9 @@ export default function ProductDetailScreen() {
           <LegacyNutritionCard nutrients={nutrients} {...cardProps('nutrition')} />
         ) : null}
         {doses.length ? <DoseCard doses={doses} {...cardProps('doses')} /> : null}
+        {skin?.sun ? <SunCard sun={skin.sun} {...cardProps('sun')} /> : null}
+        {skin?.actives.length ? <ActivesCard skin={skin} pillar={pillarFor('actives')} {...cardProps('actives')} /> : null}
+        {skin ? <ReactionsCard skin={skin} pillar={pillarFor('reactions')} {...cardProps('reactions')} /> : null}
         <IngredientsCard
           ingredients={ingredients}
           additives={product.additives}
@@ -362,10 +373,15 @@ export default function ProductDetailScreen() {
           resolving={resolving}
           onOpenIngredient={openIngredient}
           ruleExtras={product.rule_extras}
-          pillar={product.verdict?.pillars.find((p) => p.key === 'ingredients')}
+          onePercentIndex={skin?.one_percent_index}
+          skinChecked={!!skin}
+          pillar={pillarFor('ingredients') ?? (skin
+            ? { key: 'ingredients', label: 'Ingredients', tone: 'neutral', verdict: `${ingredients.length} listed` }
+            : undefined)}
           {...cardProps('ingredients')}
         />
         {product.processing ? <ProcessingCard processing={product.processing} {...cardProps('processing')} /> : null}
+        {skin?.notes.length ? <GoodToKnowCard skin={skin} {...cardProps('notes')} /> : null}
         {lab.length ? <LabCard lab={lab} {...cardProps('lab')} /> : null}
         {backed.length ? <BenefitsCard ingredients={backed} {...cardProps('benefits')} /> : null}
         {!product.verdict && supports.length ? <SupportsCard supports={supports} {...cardProps('supports')} /> : null}

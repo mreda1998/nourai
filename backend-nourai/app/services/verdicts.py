@@ -98,7 +98,7 @@ def ingredient_standing(ingredient: Any | None) -> IngredientStanding:
 # ─── Product verdict ──────────────────────────────────────────────────────────
 
 class VerdictPillar(BaseModel):
-    key: str                 # nutrition | processing | dose | evidence | ingredients
+    key: str                 # nutrition | processing | dose | evidence | ingredients | sun | actives | reactions
     label: str               # "Nutrition"
     tone: Tone
     verdict: str             # "High in sugar & sodium"
@@ -283,6 +283,95 @@ def _ingredients_pillar(rows: list[Any], extras: list[Any], glance: Any | None) 
                   f"{reviewed} of {total} ingredients reviewed so far; nothing flagged in those."), reviewed
 
 
+# ─── Skin pillars (cosmetics) ─────────────────────────────────────────────────
+
+_BASE_ACTIVES = {"Glycerin"}  # in nearly every cream: real, but not a reason to buy one
+
+
+def _sun_pillar(skin: Any | None) -> VerdictPillar | None:
+    sun = getattr(skin, "sun", None)
+    if sun is None:
+        return None
+    clause = {"Broad-spectrum": "its sunscreen filters cover UVB and long UVA",
+              "Mostly UVB": "its filters cover mostly UVB, not long UVA",
+              "UVA cover may fade": "its only long-UVA filter isn’t stabilised"}.get(sun.verdict, "")
+    return VerdictPillar(key="sun", label="Sun protection", tone=sun.tone, verdict=sun.verdict,
+                         detail=f"{_list([f.name for f in sun.filters[:4]])}.", clause=clause)
+
+
+def _actives_pillar(skin: Any | None) -> VerdictPillar | None:
+    actives = list(getattr(skin, "actives", None) or [])
+    if not actives:
+        return None
+    proven = [a for a in actives if a.tone == "good" and a.name not in _BASE_ACTIVES]
+    working = [a for a in proven if not a.likely_low]
+    low = [a for a in proven if a.likely_low]
+
+    def pillar(tone: Tone, verdict: str, detail: str, clause: str = "") -> VerdictPillar:
+        return VerdictPillar(key="actives", label="Actives", tone=tone, verdict=verdict, detail=detail, clause=clause)
+
+    if working:
+        names = [a.name for a in working[:3]]
+        detail = f"{_join(names)}: tested in controlled trials."
+        if low:
+            lows = [a.name for a in low[:2]]
+            detail += f" {_join(lows)} {'is' if len(lows) == 1 else 'are'} likely below the strength studied."
+        return pillar("good", "Backed by trials", detail,
+                      f"{_list([n.lower() for n in names[:2]])} {'is' if len(names) == 1 else 'are'} backed by trials")
+    if low:
+        first = low[0]
+        return pillar("moderate", "Actives likely too low",
+                      f"{first.name} is listed after the 1 % line; trials used {first.studied}.",
+                      f"its {first.name.lower()} is likely below the strength studied")
+    thin = [a for a in actives if a.name not in _BASE_ACTIVES]
+    if not thin:
+        return pillar("neutral", "Hydrating base", "Glycerin, a well-proven moisturiser, near the top of the label.")
+    return pillar("neutral", "Little evidence behind its actives",
+                  f"{_join([a.name for a in thin[:3]])}: early or little evidence in people.")
+
+
+def _reactions_pillar(skin: Any | None) -> VerdictPillar | None:
+    if skin is None:
+        return None
+    flags = list(skin.flags or [])
+    leave_on = skin.use == "leave-on"
+
+    def pillar(tone: Tone, verdict: str, detail: str, clause: str = "") -> VerdictPillar:
+        return VerdictPillar(key="reactions", label="Skin reactions", tone=tone, verdict=verdict, detail=detail, clause=clause)
+
+    frequent = [f for f in flags if f.kind == "frequent" and f.name != "Fragrance"]
+    banned = [f for f in frequent if f.name in ("Methylisothiazolinone", "Methylchloroisothiazolinone")]
+    if banned and leave_on:
+        return pillar("weak", "Preservative banned in EU leave-ons",
+                      f"{banned[0].name}: {banned[0].note}",
+                      f"it contains {banned[0].name.lower()}, banned in EU leave-on products")
+    if frequent:
+        names = [f.name for f in frequent[:2]]
+        tone: Tone = "moderate" if leave_on else "neutral"
+        return pillar(tone, f"{_plural(len(frequent), 'common allergen')}",
+                      f"{_join(names)}. Among the allergies dermatologists see most"
+                      f"{'' if leave_on else '; rinsing off lowers the exposure'}.",
+                      f"it contains {_list([n.lower() for n in names])}, a common skin allergen" if len(names) == 1
+                      else "it contains common skin allergens")
+    harsh = [f for f in flags if f.kind == "irritant" and f.name == "Sodium lauryl sulfate"]
+    if harsh and leave_on:
+        return pillar("moderate", "Harsh cleanser left on skin", harsh[0].note,
+                      "it leaves sodium lauryl sulfate on the skin")
+    scent = [f for f in flags if f.name == "Fragrance" or f.kind == "listed"]
+    if scent:
+        listed = [f for f in scent if f.kind == "listed"]
+        detail = ("Contains fragrance" + (f" and {_plural(len(listed), 'labelled allergen')}" if listed else "")
+                  + ". Fine for most people; worth avoiding with sensitive or eczema-prone skin.")
+        return pillar("neutral", "Fragranced", detail, "it is fragranced")
+    total = len(skin.roles) or 1
+    detail = f"None of the {skin.checked_allergens} allergens and irritants we check, from patch-test clinic data."
+    if skin.recognised * 10 < total * 7:
+        # Too much of the label is unfamiliar to call it clean.
+        return pillar("neutral", "None we recognise",
+                      f"{detail} We recognise {skin.recognised} of {len(skin.roles)} ingredients so far.")
+    return pillar("good", "No common allergens", detail, "it is free of the common skin allergens")
+
+
 def build_product_verdict(response: Any) -> ProductVerdict:
     """The product's verdict from its own response: label measures, claims and rules."""
     category = getattr(response.category, "value", response.category)
@@ -294,6 +383,13 @@ def build_product_verdict(response: Any) -> ProductVerdict:
         candidates = [_nutrition_pillar(response.nutrition, getattr(response, "high_per_100g", None)), _processing_pillar(response.processing), ingredients]
     elif category == "supplement":
         candidates = [_dose_pillar(response.doses), _evidence_pillar(rows), ingredients]
+    elif getattr(response, "skin", None) is not None:
+        skin = response.skin
+        actives = _actives_pillar(skin)
+        # The skin checks already read the label; "not reviewed yet" adds nothing beside them.
+        if ingredients is not None and ingredients.tone == "neutral" and ingredients.verdict in ("Not reviewed yet", "Mostly unreviewed"):
+            ingredients = None
+        candidates = [_sun_pillar(skin), actives or _evidence_pillar(rows), _reactions_pillar(skin), ingredients]
     else:
         candidates = [ingredients, _evidence_pillar(rows)]
     pillars = [p for p in candidates if p is not None]
@@ -336,8 +432,9 @@ def build_product_verdict(response: Any) -> ProductVerdict:
                    "What we do know is below.")
     elif level == "good":
         summary = sentence(good[:3])
-        if moderate:
-            summary += f" Worth knowing: {moderate[0].clause}."
+        aside = next((p for p in moderate + [p for p in pillars if p.tone == "neutral"] if p.clause), None)
+        if aside:
+            summary += f" Worth knowing: {aside.clause}."
     else:
         summary = sentence((weak + moderate)[:3])
         if good:
@@ -345,7 +442,10 @@ def build_product_verdict(response: Any) -> ProductVerdict:
 
     sources = [p.label.lower() for p in pillars if p.tone != "neutral"]
     basis = (f"Based on {_join(sources)}" if sources else "Nothing to base a verdict on yet")
-    if rows:
+    skin = getattr(response, "skin", None)
+    if rows and skin is not None:
+        basis += f" · {skin.recognised} of {_plural(len(rows), 'ingredient')} recognised"
+    elif rows:
         basis += f" · {reviewed} of {_plural(len(rows), 'ingredient')} reviewed"
 
     return ProductVerdict(

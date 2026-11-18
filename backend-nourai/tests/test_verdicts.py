@@ -146,9 +146,10 @@ def test_plain_food_with_a_clean_panel_looks_good():
 
 
 def test_nothing_known_is_unknown_not_good():
-    _, verdict = _verdict(_product(ProductCategory.COSMETIC, [_pi("aqua"), _pi("glycerin")]))
+    _, verdict = _verdict(_product(ProductCategory.COSMETIC, [_pi("zorbium complex"), _pi("veltrane")]))
     assert (verdict.level, verdict.tone) == ("unknown", "neutral")
-    assert verdict.pillars[0].verdict == "Not reviewed yet"
+    # An unfamiliar label is never called clean, and "not reviewed" isn't repeated beside the skin checks.
+    assert [p.verdict for p in verdict.pillars] == ["None we recognise"]
 
 
 def test_few_reviewed_ingredients_do_not_earn_nothing_flagged():
@@ -156,7 +157,8 @@ def test_few_reviewed_ingredients_do_not_earn_nothing_flagged():
     rows = [_pi("glycerin", ingredient=safe)] + [_pi(f"unknown {i}") for i in range(5)]
     _, verdict = _verdict(_product(ProductCategory.COSMETIC, rows))
     assert verdict.level == "unknown"
-    assert verdict.pillars[0].verdict == "Mostly unreviewed"
+    assert "None we recognise" in [p.verdict for p in verdict.pillars]
+    assert all(p.tone == "neutral" for p in verdict.pillars)
 
 
 def test_supplement_dose_and_evidence_pillars():

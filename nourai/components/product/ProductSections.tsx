@@ -131,7 +131,11 @@ export function DoseCard({ doses, open, onToggle }: CardProps & { doses: Measure
 
 // ─── Ingredients ─────────────────────────────────────────────────────────────
 
-export function IngredientsCard({ ingredients, additives, describe, resolving, onOpenIngredient, ruleExtras, pillar, open, onToggle }: CardProps & {
+export function IngredientsCard({ ingredients, additives, describe, resolving, onOpenIngredient, ruleExtras, onePercentIndex, skinChecked, pillar, open, onToggle }: CardProps & {
+  /** Cosmetics: the label position from which every ingredient is at 1 % or less. */
+  onePercentIndex?: number | null;
+  /** Cosmetics: the skin checks read every row, so "not researched" adds nothing. */
+  skinChecked?: boolean;
   /** The verdict's own line for ingredients, so the card and the verdict never disagree. */
   pillar?: VerdictPillar | null;
   ingredients: Ingredient[];
@@ -170,8 +174,16 @@ export function IngredientsCard({ ingredients, additives, describe, resolving, o
         <>
           {visible.map((ing, i) => {
             const { dot, subtitle } = describe(ing);
+            const line = onePercentIndex != null && i === onePercentIndex + 1 && !tiered;
             return (
               <View key={`${ing.name}-${i}`} style={styles.divider}>
+                {line ? (
+                  <View style={styles.onePercent} accessibilityLabel="From here on, each ingredient is likely 1 percent or less">
+                    <View style={styles.onePercentRule} />
+                    <Txt variant="caption" tone="tertiary">1 % or less from here</Txt>
+                    <View style={styles.onePercentRule} />
+                  </View>
+                ) : null}
                 <ListRow
                   leading={<View style={[styles.dot, { backgroundColor: dot }]} />}
                   title={ing.name}
@@ -211,7 +223,7 @@ export function IngredientsCard({ ingredients, additives, describe, resolving, o
         </View>
       ))}
 
-      {additives?.unreviewed_count ? (
+      {additives?.unreviewed_count && !skinChecked ? (
         <View style={[styles.strip, styles.divider]}>
           <Txt variant="footnote" tone="tertiary">
             {additives.unreviewed_count} ingredient{additives.unreviewed_count === 1 ? ' hasn’t' : 's haven’t'} been researched yet, so {additives.unreviewed_count === 1 ? 'it counts' : 'they count'} neither for nor against this product.
@@ -381,4 +393,6 @@ const styles = StyleSheet.create({
   tierRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingVertical: 12 },
   panel: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 18, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Palette.hairline },
   margin: { borderLeftWidth: 2, paddingLeft: 14, paddingVertical: 2 },
+  onePercent: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 2 },
+  onePercentRule: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: Palette.ink4 },
 });

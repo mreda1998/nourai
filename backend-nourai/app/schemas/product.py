@@ -7,6 +7,7 @@ from app.models.product import IngredientStatus, ProductCategory
 from app.schemas.claim import ClaimResponse  # kept for __init__ re-export
 from app.schemas.measure import AdditivesSummary, Measure, NutritionPanel, ProcessingInfo
 from app.schemas.regulation import RuleNoteOut, RulesGlanceOut
+from app.services.skin import SkinCheck, build_skin_check
 from app.services.verdicts import ProductVerdict, ingredient_standing
 
 # ─── Bio-domain scoring ───────────────────────────────────────────────────────
@@ -66,6 +67,7 @@ class MobileIngredient(BaseModel):
     benefit_label: str | None = None       # "Probably works"
     benefit_note: str | None = None        # the benefit claim
     benefit_tone: str | None = None        # good | moderate | weak
+    role: str | None = None                # cosmetics: what it does in the formula ("Humectant", "UV filter")
 
 
 # ─── Nutrition facts parsing ──────────────────────────────────────────────────
@@ -281,6 +283,8 @@ class ProductWithDetails(BaseModel):
     rules_glance: RulesGlanceOut | None = None
     # The overall read of the product, built once rules are attached (api/v1/products.py)
     verdict: ProductVerdict | None = None
+    # Cosmetics: actives, allergens, sun filters and the label's 1 % line
+    skin: SkinCheck | None = None
     # Nutrients high per 100 g (UK FSA); feeds the verdict, not sent to the app.
     high_per_100g: list[str] = Field(default_factory=list, exclude=True)
 
@@ -427,6 +431,19 @@ class ProductWithDetails(BaseModel):
                 image_license_url="https://creativecommons.org/licenses/by-sa/3.0/",
             )
 
+        # ── Skin check (cosmetics, and OTC skin products such as sunscreens) ──
+        category = getattr(product.category, "value", product.category)
+        skin: SkinCheck | None = None
+        label_rows = [i for i in ingredients if not i.is_nutrient]
+        if category in ("cosmetic", "otc") and label_rows:
+            checked = build_skin_check(
+                product.name or "", [t for t in (getattr(product, "subcategory", None),) if t], [i.name for i in label_rows],
+            )
+            if category == "cosmetic" or checked.sun or checked.actives:
+                skin = checked
+                for row, role in zip(label_rows, checked.roles):
+                    row.role = role
+
         return cls(
             id=product.id,
             barcode=product.barcode,
@@ -448,6 +465,7 @@ class ProductWithDetails(BaseModel):
             additives=additives,
             processing=processing,
             high_per_100g=per_100g_high,
+            skin=skin,
         )
 
 
