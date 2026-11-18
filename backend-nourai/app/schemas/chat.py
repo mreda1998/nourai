@@ -2,7 +2,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ChatMessage(BaseModel):
@@ -20,6 +20,8 @@ class StackProduct(BaseModel):
 
 class StackContext(BaseModel):
     products: list[StackProduct] = []
+    # Library products in the stack, so the reply can use Elory's own research on them.
+    product_ids: list[UUID] = Field(default_factory=list, max_length=50)
     domain_scores: dict[str, float] = {}  # no longer used; older app builds still send it
     goals: list[str] = []
 

@@ -627,7 +627,7 @@ export interface ChatRequest {
   messages: ChatMessage[];
   stack_context: {
     products: StackProduct[];
-    domain_scores: Record<string, number>;
+    product_ids?: string[];
     goals: string[];
   };
 }
@@ -1449,7 +1449,7 @@ class APIService {
   async sendChatMessage(
     authToken: string,
     messages: { role: string; content: string }[],
-    stackContext: { products: unknown[]; domain_scores: Record<string, number>; goals: string[] },
+    stackContext: { products: unknown[]; product_ids?: string[]; goals: string[] },
   ): Promise<{ message: string }> {
     return this.fetch<{ message: string }>('/chat/message', {
       method: 'POST',

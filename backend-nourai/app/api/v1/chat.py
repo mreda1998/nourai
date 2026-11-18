@@ -14,6 +14,8 @@ from sqlalchemy import delete, func, select
 from app.api.deps import CurrentUser, DBSession, PremiumUser
 from app.core.config import settings
 from app.models.chat_message import ChatMessage
+from app.services.chat_context import research_brief
+from app.services.stack_score import load_product_ingredients
 from app.schemas.chat import (
     ChatHistoryResponse,
     ChatMessageResponse,
@@ -46,7 +48,7 @@ _GOAL_LABELS: dict[str, str] = {
 }
 
 
-def _build_system_prompt(ctx: "ChatRequest.stack_context") -> str:  # type: ignore[name-defined]
+def _build_system_prompt(ctx: "ChatRequest.stack_context", research: str = "") -> str:  # type: ignore[name-defined]
     from app.schemas.chat import StackContext
     ctx_: StackContext = ctx  # type: ignore[assignment]
 
@@ -68,11 +70,21 @@ def _build_system_prompt(ctx: "ChatRequest.stack_context") -> str:  # type: igno
         else "User health goals: not specified"
     )
 
+    research_block = (
+        f"{research}\n\nThese verdicts come from Elory's own review of the studies. When they cover the "
+        "question, answer from them and say how certain they are, in the same words. When they don't, "
+        "say Elory hasn't reviewed that yet before answering from general knowledge."
+        if research else
+        "Elory has not reviewed the ingredients in this stack yet. Say so when it matters, and answer cautiously."
+    )
+
     return f"""You are Elory's personal stack assistant — a concise, evidence-based health advisor.
 
 {products_block}
 
 {goals_block}
+
+{research_block}
 
 Your role:
 - Answer questions about the user's specific stack with scientific precision
@@ -138,7 +150,7 @@ async def chat_message(
 
     The conversation history (messages) and the user's stack context are
     forwarded to Claude. The assistant returns a single reply grounded in
-    the user's actual ingredients and domain evidence scores.
+    the user's actual ingredients and Elory's research on them.
     Both turns are persisted for authenticated users (best-effort).
     """
     if not settings.anthropic_api_key:
@@ -151,7 +163,11 @@ async def chat_message(
         raise HTTPException(status_code=400, detail="messages array is required")
 
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    system_prompt = _build_system_prompt(request.stack_context)
+    research = ""
+    if request.stack_context.product_ids:
+        rows = await load_product_ingredients(db, request.stack_context.product_ids)
+        research = research_brief(rows)
+    system_prompt = _build_system_prompt(request.stack_context, research)
 
     # Convert to Anthropic message format
     anthropic_messages = [
