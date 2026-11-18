@@ -11,7 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Camera, PackagePlus, Search, X, Zap, ZapOff } from 'lucide-react-native';
 import { api, isBarcodeIngestionResponse, Product } from '@/services/api';
-import { Palette, Radius } from '@/constants/theme';
+import { MeasureInk, Palette, Radius } from '@/constants/theme';
 import { categoryLabel } from '@/utils/grade';
 import { Button, IconButton, ProductImage, Txt } from '@/components/ui';
 
@@ -204,6 +204,10 @@ function Reticle({ active, found }: { active: boolean; found: boolean }) {
 function ResultCard({ product, onAgain }: { product: Product; onAgain: () => void }) {
   const ingredients = product.ingredients.filter((i) => !i.is_nutrient);
   const researched = ingredients.filter((i) => i.ingredient_id).length;
+  const verdict = product.verdict;
+  const ink = verdict && verdict.tone !== 'neutral' ? MeasureInk[verdict.tone] : Palette.ink;
+  // The first two checks, as small coloured words: the answer before the detail.
+  const checks = verdict?.pillars.filter((p) => p.tone !== 'neutral').slice(0, 2) ?? [];
   return (
     <Animated.View entering={FadeInDown.springify().damping(18)} exiting={FadeOutDown} style={styles.result}>
       <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
@@ -211,15 +215,34 @@ function ResultCard({ product, onAgain }: { product: Product; onAgain: () => voi
         <View style={{ flex: 1 }}>
           <Txt variant="caption" tone="secondary" numberOfLines={1}>{product.brand || categoryLabel(product.category)}</Txt>
           <Txt variant="headline" numberOfLines={2} style={{ marginTop: 2 }}>{product.name}</Txt>
-          <Txt variant="footnote" tone="secondary" style={{ marginTop: 3 }}>
-            {ingredients.length} ingredient{ingredients.length === 1 ? '' : 's'}
-            {ingredients.length ? ` · ${researched} with research` : ''}
-          </Txt>
+          {verdict ? null : (
+            <Txt variant="footnote" tone="secondary" style={{ marginTop: 3 }}>
+              {ingredients.length} ingredient{ingredients.length === 1 ? '' : 's'}
+              {ingredients.length ? ` · ${researched} with research` : ''}
+            </Txt>
+          )}
         </View>
       </View>
+      {verdict ? (
+        <View style={styles.verdict} accessible accessibilityLabel={`${verdict.headline}. ${verdict.summary}`}>
+          <Txt variant="title1" color={ink}>{verdict.headline}</Txt>
+          {checks.length ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 6, marginTop: 8 }}>
+              {checks.map((c) => (
+                <View key={c.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={[styles.dot, { backgroundColor: MeasureInk[c.tone] }]} />
+                  <Txt variant="footnote" color={MeasureInk[c.tone]}>{c.verdict}</Txt>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Txt variant="footnote" tone="secondary" style={{ marginTop: 6 }} numberOfLines={2}>{verdict.summary}</Txt>
+          )}
+        </View>
+      ) : null}
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
         <Button label="Scan again" variant="secondary" size="md" style={{ flex: 1 }} onPress={onAgain} />
-        <Button label="See analysis" size="md" style={{ flex: 1.4 }} onPress={() => { router.push(`/product/${product.id}?via=scan` as never); setTimeout(onAgain, 400); }} />
+        <Button label={verdict ? 'See why' : 'See analysis'} size="md" style={{ flex: 1.4 }} onPress={() => { router.push(`/product/${product.id}?via=scan` as never); setTimeout(onAgain, 400); }} />
       </View>
     </Animated.View>
   );
@@ -262,6 +285,7 @@ const styles = StyleSheet.create({
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16 },
   status: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 18, paddingVertical: 12, borderRadius: Radius.pill, backgroundColor: 'rgba(244,241,234,0.12)', maxWidth: '92%' },
   dot: { width: 8, height: 8, borderRadius: 4 },
+  verdict: { marginTop: 16, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Palette.hairline },
   result: { backgroundColor: Palette.surface, borderRadius: Radius.xxl, borderCurve: 'continuous', padding: 18 },
   missIcon: { width: 68, height: 68, borderRadius: 34, backgroundColor: Palette.accentSoft, alignItems: 'center', justifyContent: 'center' },
 });

@@ -1,11 +1,13 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActionSheetIOS, ActivityIndicator, Alert, Platform, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { Clock, GitCompareArrows, Layers, Moon, Plus, ScanLine, Sun, Sunrise, Sunset } from 'lucide-react-native';
 import { useAppState, type Product } from '@/context/app-state';
-import { Palette } from '@/constants/theme';
+import { MeasureInk, Palette } from '@/constants/theme';
+import { api, type StackReview } from '@/services/api';
+import { isCatalogueId } from '@/lib/insights';
 import { categoryLabel } from '@/utils/grade';
 import {
   Button, Card, ChipRow, EmptyState, IconButton, ListGroup, ListRow, ProductImage, Screen, Section, Txt,
@@ -23,6 +25,29 @@ export default function StackScreen() {
   const { stack, refreshStack, removeFromStack, isStackLoading, stackError } = useAppState();
   const [filter, setFilter] = useState('all');
   const [removing, setRemoving] = useState(false);
+  const [review, setReview] = useState<StackReview | null>(null);
+  const stackIds = stack.map((p) => p.id).filter(isCatalogueId).join(',');
+
+  // What the research says about the stack as a whole: refreshed whenever it changes.
+  useEffect(() => {
+    if (!stackIds) { setReview(null); return; }
+    let alive = true;
+    api.getStackReview(stackIds.split(',')).then((r) => alive && setReview(r)).catch(() => alive && setReview(null));
+    return () => { alive = false; };
+  }, [stackIds]);
+
+  // "Shares magnesium with Daily Multivitamin", keyed by product name.
+  const shared = useMemo(() => {
+    const notes = new Map<string, string>();
+    for (const o of review?.overlaps ?? []) {
+      for (const name of o.products) {
+        const others = o.products.filter((n) => n !== name);
+        if (!others.length || notes.has(name)) continue;
+        notes.set(name, `Shares ${o.ingredient.toLowerCase()} with ${others.join(' and ')}`);
+      }
+    }
+    return notes;
+  }, [review]);
 
   // The server is the record for signed-in accounts; refresh whenever the tab is shown.
   useFocusEffect(useCallback(() => { refreshStack().catch(() => undefined); }, [refreshStack]));
@@ -103,19 +128,15 @@ export default function StackScreen() {
       {status}
       <Animated.View entering={FadeInDown.duration(500)}>
         <Card padding={20}>
-          <View style={{ flexDirection: 'row', gap: 28 }}>
-            <View>
-              <Txt variant="title1">{stack.length}</Txt>
-              <Txt variant="footnote" tone="secondary">saved product{stack.length === 1 ? '' : 's'}</Txt>
-            </View>
-            <View>
-              <Txt variant="title1">{missingAmounts}</Txt>
-              <Txt variant="footnote" tone="secondary">missing amount{missingAmounts === 1 ? '' : 's'}</Txt>
-            </View>
+          <View style={{ flexDirection: 'row', gap: 16 }}>
+            <Tally value={review?.overlaps.length} label="doubled up" tone={review?.overlaps.length ? 'moderate' : undefined} />
+            <Tally value={review?.risks.filter((r) => r.tone === 'weak').length} label={review?.risks.filter((r) => r.tone === 'weak').length === 1 ? 'documented risk' : 'documented risks'} tone={review?.risks.some((r) => r.tone === 'weak') ? 'weak' : undefined} />
+            <Tally value={review?.supported.filter((f) => f.tone === 'good').length} label="backed by trials" tone={review?.supported.some((f) => f.tone === 'good') ? 'good' : undefined} />
           </View>
-          <Txt variant="footnote" tone="secondary" style={{ marginTop: 12 }}>
-            {categories.map((c) => `${stack.filter((p) => p.category === c).length} ${categoryLabel(c).toLowerCase()}`).join(' · ')}
-            {' · '}Saved isn’t the same as taken — actual use may vary.
+          <Txt variant="footnote" tone="secondary" style={{ marginTop: 14 }}>
+            {review ? `${review.reviewed_count} of ${review.ingredient_count} ingredients researched so far. ` : ''}
+            {missingAmounts ? `${missingAmounts} product${missingAmounts === 1 ? ' has' : 's have'} no amount recorded, so doses can’t be checked. ` : ''}
+            Saved isn’t the same as taken.
           </Txt>
         </Card>
       </Animated.View>
@@ -143,7 +164,7 @@ export default function StackScreen() {
                   key={p.stackEntryId ?? p.id}
                   leading={<ProductImage uri={p.imageUri} category={p.category} size={44} />}
                   title={p.name}
-                  subtitle={[p.brand || categoryLabel(p.category), p.quantity?.trim() || 'Amount not recorded'].join(' · ')}
+                  subtitle={[p.brand || categoryLabel(p.category), p.quantity?.trim() || 'Amount not recorded', shared.get(p.name)].filter(Boolean).join(' · ')}
                   chevron={false}
                   onPress={() => openActions(p)}
                 />
@@ -158,3 +179,13 @@ export default function StackScreen() {
   );
 }
 
+
+/** One count in the summary; a dash while the review loads or when we have none. */
+function Tally({ value, label, tone }: { value?: number; label: string; tone?: 'good' | 'moderate' | 'weak' }) {
+  return (
+    <View style={{ flex: 1 }}>
+      <Txt variant="metric" color={value && tone ? MeasureInk[tone] : undefined} tone={value ? 'primary' : 'tertiary'}>{value ?? '–'}</Txt>
+      <Txt variant="caption" tone="secondary" style={{ marginTop: 2 }}>{label}</Txt>
+    </View>
+  );
+}
