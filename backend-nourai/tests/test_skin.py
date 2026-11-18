@@ -159,3 +159,7 @@ def test_research_on_a_base_ingredient_is_not_the_cosmetic_evidence():
     verdict = build(out)
     assert "evidence" not in [p.key for p in verdict.pillars]
     assert "dimethicone" not in verdict.summary.lower()
+    # Nor does the off-context claim ("kills head lice") reach the ingredient row.
+    row = next(i for i in out.ingredients if i.name == "Dimethicone")
+    assert row.benefit_label is None and row.benefit_note is None
+    assert verdict.level == "good"

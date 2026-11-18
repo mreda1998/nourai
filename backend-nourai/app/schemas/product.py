@@ -443,6 +443,8 @@ class ProductWithDetails(BaseModel):
                 skin = checked
                 for row, role in zip(label_rows, checked.roles):
                     row.role = role
+                    # Library benefit claims describe eating or medical use, not skin use.
+                    row.benefit_label = row.benefit_note = row.benefit_tone = None
 
         return cls(
             id=product.id,
